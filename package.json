@@ -1,15 +1,1 @@
-{
-  "name": "viking-miner-server",
-  "version": "1.0.0",
-  "private": true,
-  "description": "$VIKING MINER Telegram Mini App server (Cloud Functions style, single collectMining endpoint)",
-  "main": "index.js",
-  "engines": { "node": ">=18" },
-  "scripts": {
-    "start": "functions-framework --target=collectMining"
-  },
-  "dependencies": {
-    "@google-cloud/firestore": "^7.11.0",
-    "@google-cloud/functions-framework": "^3.4.0"
-  }
-}
+{"dependencies":{"@google-cloud/functions-framework":"^3.4.0","firebase-admin":"^12.7.0"},"description":"$VIKING MINER Telegram Mini App server — RTDB port (single collectMining endpoint)","engines":{"node":">=18"},"main":"index.js","name":"viking-miner-server-rtdb","private":true,"scripts":{"start":"functions-framework --target=collectMining"},"version":"1.0.0"}
