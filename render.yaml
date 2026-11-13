@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: viking-miner-server
+    env: node
+    plan: free
+    region: frankfurt
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: OWNER_ID
+        value: "6970148965"
+      - key: ALLOWED_ORIGIN
+        value: https://ahmedrabieharoun-eng.github.io
+      - key: GOOGLE_APPLICATION_CREDENTIALS
+        value: /etc/secrets/service-account.json
+      - key: BOT_TOKEN
+        sync: false
