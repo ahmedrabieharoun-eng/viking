@@ -1504,6 +1504,11 @@
 
     function finishBoot() {
       if (initialLoadDone) return;
+      // Owner order 2026-11-15: the loading page may ONLY finish when
+      // the user data has been fetched AND applied and every critical
+      // picture has actually loaded — entering the app to find images
+      // still popping in is not acceptable.
+      if (!bootStateReady || !bootAssetsReady) return;
       const bootElapsed = Date.now() - BOOT_STARTED_AT;
       if (bootElapsed < BOOT_MIN_MS) { setTimeout(finishBoot, BOOT_MIN_MS - bootElapsed); return; }
       initialLoadDone = true;
@@ -1518,6 +1523,44 @@
         const app = document.getElementById('main-app-shell');
         if (app && document.getElementById('banned-screen').style.display !== 'flex') app.style.display = 'flex';
       }, 300);
+    }
+
+    // ---- Boot readiness: preload every fixed picture the shell and
+    // the first screens use, so nothing pops in after the loader. The
+    // player's own evolution portrait depends on the state payload, so
+    // it is awaited separately inside refreshState (waitForImgEl).
+    let bootStateReady = false;
+    let bootAssetsReady = false;
+    const BOOT_IMAGES = [
+      'assets/boot_scene.webp?v=4', 'assets/boot_plaque.webp', 'assets/boot_panel.webp',
+      'assets/bg_wood.webp', 'assets/ref_stone_plain.webp', 'assets/coin_icon.webp',
+      'assets/hero_tier1.webp',
+      'assets/nav_mine.webp', 'assets/nav_tasks.webp', 'assets/nav_boost.webp', 'assets/nav_friends.webp', 'assets/nav_profile.webp',
+      'assets/icon_shield.webp', 'assets/icon_verified.webp', 'assets/icon_chest.webp', 'assets/icon_crystal.webp',
+      'assets/quest_scroll.webp', 'assets/icon_q_sun.webp', 'assets/icon_q_flag.webp', 'assets/icon_q_feather.webp', 'assets/icon_q_chest.webp',
+      'assets/picker_bg.webp', 'assets/avatar_ring.webp',
+      'assets/avatar_1.webp', 'assets/avatar_2.webp', 'assets/avatar_3.webp', 'assets/avatar_4.webp',
+      'assets/avatar_5.webp', 'assets/avatar_6.webp', 'assets/avatar_7.webp', 'assets/avatar_8.webp'
+    ];
+    (function preloadBootImages() {
+      let settled = 0;
+      const total = BOOT_IMAGES.length;
+      const one = () => { settled++; if (settled >= total) { bootAssetsReady = true; finishBoot(); } };
+      BOOT_IMAGES.forEach((u) => { const im = new Image(); im.onload = one; im.onerror = one; im.src = u; });
+      // Safety: one broken asset must never brick the app — after
+      // 45 s the gate opens anyway (state is still required).
+      setTimeout(() => { if (!bootAssetsReady) { bootAssetsReady = true; finishBoot(); } }, 45000);
+    })();
+    function waitForImgEl(img, timeoutMs) {
+      return new Promise((res) => {
+        if (!img) return res();
+        if (img.complete && img.naturalWidth > 0) return res();
+        let done = false;
+        const fin = () => { if (!done) { done = true; res(); } };
+        img.addEventListener('load', fin, { once: true });
+        img.addEventListener('error', fin, { once: true });
+        setTimeout(fin, timeoutMs || 20000);
+      });
     }
 
     const customLevels = [
@@ -1773,6 +1816,15 @@
       wdHistory = (j.withdrawals || []).sort((a, b) => (b.wdNum || 0) - (a.wdNum || 0));
       renderWithdrawHistory();
       applyUI();
+      if (!initialLoadDone) {
+        // Wait until the player's own portrait — the evolution image
+        // applyUI just pointed #hero-img at — has really loaded, so
+        // the first screen is complete the moment the loader lifts.
+        // (The same URL feeds Profile and Boost, so those are ready
+        // too.) Only then is the boot allowed to finish.
+        await waitForImgEl(document.getElementById('hero-img'), 20000);
+        bootStateReady = true;
+      }
       finishBoot();
       // First successful load with a wallet linked: pull the live
       // on-chain hold once (later loads are covered by the Profile
@@ -2694,7 +2746,9 @@
     document.querySelectorAll('.nav-item').forEach(i => i.addEventListener('click', () => switchTab(i.getAttribute('data-tab'))));
 
     initCloudSync(); setInterval(() => { updateLiveMining(); if (wdCooldownActive) updateWdCalculation(); }, 1000); updateLiveMining();
-    setTimeout(() => { finishBoot(); }, 2500);
+    // No unconditional boot finish anymore (owner order 2026-11-15):
+    // finishBoot only fires once state is applied AND all critical
+    // images have loaded — see the readiness gates above.
   })();
   </script>
 </body>
