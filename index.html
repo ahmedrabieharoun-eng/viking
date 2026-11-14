@@ -212,7 +212,25 @@
     #mine-claimed-total{font-family:Georgia,'Times New Roman',serif;font-size:23px}
     .live-counter-3d{font-family:Georgia,'Times New Roman',serif}
   </style>
-  
+  <style id="epic-ice">
+    /* Owner orders 2026-11-14 ~19:36: the ice loading page is adopted
+       (boot assets: design 8 fortress warriors, owner-picked 2026-11-14);
+       every other page keeps the dark design. The ornamental page
+       frame around all pages is REMOVED, and the spacing that
+       compensated for it is restored to the pre-frame values. */
+    #epic-frame{display:none!important}
+    .app-shell{padding-left:12px;padding-right:12px;padding-bottom:86px}
+    .bottom-nav-3d{bottom:8px}
+    /* Owner order 2026-11-14 ~19:38: the ornament frames around the
+       CARDS are removed too — cards go back to the clean epic borders. */
+    .card-3d{border:1px solid rgba(212,175,55,.45);border-top:2px solid rgba(245,215,110,.65);border-bottom:4px solid #04060a;border-image:none}
+    .miner-card-3d{border:1px solid rgba(212,175,55,.4);border-bottom:4px solid #04060a;border-image:none}
+    /* Owner order 2026-11-14 ~19:40: the page FILLS the screen — no
+       background showing around it. Shell side padding goes to zero,
+       cards and bars stretch edge to edge, nav sits flush. */
+    .app-shell{padding-left:0;padding-right:0}
+    .bottom-nav-3d{left:0;right:0;bottom:0;border-radius:0}
+  </style>
 </head>
 <body oncontextmenu="return false;">
 
