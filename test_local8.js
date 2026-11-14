@@ -2,14 +2,19 @@
  *
  *   A. Automatic $VIKING jetton payout for withdrawals (server):
  *      withdraw() keeps deducting + creating the 'Pending ⏳' record
- *      exactly as before; when PAYOUT_MNEMONIC is configured,
- *      attemptPayout() pays the NET in the $VIKING jetton under a
- *      payoutState machine on the record (none -> paying -> paid /
- *      failed). The chain layer is stubbed through the
- *      PAYOUT_STUB_MODULE env seam (a file-backed fake client shared
- *      by the spawned child and the in-process instance), and the
- *      tonapi stub serves jetton decimals = 6 (NOT 9) so the base-
- *      unit conversion is proven, not assumed.
+ *      exactly as before; since the manual-review round (owner order
+ *      2026-11-14 ~07:29) it no longer pays on its own — it DMs the
+ *      owner a review card and attemptPayout() runs only when the
+ *      owner taps «موافقة» (driven here through real wdok:<n>
+ *      callback_query webhook updates; the deep review-flow
+ *      coverage lives in test_local9.js). When PAYOUT_MNEMONIC is
+ *      configured, attemptPayout() pays the NET in the $VIKING
+ *      jetton under a payoutState machine on the record (none ->
+ *      paying -> paid / failed). The chain layer is stubbed through
+ *      the PAYOUT_STUB_MODULE env seam (a file-backed fake client
+ *      shared by the spawned child and the in-process instance), and
+ *      the tonapi stub serves jetton decimals = 6 (NOT 9) so the
+ *      base-unit conversion is proven, not assumed.
  *
  *   B. The payout-success celebration: ONE shared
  *      sendPayoutSuccess() fired exactly once per Paid withdrawal
@@ -23,7 +28,7 @@
  *      BOTH carry the «View Transaction» button when a tx link
  *      resolves.
  *
- *   P1  auto-pay success: record Paid ✅ / payoutState 'paid',
+ *   P1  pay-on-approve success: record Paid ✅ / payoutState 'paid',
  *       exactly ONE transfer of net x 10^6 base units (decimals 6),
  *       comment VIKING-<n>, player balance stays deducted.
  *   P2  insufficient payout-wallet jettons: NO transfer, record
@@ -285,6 +290,41 @@ async function doWithdraw(port, id, name, username) {
   return r.body.wdNum;
 }
 
+/* Manual-review drive (owner order 2026-11-14 ~07:29): withdraw()
+   no longer pays on its own — it DMs the owner a review card and
+   the payout fires only when the owner taps «موافقة», which
+   Telegram delivers as a wdok:<n> callback_query webhook update.
+   The payout scenarios below approve through that real path. */
+const WEBHOOK_SECRET = crypto
+  .createHash('sha256')
+  .update(BOT_TOKEN)
+  .digest('hex')
+  .substring(0, 32);
+let updSeq = 800000;
+async function botCallback(port, data, fromId) {
+  const upd = {
+    update_id: ++updSeq,
+    callback_query: {
+      id: 'cbq' + updSeq,
+      from: { id: Number(fromId || OWNER_ID), first_name: 'Owner' },
+      message: { message_id: updSeq, chat: { id: Number(OWNER_ID), type: 'private' }, text: '🔍 طلب سحب' },
+      data
+    }
+  };
+  const r = await fetch(`http://127.0.0.1:${port}/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-telegram-bot-api-secret-token': WEBHOOK_SECRET },
+    body: JSON.stringify(upd)
+  });
+  return r.status;
+}
+const ownerCardsFor = (n) => msgsTo(OWNER_ID).filter((mm) => String(mm.text || '').includes('طلب سحب #' + n));
+async function approveWd(port, n) {
+  await waitFor(async () => ownerCardsFor(n).length >= 1, 15000, 'owner review card for wd ' + n);
+  const st = await botCallback(port, 'wdok:' + n);
+  check('owner approve callback accepted for wd ' + n + ' (webhook 200)', st === 200, st);
+}
+
 (async () => {
   const children = [];
   let outA = '', outB = '';
@@ -328,11 +368,14 @@ async function doWithdraw(port, id, name, username) {
     await waitFor(async () => outB.includes('[payout] disabled (PAYOUT_MNEMONIC not set)'), 15000, 'child B payout boot line');
     check('boot line (disabled): [payout] disabled (PAYOUT_MNEMONIC not set)', outB.includes('[payout] disabled (PAYOUT_MNEMONIC not set)'));
 
-    /* ---------- P1 + C1: auto-pay success + the celebration ---------- */
-    console.log('\n[P1+C1: auto-pay success — one transfer, Paid record, one DM + one channel post]');
+    /* ---------- P1 + C1: pay-on-approve success + the celebration ---------- */
+    console.log('\n[P1+C1: pay-on-approve success — one transfer, Paid record, one DM + one channel post]');
     const U1 = '700009001', W1 = RAW('1');
     await seedPlayer(U1, 'Zayd Rich', 'zaydrich', 20000, W1);
     const n1 = await doWithdraw(APP_A, U1, 'Zayd', 'zaydrich');
+    check('manual review: the owner got a review card for the withdrawal', ownerCardsFor(n1).length === 1, ownerCardsFor(n1).length);
+    check('manual review: NO transfer before the owner approves', sendsFor('VIKING-' + n1).length === 0, sendsFor('VIKING-' + n1));
+    await approveWd(APP_A, n1);
     await waitFor(async () => { const w = await dbGet('withdrawals/wd_' + n1); return w && w.payoutState === 'paid'; }, 20000, 'wd ' + n1 + ' paid');
     const wd1 = await dbGet('withdrawals/wd_' + n1);
     check('record flipped to Paid ✅ with payoutState paid', wd1.status === 'Paid ✅' && wd1.payoutState === 'paid', wd1);
@@ -395,6 +438,7 @@ async function doWithdraw(port, id, name, username) {
     setStub({ jettonBalanceBase: '1000', sendBehavior: 'ok' });
     const alertsBefore = msgsTo(OWNER_ID).filter((m) => String(m.text || '').includes('فشل الدفع التلقائي')).length;
     const n2 = await doWithdraw(APP_A, U2, 'Mona', 'monapoor');
+    await approveWd(APP_A, n2);
     await waitFor(async () => { const w = await dbGet('withdrawals/wd_' + n2); return w && w.payoutState === 'failed'; }, 20000, 'wd ' + n2 + ' failed');
     const wd2 = await dbGet('withdrawals/wd_' + n2);
     check('record stays Pending ⏳ with payoutState failed + reason', wd2.status === 'Pending ⏳' && wd2.payoutState === 'failed' && String(wd2.payoutError || '').includes('insufficient jetton balance'), wd2);
@@ -418,6 +462,7 @@ async function doWithdraw(port, id, name, username) {
     await seedPlayer(U3, 'Omar Unlucky', 'omarunlucky', 20000, W3);
     setStub({ jettonBalanceBase: '1000000000000', sendBehavior: 'throw' });
     const n3 = await doWithdraw(APP_A, U3, 'Omar', 'omarunlucky');
+    await approveWd(APP_A, n3);
     await waitFor(async () => { const w = await dbGet('withdrawals/wd_' + n3); return w && w.payoutState === 'failed'; }, 20000, 'wd ' + n3 + ' failed');
     const wd3 = await dbGet('withdrawals/wd_' + n3);
     check('record stays Pending ⏳, payoutError carries the broadcast failure', wd3.status === 'Pending ⏳' && String(wd3.payoutError || '').includes('stub broadcast boom'), wd3);
@@ -432,6 +477,7 @@ async function doWithdraw(port, id, name, username) {
     await seedPlayer(U4, 'Sara Quiet', 'saraquiet', 20000, W4);
     failChannel = true;
     const n4 = await doWithdraw(APP_A, U4, 'Sara', 'saraquiet');
+    await approveWd(APP_A, n4);
     await waitFor(async () => { const w = await dbGet('withdrawals/wd_' + n4); return w && w.payoutState === 'paid'; }, 20000, 'wd ' + n4 + ' paid');
     const wd4 = await dbGet('withdrawals/wd_' + n4);
     check('record is Paid ✅ despite the channel failure', wd4.status === 'Paid ✅' && typeof wd4.payoutNotifiedAt === 'number', wd4);
@@ -447,6 +493,7 @@ async function doWithdraw(port, id, name, username) {
     const U5 = '700009005', W5 = RAW('5');
     await seedPlayer(U5, 'Karim Fixed', 'karimfixed', 20000, W5);
     const n5 = await doWithdraw(APP_A, U5, 'Karim', 'karimfixed');
+    await approveWd(APP_A, n5);
     await waitFor(async () => { const w = await dbGet('withdrawals/wd_' + n5); return w && w.payoutState === 'paid'; }, 20000, 'wd ' + n5 + ' paid');
     await waitFor(async () => photosTo(U5).length === 1 && photosTo('@VIKING_PAYOUT').length === 2, 15000, 'wd ' + n5 + ' celebration messages');
     const dm5 = photosTo(U5)[0] || {};
@@ -461,6 +508,7 @@ async function doWithdraw(port, id, name, username) {
     setStub({ jettonBalanceBase: '1000000000000', sendBehavior: 'ok', findBehavior: 'null' });
     const chBefore7 = photosTo('@VIKING_PAYOUT').length;
     const n7 = await doWithdraw(APP_A, U7, 'Nadia', 'nadiatimeout');
+    await approveWd(APP_A, n7);
     await waitFor(async () => { const w = await dbGet('withdrawals/wd_' + n7); return w && w.payoutState === 'paid'; }, 20000, 'wd ' + n7 + ' paid');
     const wd7 = await dbGet('withdrawals/wd_' + n7);
     const WALLET_PAGE = 'https://tonviewer.com/' + TEST_V5;

@@ -39,9 +39,10 @@ const TON_API_BASE = (process.env.TON_API_BASE || 'https://toncenter.com/api/v3'
 
 const JETTON = 'EQC6uN73kvaKh8LrTHQ8TQ5_vgqheI93iny5XUWkpQL9vjxI';
 /* Automatic $VIKING payouts (owner order 2026-11-14): when the
-   PAYOUT_MNEMONIC env var holds the payout wallet's 24 words,
-   withdraw() pays the net amount in the $VIKING jetton automatically
-   (see attemptPayout). The mnemonic lives ONLY in this env var — it
+   PAYOUT_MNEMONIC env var holds the payout wallet's 24 words, an
+   owner-approved withdrawal is paid the net amount in the $VIKING
+   jetton by attemptPayout (manual review first — owner order
+   2026-11-14 ~07:29). The mnemonic lives ONLY in this env var — it
    is never stored in settings, never logged, never sent anywhere.
    PAYOUT_WALLET_VERSION selects the wallet contract the words open:
    'v5' (WalletContractV5R1, the default) or 'v4'. Unset/invalid
@@ -1164,6 +1165,7 @@ const newPlayer = (user, extra) => ({
   id: String(user.id), name: clean(user.first_name || 'Warrior', 64), username: clean(user.username || 'user', 64),
   deviceHash: '', mined: 0, hold: 0, lastCollectTime: Date.now(), walletAddr: '', banned: false, invitedBy: null,
   refBonusPaid: false, refCommissionEarned: 0, pendingRefComm: 0, lastWithdrawTime: 0, adsWatched: 0,
+  earnMining: 0, earnDaily: 0, earnTasks: 0, earnRef: 0, // lifetime earnings by source (owner review card, 2026-11-14); pre-existing players read as 0 until they earn again
   lastAdUtcDay: dayOf(Date.now()), task1Done: false, task2Done: false, bioTaskDone: false, dailyStreak: 0, lastDailyCheckIn: 0,
   lastSeen: Date.now(), referrals: [], createdAt: Date.now(), ...extra
 });
@@ -1293,7 +1295,7 @@ async function collect(c) {
     if (elapsed < MIN_COLLECT_SEC) return { error: new Fail(400, 'Wait 10 seconds') };
     const added = Math.min(86400, elapsed) * (BASE_RATE / 86400);
     return {
-      value: { ...d, mined: (Number(d.mined) || 0) + added, lastCollectTime: now },
+      value: { ...d, mined: (Number(d.mined) || 0) + added, earnMining: (Number(d.earnMining) || 0) + added, lastCollectTime: now },
       out: { added, inviterId: d.invitedBy && d.refBonusPaid ? String(d.invitedBy) : null }
     };
   });
@@ -1320,7 +1322,7 @@ async function daily(c) {
     const streak = last === today - 1 ? ((d.dailyStreak || 0) % 7) + 1 : 1;
     const reward = DAILY[streak - 1];
     return {
-      value: { ...d, dailyStreak: streak, lastDailyCheckIn: now, mined: (Number(d.mined) || 0) + reward },
+      value: { ...d, dailyStreak: streak, lastDailyCheckIn: now, mined: (Number(d.mined) || 0) + reward, earnDaily: (Number(d.earnDaily) || 0) + reward },
       out: { success: true, reward, streak }
     };
   });
@@ -1346,7 +1348,7 @@ async function task(c) {
     if (d[key]) return { error: new Fail(400, 'Already claimed') };
     const reward = Number(c.cfg.taskReward) || 50;
     return {
-      value: { ...d, [key]: true, mined: (Number(d.mined) || 0) + reward },
+      value: { ...d, [key]: true, mined: (Number(d.mined) || 0) + reward, earnTasks: (Number(d.earnTasks) || 0) + reward },
       out: { success: true, reward }
     };
   });
@@ -1394,7 +1396,7 @@ function creditBioReward(userId, cfg) {
     if (d.bioTaskDone) return { error: new Fail(400, 'Already claimed') };
     const reward = Number(cfg.bioReward) || 50;
     return {
-      value: { ...d, bioTaskDone: true, mined: (Number(d.mined) || 0) + reward },
+      value: { ...d, bioTaskDone: true, mined: (Number(d.mined) || 0) + reward, earnTasks: (Number(d.earnTasks) || 0) + reward },
       out: { success: true, reward }
     };
   });
@@ -1444,7 +1446,7 @@ function ensureWebhook() {
   Promise.resolve(tg('setWebhook', {
     url: process.env.PUBLIC_URL || 'https://viking-miner-server.onrender.com/',
     secret_token: webhookSecret(),
-    allowed_updates: ['message']
+    allowed_updates: ['message', 'callback_query']
   })).catch(() => {});
 }
 const seenUpdateIds = new Set();
@@ -1588,7 +1590,9 @@ async function emojiHunt(chatId) {
 /* Returns true when a tool consumed the message. Runs BEFORE the
    /start handling. Also dispatched here, under the same OWNER_ID
    gate: /multi <telegramId> — the on-demand multi-account link tree
-   (see multiTree; owner order 2026-11-14). The entity extractor only
+   (see multiTree; owner order 2026-11-14) — and /withdrawals, the
+   pending-withdrawal review walk (see the withdrawal-review
+   section; owner order 2026-11-14). The entity extractor only
    fires when the text does NOT start with '/', so it can never
    swallow the owner's /start, /emojipack, /emojihunt or /multi
    messages. */
@@ -1600,6 +1604,7 @@ async function handleOwnerTools(msg, text) {
   if (pm) { await emojiPack(chatId, (pm[2] || '').trim()); return true; }
   const mm = /^\/multi(@\w+)?(?:\s+(.+))?$/.exec(text);
   if (mm) { await multiTree(chatId, (mm[2] || '').trim()); return true; }
+  if (/^\/withdrawals(@\w+)?(\s|$)/.test(text)) { await startWdReview(chatId); return true; }
   if (text.startsWith('/')) return false; // commands (incl. /start) never reach the extractor
   const rawText = typeof msg.text === 'string' ? msg.text : (typeof msg.caption === 'string' ? msg.caption : '');
   const ents = [].concat(msg.entities || [], msg.caption_entities || []);
@@ -1760,7 +1765,7 @@ async function refAch(c) {
     if (claimed[n]) return { error: new Fail(400, 'Already claimed') };
     const reward = Number(c.cfg['refAchReward' + n]) || 0;
     return {
-      value: { ...d, mined: (Number(d.mined) || 0) + reward, refAchClaimed: { ...claimed, [n]: Date.now() } },
+      value: { ...d, mined: (Number(d.mined) || 0) + reward, earnRef: (Number(d.earnRef) || 0) + reward, refAchClaimed: { ...claimed, [n]: Date.now() } },
       out: { success: true, reward, milestone: n }
     };
   });
@@ -2154,7 +2159,7 @@ async function refCollect(c) {
     const amt = Number(d.pendingRefComm) || 0;
     if (amt <= 0) return { error: new Fail(400, 'No pending referral profits') };
     return {
-      value: { ...d, pendingRefComm: 0, mined: (Number(d.mined) || 0) + amt, refCommissionEarned: (Number(d.refCommissionEarned) || 0) + amt },
+      value: { ...d, pendingRefComm: 0, mined: (Number(d.mined) || 0) + amt, refCommissionEarned: (Number(d.refCommissionEarned) || 0) + amt, earnRef: (Number(d.earnRef) || 0) + amt },
       out: { success: true, amount: amt }
     };
   });
@@ -2190,14 +2195,10 @@ async function withdraw(c) {
   const num = await bumpCounter('withdrawals');
   const wd = { wdNum: num, userId: String(c.user.id), userName: clean(me.name, 64), walletAddr: addr, amt, net, fee, status: 'Pending ⏳', timestamp: Date.now() };
   await rtdb().ref('withdrawals/wd_' + num).set(wd);
-  // Automatic $VIKING payout (owner order 2026-11-14): fire-and-forget
-  // — the player's response must never hang on chain operations
-  // (a seqno confirmation alone can take most of a minute). The
-  // balance is already deducted and the record already exists, so
-  // the payout finishes asynchronously under its own state machine
-  // (attemptPayout); when the feature is disabled this is a no-op
-  // and the manual flow proceeds exactly as before.
-  if (payoutEnabled()) attemptPayout(wd.wdNum).catch((e) => console.error('payout', wd.wdNum, e.message));
+  // NO automatic payout any more (owner order 2026-11-14 ~07:29):
+  // withdrawals wait for the owner's manual decision on the bot
+  // review card sent at the end of this function (approve there
+  // fires attemptPayout — see the withdrawal-review section below).
   let rk = null;
   try { rk = await riskOf(c.user.id); } catch (e) { console.error('risk', e.message); }
   if (cfg.adminChatId) {
@@ -2206,15 +2207,24 @@ async function withdraw(c) {
       text: `🔔 <b>New withdrawal #${wd.wdNum}</b>\n👤 ${esc(wd.userName)} (<code>${esc(wd.userId)}</code>)\n💰 ${wd.amt} ${esc(cfg.coinSym)}\n💎 Net: ${wd.net}\n👛 <code>${esc(wd.walletAddr)}</code>${rk && rk.level !== 'low' ? '\n⚠️ تعدد حسابات: ' + (rk.level === 'high' ? 'عالي' : 'متوسط') : ''}`
     });
   }
+  // Owner review card (manual-review flow, owner order 2026-11-14):
+  // the withdrawal is decided by the owner in the bot chat — approve
+  // pays via attemptPayout, reject/ban via the callback handlers in
+  // the withdrawal-review section. Best-effort: a failed card DM
+  // never fails the player's withdrawal (he can still be reviewed
+  // later via /withdrawals).
+  try { await sendWdReviewCard(wd.wdNum); } catch (e) { console.error('wd review card', wd.wdNum, e.message); }
   return { success: true, wdNum: wd.wdNum };
 }
 
 /* ---------- automatic $VIKING jetton payouts (owner order 2026-11-14) ----------
-   When PAYOUT_MNEMONIC is configured, withdraw() hands each new
-   record to attemptPayout(), which pays the NET amount in the
+   When PAYOUT_MNEMONIC is configured, an APPROVED withdrawal is
+   paid by attemptPayout(), which pays the NET amount in the
    $VIKING jetton from the payout wallet to the player's bound
-   wallet. Safety comes from a tiny state machine on the withdrawal
-   record itself (field `payoutState`):
+   wallet. (Approval moved from withdraw()-time to the owner's bot
+   review card — owner order 2026-11-14 ~07:29; see the withdrawal-
+   review section.) Safety comes from a tiny state machine on the
+   withdrawal record itself (field `payoutState`):
 
      (absent)/'none'  --claim-->  'paying'  --confirmed-->  'paid'
                                     |
@@ -2616,6 +2626,322 @@ async function sendPayoutSuccess(wd, player, cfg) {
   }
 }
 
+/* ---------- withdrawal review: the owner's bot panel (owner order 2026-11-14 ~07:29) ----------
+   Automatic payout-on-request is REPLACED by manual review in the
+   bot chat, modelled on the owner's AdVOLT messages bot: every new
+   withdrawal DMs the owner a review card carrying the full picture
+   (identity + player number, wallet + verification + wallet age,
+   current in-bot balance, join date, who referred him, his referral
+   counts, the LIVE on-chain hold, the multi-account tree, where his
+   coins came from, his previous withdrawals) and four decision
+   buttons — ✅ approve (fires the EXISTING attemptPayout state
+   machine, unchanged), ❌ reject (NO refund: the deducted coins stay
+   deducted — the owner's explicit order, deliberately unlike the
+   admin panel's reject-refund), 🚫 ban (reject + ban the player),
+   ⏭ skip. /withdrawals walks the pending queue one card at a time;
+   every decision advances to the next card and the end of the queue
+   prints a session summary. Sessions live in a process-local Map —
+   a restart just means /withdrawals starts the walk over; the
+   cards already in chat keep working because each decision
+   re-reads the record and re-checks its status. Decisions are made
+   in the DB FIRST and messaged second, so a Telegram failure can
+   never corrupt a decision. */
+const wdSessions = new Map(); // chatId -> { presented:Set<number>, paid, rejected, banned, skipped }
+const fmtAmt = (n) => { const v = Number(n) || 0; return Number.isInteger(v) ? v.toLocaleString('en-US') : v.toLocaleString('en-US', { maximumFractionDigits: 2 }); };
+const fmtDateTime = (ts) => fmtDayMonYear(ts) + ' · ' + new Date(Number(ts) || 0).toISOString().slice(11, 19) + ' UTC';
+
+async function pendingWithdrawals() {
+  const all = (await getVal(rtdb().ref('withdrawals'))) || {};
+  return Object.values(all).filter((w) => w && w.status === 'Pending ⏳').sort((a, b) => (Number(a.wdNum) || 0) - (Number(b.wdNum) || 0));
+}
+
+/* The multi-account cluster around a player: the same both-
+   directions BFS over the stored multiLinks lists that /multi
+   (multiTree) performs — a player's links are its multiLinks.ids
+   PLUS every player whose stored ids contain it (the stored lists
+   are asymmetric). Returns the BFS order (target first) and each
+   node's parent (the account it was first reached through), which
+   is what linkReason() labels are read off. */
+function multiClusterOf(players, target) {
+  const idsOf = (p) => (p && p.multiLinks && Array.isArray(p.multiLinks.ids)) ? p.multiLinks.ids.map(String) : [];
+  const listedBy = new Map();
+  for (const [uid, p] of Object.entries(players || {})) {
+    for (const id of idsOf(p)) {
+      if (!listedBy.has(id)) listedBy.set(id, []);
+      listedBy.get(id).push(uid);
+    }
+  }
+  const neighborsOf = (uid) => [...new Set([...idsOf(players[uid]), ...(listedBy.get(uid) || [])])]
+    .filter((id) => id !== uid && players[id]).sort();
+  const parent = new Map([[target, null]]);
+  const order = [target];
+  for (let i = 0; i < order.length; i++) {
+    for (const nb of neighborsOf(order[i])) {
+      if (!parent.has(nb)) { parent.set(nb, order[i]); order.push(nb); }
+    }
+  }
+  return { order, parent };
+}
+
+async function buildWdReviewCard(wd, position) {
+  const cfg = await getConfig();
+  const sym = esc(cfg.coinSym);
+  const num = Number(wd.wdNum);
+  const uid = String(wd.userId);
+  const [player, players, prevWds] = await Promise.all([
+    getVal(P(uid)),
+    getVal(rtdb().ref('players')),
+    withdrawalsOfUser(uid)
+  ]);
+  const p = player || {};
+  const allPlayers = players || {};
+  const name = esc(p.name || wd.userName || '—');
+  const uname = p.username ? ' (@' + esc(p.username) + ')' : '';
+  /* multi-account picture: the stored-link cluster (both-directions
+     BFS, as /multi) unioned with riskOf()'s live sig-registry links,
+     so the card shows the whole tree either source knows about. */
+  const linked = new Map(); // uid -> { name, username, reason }
+  const { order, parent } = multiClusterOf(allPlayers, uid);
+  for (const id of order.slice(1)) {
+    const lp = allPlayers[id] || {};
+    linked.set(id, { name: lp.name || '', username: lp.username || '', reason: linkReason(allPlayers[id], allPlayers[parent.get(id)] || {}) });
+  }
+  try {
+    const rk = await riskOf(uid);
+    for (const row of (rk && rk.linked) || []) {
+      if (!linked.has(String(row.id))) linked.set(String(row.id), { name: row.name || '', username: '', reason: (row.via || []).join('، ') || 'رابط مسجل' });
+    }
+  } catch (e) { /* the stored cluster alone is a complete picture */ }
+  const linkedIds = [...linked.keys()];
+  const multiSection = (showCount) => {
+    if (!linkedIds.length) return '⚠️ <b>التعدد:</b> مش مرتبط بحسابات تانية ✅';
+    const lines = [`⚠️ <b>التعدد:</b> عامل تعدد — مرتبط بـ ${linkedIds.length} حساب`];
+    for (const id of linkedIds.slice(0, showCount)) {
+      const l = linked.get(id);
+      lines.push(`• <b>${esc(l.name || '—')}</b>${l.username ? ' (@' + esc(l.username) + ')' : ''} — <code>${esc(id)}</code> — ${esc(l.reason)}`);
+    }
+    if (linkedIds.length > showCount) lines.push(`…و ${linkedIds.length - showCount} كمان`);
+    return lines.join('\n');
+  };
+  /* live on-chain hold; a chain hiccup falls back to the player's
+     last synced hold, labelled as such */
+  let holdTxt;
+  try { holdTxt = fmtAmt(await jettonHold(wd.walletAddr || p.walletAddr || '')); }
+  catch (e) { holdTxt = fmtAmt(p.hold) + ' (آخر مزامنة)'; }
+  const inv = p.invitedBy ? allPlayers[String(p.invitedBy)] : null;
+  const invLine = p.invitedBy
+    ? (inv ? `<b>${esc(inv.name || '—')}</b>${inv.username ? ' (@' + esc(inv.username) + ')' : ''} — <code>${esc(String(p.invitedBy))}</code>` : `<code>${esc(String(p.invitedBy))}</code>`)
+    : 'دخول مباشر (بدون إحالة)';
+  const refTotal = Object.values(allPlayers).filter((x) => x && String(x.invitedBy) === uid).length;
+  const refActive = countActiveRefs(p.referrals); // the exact counter state() ships as player.activeRefs
+  const prev = (prevWds || []).filter((w) => Number(w.wdNum) !== num);
+  const prevSum = prev.reduce((s, w) => s + (Number(w.amt) || 0), 0);
+  const verifiedLine = p.walletVerified === true
+    ? '✅ موثّقة' + (Number(p.verifiedAt) > 0 ? ` (${fmtDayMonYear(p.verifiedAt)})` : '')
+    : '❌ غير موثّقة';
+  const ageLine = (p.walletAgeDays !== undefined && p.walletAgeDays !== null && Number.isFinite(Number(p.walletAgeDays)))
+    ? `\n🕰 <b>عمر المحفظة:</b> ${Number(p.walletAgeDays)} يوم` : '';
+  const joinLine = Number(p.createdAt) > 0
+    ? `${fmtDayMonYear(p.createdAt)} (منذ ${Math.max(0, Math.floor((Date.now() - Number(p.createdAt)) / 86400000))} يوم)`
+    : '—';
+  const build = (showCount) => [
+    `🔍 <b>طلب سحب #${num}</b>${position ? ` — سحب ${position.index} من ${position.total}` : ''}`,
+    `👤 <b>${name}</b>${uname} — <code>${esc(uid)}</code> · رقم اللاعب: ${Number(p.userNo) || '—'}`,
+    `💰 <b>مبلغ السحب:</b> ${fmtCoins(wd.amt)} ${sym} · الرسوم: ${fmtCoins(wd.fee)} · <b>الصافي: ${fmtCoins(wd.net)} ${sym}</b>`,
+    `👛 <b>المحفظة:</b> <code>${esc(toFriendlyAddress(wd.walletAddr || p.walletAddr || ''))}</code>`,
+    `🛡 <b>التوثيق:</b> ${verifiedLine}${ageLine}`,
+    `💎 <b>رصيده في البوت الآن:</b> ${fmtAmt(p.mined)} ${sym} (بعد خصم السحب)`,
+    `🗓 <b>في البوت من:</b> ${joinLine}`,
+    `🔗 <b>أحاله:</b> ${invLine}`,
+    `👥 <b>إحالاته:</b> ${refTotal} · النشطة: ${refActive}`,
+    `🪙 <b>الهولد على الشبكة الآن:</b> ${holdTxt} ${sym}`,
+    multiSection(showCount),
+    `📊 <b>مصادر أرباحه:</b>\n⛏ التعدين: ${fmtAmt(p.earnMining)} · 📅 الدخول اليومي: ${fmtAmt(p.earnDaily)}\n✅ المهام: ${fmtAmt(p.earnTasks)} · 👥 الإحالات: ${fmtAmt(p.earnRef)} · 💸 عمولات محصّلة: ${fmtAmt(p.refCommissionEarned)}`,
+    `🕐 <b>سحوبات سابقة:</b> ${prev.length} (إجمالي ${fmtCoins(prevSum)} ${sym})`,
+    `⏱ <b>وقت الطلب:</b> ${fmtDateTime(wd.timestamp)}`
+  ].join('\n');
+  // Telegram's 4096-char cap: shed linked-account lines (the count
+  // line always survives) until the card fits.
+  let show = Math.min(8, linkedIds.length);
+  let text = build(show);
+  while (text.length > 3900 && show > 0) { show--; text = build(show); }
+  const keyboard = {
+    inline_keyboard: [
+      [{ text: '✅ موافقة', callback_data: 'wdok:' + num }, { text: '❌ رفض', callback_data: 'wdno:' + num }],
+      [{ text: '🚫 حظر المستخدم', callback_data: 'wdban:' + num }, { text: '⏭ تخطي', callback_data: 'wdskip:' + num }]
+    ]
+  };
+  return { text, keyboard };
+}
+
+/* Send one review card for a withdrawal. Default target is the
+   owner; review sessions pass their chat explicitly. With OWNER_ID
+   unset there is nobody to review with — skip silently. */
+async function sendWdReviewCard(wdNum, position, chatId) {
+  const target = (chatId !== undefined && chatId !== null) ? chatId : OWNER_ID;
+  if (!target) return;
+  const wd = await getVal(rtdb().ref('withdrawals/wd_' + Number(wdNum)));
+  if (!wd) return;
+  const card = await buildWdReviewCard(wd, position);
+  await tg('sendMessage', { chat_id: target, parse_mode: 'HTML', text: card.text, reply_markup: card.keyboard });
+}
+
+function ensureWdSession(chatId, num) {
+  let s = wdSessions.get(chatId);
+  if (!s) { s = { presented: new Set(), paid: 0, rejected: 0, banned: 0, skipped: 0 }; wdSessions.set(chatId, s); }
+  if (num !== undefined && num !== null) s.presented.add(Number(num));
+  return s;
+}
+
+/* Send the session's next card: the lowest still-pending withdrawal
+   this session has not presented yet. Returns false at queue end. */
+async function sendNextWdCard(chatId) {
+  const s = wdSessions.get(chatId);
+  if (!s) return false;
+  const pending = await pendingWithdrawals();
+  const rest = pending.filter((w) => !s.presented.has(Number(w.wdNum)));
+  if (!rest.length) return false;
+  const next = rest[0];
+  const position = { index: s.presented.size + 1, total: s.presented.size + rest.length };
+  s.presented.add(Number(next.wdNum));
+  await sendWdReviewCard(Number(next.wdNum), position, chatId);
+  return true;
+}
+
+/* After a decision/skip: present the next card, or close the
+   session with its summary when the queue is exhausted. */
+async function advanceWdSession(chatId) {
+  const s = wdSessions.get(chatId);
+  if (!s) return;
+  let sent = false;
+  try { sent = await sendNextWdCard(chatId); } catch (e) { console.error('wd session next', e.message); }
+  if (sent) return;
+  wdSessions.delete(chatId);
+  try {
+    await tg('sendMessage', { chat_id: chatId, parse_mode: 'HTML', text: `🏁 <b>انتهت المراجعة</b> — ✅ مدفوع: ${s.paid} · ❌ مرفوض: ${s.rejected} · 🚫 محظور: ${s.banned} · ⏭ متخطى: ${s.skipped}` });
+  } catch (e) { console.error('wd session summary', e.message); }
+}
+
+/* /withdrawals (owner-only, dispatched from handleOwnerTools):
+   start a fresh review walk over the pending queue. */
+async function startWdReview(chatId) {
+  const pending = await pendingWithdrawals();
+  if (!pending.length) {
+    await tg('sendMessage', { chat_id: chatId, parse_mode: 'HTML', text: 'لا توجد سحوبات معلّقة ✅' });
+    return;
+  }
+  wdSessions.set(chatId, { presented: new Set(), paid: 0, rejected: 0, banned: 0, skipped: 0 });
+  await sendNextWdCard(chatId);
+}
+
+/* The review-card buttons (callback_query updates). Strictly
+   owner-only; the callback is ALWAYS answered (a spinning button
+   is a broken button). Every decision is committed to the DB
+   before any message moves, and every Telegram call is
+   best-effort — a messaging failure never corrupts a decision. */
+async function handleBotCallback(cq) {
+  let answered = false;
+  const answer = async (text, alert) => {
+    if (answered || !cq || !cq.id) return;
+    answered = true;
+    try { await tg('answerCallbackQuery', { callback_query_id: cq.id, ...(text ? { text, show_alert: !!alert } : {}) }); } catch (e) { /* best-effort */ }
+  };
+  try {
+    const fromId = cq && cq.from ? String(cq.from.id) : '';
+    if (!OWNER_ID || fromId !== OWNER_ID) { await answer('⛔ للمالك فقط', true); return; }
+    const m = /^wd(ok|no|ban|skip):(\d+)$/.exec(String((cq && cq.data) || ''));
+    if (!m) { await answer(''); return; }
+    const op = m[1], num = Number(m[2]);
+    const msg = (cq && cq.message) || {};
+    const chatId = msg.chat ? msg.chat.id : Number(OWNER_ID);
+    const editCard = async (suffix) => {
+      if (!msg.message_id || chatId === undefined || chatId === null) return;
+      try {
+        await tg('editMessageText', { chat_id: chatId, message_id: msg.message_id, parse_mode: 'HTML', text: String(msg.text || '') + suffix, reply_markup: { inline_keyboard: [] } });
+      } catch (e) { console.error('wd card edit', num, e.message); }
+    };
+    const ref = rtdb().ref('withdrawals/wd_' + num);
+    const wd = await getVal(ref);
+    if (!wd || wd.status !== 'Pending ⏳') {
+      await answer('اتقرر في السحب ده خلاص');
+      if (wd) await editCard(`\n\n— <b>الحالة الحالية:</b> ${esc(wd.status)}`);
+      return;
+    }
+    if (op === 'skip') {
+      const s = ensureWdSession(chatId, num);
+      s.skipped++;
+      await answer('تم التخطي');
+      await advanceWdSession(chatId);
+      return;
+    }
+    if (op === 'ok') {
+      if (!payoutEnabled()) { await answer('الدفع التلقائي مش مفعّل على السيرفر', true); return; }
+      if (wd.payoutState === 'paying') { await answer('الدفع جاري تنفيذه بالفعل'); return; }
+      ensureWdSession(chatId, num);
+      await answer('جاري الدفع…');
+      await editCard('\n\n✅ <b>تمت الموافقة — جاري الدفع…</b>');
+      // Fire the EXISTING payout state machine WITHOUT awaiting it
+      // in the webhook path (seqno confirmation + tx-hash
+      // resolution can take a couple of minutes). The settle
+      // handler reports the outcome to the owner and only then
+      // advances the review session.
+      attemptPayout(num).then(async () => {
+        try {
+          const fin = await getVal(ref);
+          const cfg = await getConfig();
+          if (fin && fin.status === 'Paid ✅') {
+            const s = wdSessions.get(chatId);
+            if (s) s.paid++;
+            const txUrl = payoutTxUrl(fin);
+            await tg('sendMessage', {
+              chat_id: chatId, parse_mode: 'HTML',
+              text: `💸 <b>سحب #${num} اتدفع</b> — ${fmtCoins(fin.net)} ${esc(cfg.coinSym)}`,
+              ...(txUrl ? { reply_markup: { inline_keyboard: [[{ text: '🔗 View Transaction', url: txUrl }]] } } : {})
+            });
+          } else if (fin && fin.payoutState === 'failed') {
+            await tg('sendMessage', { chat_id: chatId, parse_mode: 'HTML', text: `⚠️ <b>سحب #${num}: الدفع فشل</b> — ${esc(fin.payoutError || 'خطأ غير معروف')} (السحب لسه معلّق)` });
+          } else {
+            await tg('sendMessage', { chat_id: chatId, parse_mode: 'HTML', text: `ℹ️ سحب #${num}: الدفع اتقرر أو جاري من مكان تاني — الحالة الحالية: ${esc((fin && fin.status) || '؟')}` });
+          }
+        } catch (e) { console.error('wd approve followup', num, e.message); }
+        await advanceWdSession(chatId);
+      }).catch((e) => console.error('wd approve payout', num, e.message));
+      return;
+    }
+    /* wdno / wdban: flip the record FIRST (atomically — a second
+       tap on a stale card loses the race and changes nothing),
+       then message. NO refund either way: the deducted coins stay
+       deducted (owner's explicit order). */
+    const flip = await txUpdate(ref, (x) => {
+      if (x === null) return { skip: true, out: null };
+      if (x.status !== 'Pending ⏳') return { skip: true, out: null };
+      return { value: { ...x, status: 'Rejected ❌', decidedAt: Date.now() }, out: x };
+    });
+    if (!flip) { await answer('اتقرر في السحب ده خلاص'); return; }
+    const s = ensureWdSession(chatId, num);
+    const cfg = await getConfig();
+    if (op === 'ban') {
+      try {
+        const pref = P(wd.userId);
+        if ((await getVal(pref)) !== null) await pref.update({ banned: true });
+      } catch (e) { console.error('wd ban', num, e.message); }
+      s.banned++;
+      await answer('تم حظر المستخدم ورفض السحب');
+      await editCard('\n\n🚫 <b>تم حظر المستخدم ورفض السحب — لم تُسترد العملات</b>');
+      try { await tg('sendMessage', { chat_id: chatId, parse_mode: 'HTML', text: `🚫 تم حظر <b>${esc(wd.userName || '')}</b> ورفض سحبه #${num} (${fmtCoins(wd.amt)} ${esc(cfg.coinSym)}) — لم تُسترد عملاته` }); } catch (e) { console.error('wd ban confirm', num, e.message); }
+    } else {
+      s.rejected++;
+      await answer('تم الرفض');
+      await editCard('\n\n❌ <b>تم الرفض — لم تُسترد العملات</b>');
+      try { await tg('sendMessage', { chat_id: chatId, parse_mode: 'HTML', text: `❌ تم رفض سحب #${num} (<b>${esc(wd.userName || '')}</b> — ${fmtCoins(wd.amt)} ${esc(cfg.coinSym)}) ولم تُسترد عملاته` }); } catch (e) { console.error('wd reject confirm', num, e.message); }
+    }
+    await advanceWdSession(chatId);
+  } catch (e) {
+    console.error('bot callback', e.message);
+    await answer('');
+  }
+}
+
 /* Boot line (owner order 2026-11-14): one startup line, always —
    the disabled line, or the live wallet + balances when enabled.
    Balances are best-effort: a chain hiccup at boot is logged,
@@ -2799,19 +3125,23 @@ functions.http('collectMining', async (req, res) => {
   }
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
   // Telegram webhook updates arrive on this same endpoint: they carry
-  // update_id + message instead of initData/action and are authenticated
+  // update_id + message (or callback_query, for the withdrawal-review
+  // card buttons) instead of initData/action and are authenticated
   // by the webhook secret header, never by initData — handled BEFORE
   // the API path (and before its rate limiter: Telegram retries must
   // not be throttled into dropping a verification).
   const updBody = req.body || {};
-  if (typeof updBody.update_id === 'number' && updBody.message) {
+  if (typeof updBody.update_id === 'number' && (updBody.message || updBody.callback_query)) {
     const given = String(req.headers['x-telegram-bot-api-secret-token'] || '');
     const secret = webhookSecret();
     if (!BOT_TOKEN || given.length !== secret.length || !crypto.timingSafeEqual(Buffer.from(given), Buffer.from(secret))) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
     if (markUpdateSeen(updBody.update_id)) {
-      try { await handleBotMessage(updBody.message); } catch (e) { console.error('bot update', e.message); }
+      try {
+        if (updBody.message) await handleBotMessage(updBody.message);
+        else await handleBotCallback(updBody.callback_query); // withdrawal-review card buttons
+      } catch (e) { console.error('bot update', e.message); }
     }
     return res.status(200).json({ ok: true });
   }
@@ -2852,4 +3182,4 @@ functions.http('collectMining', async (req, res) => {
   }
 });
 
-module.exports = { verifyInitData, clientKeys, riskOf, noteSignals, hit, publicConfig, chatIdOf, memberStatus, updateMultiLinks, completeVerification, verifyWatchTick, toFriendlyAddress, fmtDayMonYear, txUpdate, attemptPayout, derivePayoutAddress, payoutEnabled, sendPayoutSuccess };
+module.exports = { verifyInitData, clientKeys, riskOf, noteSignals, hit, publicConfig, chatIdOf, memberStatus, updateMultiLinks, completeVerification, verifyWatchTick, toFriendlyAddress, fmtDayMonYear, txUpdate, attemptPayout, derivePayoutAddress, payoutEnabled, sendPayoutSuccess, buildWdReviewCard, sendWdReviewCard, handleBotCallback };
