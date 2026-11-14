@@ -362,8 +362,6 @@
         <div class="card-3d" style="margin:0;"><small style="color:var(--m);" data-i18n="mine_wallet_lbl">Mined Balance</small><div style="font-size:17px;font-weight:900;"><span id="prof-mine-bal">0</span> 🪙</div></div>
       </div>
 
-      <div id="wd-unlock-status" class="card-3d" style="font-size:11.5px;font-weight:700;color:#fca5a5;"></div>
-
       <div class="card-3d">
         <h4 style="margin-bottom:6px;"><span data-i18n="withdraw_title">Withdraw</span> <span class="coin-sym">$VIKING</span></h4>
         <input type="number" id="wd-input-amt" class="input-3d" value="5000" min="5000" step="500">
@@ -1911,9 +1909,6 @@
       document.getElementById('wd-net-calc').innerText = (amt - fee).toLocaleString();
       document.getElementById('wd-req-hold-num').innerText = reqHold.toLocaleString();
       document.getElementById('wd-cur-hold-num').innerText = Math.floor(walletHold).toLocaleString();
-      const sb = document.getElementById('wd-unlock-status');
-      sb.style.color = (linkedWalletAddr && walletHold >= reqHold) ? "#86efac" : "#fca5a5";
-      sb.innerText = (linkedWalletAddr && walletHold >= reqHold) ? "✅ Withdrawal Unlocked!" : `🔒 Locked: Connect Wallet & Hold 25% (${reqHold.toLocaleString()} ${config.coinSym}).`;
       // Locked-button state (owner order 2026-11-14): when the user cannot
       // withdraw, the Request button itself greys out, disables, and carries
       // the FIRST blocking reason. Priority mirrors the server's validation
