@@ -2303,7 +2303,7 @@ async function createRealPayoutClient() {
     },
     /* Standard TEP-74 jetton transfer (op 0x0f8a7ea5) from the payout
        wallet's jetton wallet to the recipient's OWNER wallet (their
-       jetton wallet credits them), comment `WD-<wdNum>` as the
+       jetton wallet credits them), comment `VIKING-<wdNum>` as the
        forward payload so every payout is traceable on-chain.
        Returns after the wallet seqno has moved (the external message
        has landed) — bounded at ~60 s. */
@@ -2351,7 +2351,7 @@ async function createRealPayoutClient() {
        with the exact base amount and recipient, AND whose forward
        comment — decoded from the payload ref with the exact layout
        sendJetton builds (uint32 0 + string tail) — equals `comment`
-       (WD-<wdNum>, unique per withdrawal). Polls every 5 s for up
+       (VIKING-<wdNum>, unique per withdrawal). Polls every 5 s for up
        to ~90 s; a lagging index or a failed read just costs one
        poll. Returns the lowercase hex hash, or null on timeout —
        the caller then links the wallet page, never the local hash. */
@@ -2482,12 +2482,12 @@ async function attemptPayout(wdNum) {
     //      out the record keeps payoutTx '' and gains payoutTxLink
     //      (the payout wallet's tonviewer page) as the link target.
     const broadcastAt = Date.now();
-    const sent = await client.sendJetton({ toRaw: wd.walletAddr, amount: amountBase, comment: 'WD-' + num });
+    const sent = await client.sendJetton({ toRaw: wd.walletAddr, amount: amountBase, comment: 'VIKING-' + num });
     if (sent && sent.txHash) console.log('payout', num, 'local external hash (not the on-chain tx id):', String(sent.txHash));
     let resolvedTx = '';
     if (typeof client.findTransferTx === 'function') {
       try {
-        resolvedTx = String((await client.findTransferTx({ comment: 'WD-' + num, toRaw: wd.walletAddr, amountBase, sinceMs: broadcastAt })) || '');
+        resolvedTx = String((await client.findTransferTx({ comment: 'VIKING-' + num, toRaw: wd.walletAddr, amountBase, sinceMs: broadcastAt })) || '');
       } catch (e) { console.error('payout tx resolve', num, e.message); }
     }
     if (!/^[0-9a-fA-F]{64}$/.test(resolvedTx)) resolvedTx = '';

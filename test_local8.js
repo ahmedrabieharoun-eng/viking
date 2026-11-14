@@ -25,7 +25,7 @@
  *
  *   P1  auto-pay success: record Paid ✅ / payoutState 'paid',
  *       exactly ONE transfer of net x 10^6 base units (decimals 6),
- *       comment WD-<n>, player balance stays deducted.
+ *       comment VIKING-<n>, player balance stays deducted.
  *   P2  insufficient payout-wallet jettons: NO transfer, record
  *       stays 'Pending ⏳' with payoutState 'failed', owner alerted
  *       exactly once, admin reject-refund still works afterwards.
@@ -338,9 +338,9 @@ async function doWithdraw(port, id, name, username) {
     check('record flipped to Paid ✅ with payoutState paid', wd1.status === 'Paid ✅' && wd1.payoutState === 'paid', wd1);
     check('payoutTx is the chain-RESOLVED hash (findTransferTx), payoutAt stamped', wd1.payoutTx === STUB_TX_HASH && typeof wd1.payoutAt === 'number', wd1);
     check('the seam local hash was NOT stored — it appears nowhere in the record', wd1.payoutTx !== BOGUS_LOCAL_HASH && !JSON.stringify(wd1).includes(BOGUS_LOCAL_HASH), wd1);
-    const f1 = findsFor('WD-' + n1);
+    const f1 = findsFor('VIKING-' + n1);
     check('findTransferTx was asked for OUR transfer (comment + recipient + exact base amount)', f1.length >= 1 && f1[0].toRaw === W1 && f1[0].amountBase === '4750000000', f1);
-    const s1 = sendsFor('WD-' + n1);
+    const s1 = sendsFor('VIKING-' + n1);
     check('exactly ONE jetton transfer for this withdrawal', s1.length === 1, s1);
     check('transfer amount = net 4750 x 10^6 base units (decimals 6, not 9)', s1.length === 1 && s1[0].amount === '4750000000', s1);
     check('transfer went to the player bound wallet', s1.length === 1 && s1[0].toRaw === W1, s1);
@@ -398,7 +398,7 @@ async function doWithdraw(port, id, name, username) {
     await waitFor(async () => { const w = await dbGet('withdrawals/wd_' + n2); return w && w.payoutState === 'failed'; }, 20000, 'wd ' + n2 + ' failed');
     const wd2 = await dbGet('withdrawals/wd_' + n2);
     check('record stays Pending ⏳ with payoutState failed + reason', wd2.status === 'Pending ⏳' && wd2.payoutState === 'failed' && String(wd2.payoutError || '').includes('insufficient jetton balance'), wd2);
-    check('NO transfer was broadcast', sendsFor('WD-' + n2).length === 0, sendsFor('WD-' + n2));
+    check('NO transfer was broadcast', sendsFor('VIKING-' + n2).length === 0, sendsFor('VIKING-' + n2));
     const alerts2 = msgsTo(OWNER_ID).filter((m) => String(m.text || '').includes('فشل الدفع التلقائي') && String(m.text || '').includes('#' + n2));
     check('owner alerted exactly once, naming the withdrawal', alerts2.length === 1, alerts2.length);
     const p2 = await dbGet('players/' + U2);
@@ -421,7 +421,7 @@ async function doWithdraw(port, id, name, username) {
     await waitFor(async () => { const w = await dbGet('withdrawals/wd_' + n3); return w && w.payoutState === 'failed'; }, 20000, 'wd ' + n3 + ' failed');
     const wd3 = await dbGet('withdrawals/wd_' + n3);
     check('record stays Pending ⏳, payoutError carries the broadcast failure', wd3.status === 'Pending ⏳' && String(wd3.payoutError || '').includes('stub broadcast boom'), wd3);
-    check('exactly one broadcast attempt was made', sendsFor('WD-' + n3).length === 1, sendsFor('WD-' + n3));
+    check('exactly one broadcast attempt was made', sendsFor('VIKING-' + n3).length === 1, sendsFor('VIKING-' + n3));
     const alerts3 = msgsTo(OWNER_ID).filter((m) => String(m.text || '').includes('فشل الدفع التلقائي') && String(m.text || '').includes('#' + n3));
     check('owner alerted exactly once for the throw', alerts3.length === 1, alerts3.length);
     setStub(RICH);
@@ -467,8 +467,8 @@ async function doWithdraw(port, id, name, username) {
     check('timeout: the payout still completes — record Paid ✅ / payoutState paid', wd7.status === 'Paid ✅' && wd7.payoutState === 'paid', wd7);
     check('timeout: payoutTx is EMPTY and payoutTxLink is the payout wallet page', wd7.payoutTx === '' && wd7.payoutTxLink === WALLET_PAGE, wd7);
     check('timeout: the bogus local hash is nowhere in the record', !JSON.stringify(wd7).includes(BOGUS_LOCAL_HASH), wd7);
-    check('timeout: exactly one transfer was still broadcast', sendsFor('WD-' + n7).length === 1, sendsFor('WD-' + n7));
-    check('timeout: resolution was actually attempted for our comment', findsFor('WD-' + n7).length >= 1, findsFor('WD-' + n7));
+    check('timeout: exactly one transfer was still broadcast', sendsFor('VIKING-' + n7).length === 1, sendsFor('VIKING-' + n7));
+    check('timeout: resolution was actually attempted for our comment', findsFor('VIKING-' + n7).length >= 1, findsFor('VIKING-' + n7));
     await waitFor(async () => photosTo(U7).length === 1 && photosTo('@VIKING_PAYOUT').length === chBefore7 + 1, 15000, 'wd ' + n7 + ' celebration messages');
     const dm7 = photosTo(U7)[0] || {};
     const ch7 = photosTo('@VIKING_PAYOUT').slice(-1)[0] || {};
@@ -487,24 +487,24 @@ async function doWithdraw(port, id, name, username) {
     setStub({ jettonBalanceBase: '1000000000000', sendBehavior: 'ok', sendDelayMs: 700 });
     await Promise.all([srv.attemptPayout(9001), srv.attemptPayout(9001), srv.attemptPayout(9001)]);
     const wd9001 = await dbGet('withdrawals/wd_9001');
-    check('three concurrent invocations -> exactly ONE transfer', sendsFor('WD-9001').length === 1, sendsFor('WD-9001'));
+    check('three concurrent invocations -> exactly ONE transfer', sendsFor('VIKING-9001').length === 1, sendsFor('VIKING-9001'));
     check('the record completed exactly once (Paid / paid / notified)', wd9001.status === 'Paid ✅' && wd9001.payoutState === 'paid' && typeof wd9001.payoutNotifiedAt === 'number', wd9001);
     await srv.attemptPayout(9001);
-    check('re-invoking a paid record broadcasts nothing more', sendsFor('WD-9001').length === 1);
+    check('re-invoking a paid record broadcasts nothing more', sendsFor('VIKING-9001').length === 1);
     await seedWd(9002, {});
     setStub({ jettonBalanceBase: '1000000000000', sendBehavior: 'throw' });
     await srv.attemptPayout(9002);
     const wd9002a = await dbGet('withdrawals/wd_9002');
     check('a throwing attempt lands in failed', wd9002a.payoutState === 'failed', wd9002a);
     await srv.attemptPayout(9002);
-    check('a failed record is never auto-retried (still one attempt)', sendsFor('WD-9002').length === 1 && (await dbGet('withdrawals/wd_9002')).payoutState === 'failed');
+    check('a failed record is never auto-retried (still one attempt)', sendsFor('VIKING-9002').length === 1 && (await dbGet('withdrawals/wd_9002')).payoutState === 'failed');
     await seedWd(9003, { payoutState: 'paying', payoutAttemptAt: Date.now() });
     setStub(RICH);
     await srv.attemptPayout(9003);
     const wd9003 = await dbGet('withdrawals/wd_9003');
-    check('a paying record is hands-off (untouched, no send)', wd9003.payoutState === 'paying' && !wd9003.payoutAt && sendsFor('WD-9003').length === 0, wd9003);
+    check('a paying record is hands-off (untouched, no send)', wd9003.payoutState === 'paying' && !wd9003.payoutAt && sendsFor('VIKING-9003').length === 0, wd9003);
     await srv.attemptPayout(977777);
-    check('a missing record is a quiet no-op', sendsFor('WD-977777').length === 0);
+    check('a missing record is a quiet no-op', sendsFor('VIKING-977777').length === 0);
 
     /* ---------- G1: adminWd refuses a 'paying' record ---------- */
     console.log('\n[G1: adminWd on a payoutState=paying record — refused]');
@@ -524,7 +524,7 @@ async function doWithdraw(port, id, name, username) {
     const wd6a = await dbGet('withdrawals/wd_' + n6);
     check('disabled: record is exactly the old shape — Pending, NO payoutState at all',
       wd6a.status === 'Pending ⏳' && !('payoutState' in wd6a) && !('payoutNotifiedAt' in wd6a), wd6a);
-    check('disabled: no transfer, no celebration yet', sendsFor('WD-' + n6).length === 0 && allTo(U6).length === 0);
+    check('disabled: no transfer, no celebration yet', sendsFor('VIKING-' + n6).length === 0 && allTo(U6).length === 0);
     const chBefore6 = allTo('@VIKING_PAYOUT').length;
     const r6 = await apiOn(APP_B, OWNER_INIT(), 'adminWd', { docId: 'wd_' + n6, decision: 'approve', txHash: '' });
     check('manual approve succeeds', r6.status === 200, r6);
