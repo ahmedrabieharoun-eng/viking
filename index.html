@@ -120,13 +120,30 @@
     @keyframes heroBreath{0%,100%{transform:scale(1)}50%{transform:scale(1.045)}}
     .coin-stage-3d:active #hero-img{transform:scale(1.02)}
     .live-counter-3d{color:var(--gold2);text-shadow:0 0 14px rgba(245,215,110,.45),0 2px 0 #3a2403}
-    /* Tasks board: parchment scrolls (owner-approved) */
-    #page-tasks .card-3d{background:linear-gradient(172deg,#efdfae,#e0c78d 55%,#cdb27a);border:1px solid #8a6d35;border-top:2px solid #f7ecc4;border-bottom:4px solid #5d4517;color:#2e2010;box-shadow:0 8px 18px rgba(0,0,0,.6)}
-    #page-tasks .card-3d h4{color:#3a2a10!important}
-    #page-tasks .card-3d p{color:#5a4520!important}
-    #page-tasks .card-3d strong{color:#7a5410!important}
-    #page-tasks #ref-ach-list div{color:#5a4520!important}
-    #page-tasks #ref-ach-list [style*="color:var(--gb)"]{color:#7a5410!important}
+    /* Tasks board: QUESTS — generated plaque + parchment scroll rows (owner reference 2026-11-14) */
+    .q-sign{position:relative;margin-bottom:14px}
+    .q-sign img{width:100%;display:block;border-radius:8px;box-shadow:0 10px 22px rgba(0,0,0,.6)}
+    .q-sign-title{position:absolute;left:8%;right:8%;top:57%;transform:translateY(-50%);text-align:center;font-family:Georgia,serif;font-size:30px;font-weight:900;letter-spacing:6px;color:#f5d76e;text-shadow:0 2px 10px rgba(0,0,0,.85),0 0 26px rgba(212,175,55,.3)}
+    .q-wrap{background:url('assets/ref_stone_wide.webp') center/cover;border-radius:12px;padding:10px;margin-bottom:14px;box-shadow:0 8px 18px rgba(0,0,0,.55),inset 0 0 0 1px rgba(255,255,255,.05)}
+    .q-row{position:relative;margin:0 14px}
+    .q-scroll{width:100%;display:block}
+    .q-row-in{position:absolute;inset:0;display:flex;align-items:center;gap:8px;padding:5% 8.5% 5% 12.5%}
+    .q-ic{width:46px;height:46px;object-fit:contain;flex:none;filter:drop-shadow(0 3px 5px rgba(0,0,0,.35))}
+    .q-mid{flex:1;min-width:0}
+    .q-title{font-weight:900;font-size:14.5px;color:#241806;line-height:1.18}
+    .q-rew{display:flex;align-items:center;gap:5px;color:#7a5410;font-weight:900;font-size:13px;margin-top:3px}
+    .q-rew img{width:16px;height:16px;flex:none}
+    .q-hint{font-size:10.5px;color:#6b5322;margin-top:2px;font-weight:700}
+    .q-btn{width:auto!important;flex:none;max-width:106px;font-size:12px!important;line-height:1.25;padding:9px 10px!important}
+    .q-claimed{flex:none;background:linear-gradient(180deg,#4ade80,#22c55e,#16a34a);color:#fff;font-weight:800;font-size:12px;white-space:nowrap;padding:8px 14px;border-radius:14px;box-shadow:0 4px 0 #14532d}
+    .q-prog{padding:9px 12px 11px}
+    .q-prog-bg{height:8px;background:rgba(0,0,0,.5);border:1px solid rgba(212,175,55,.4);border-radius:99px;overflow:hidden}
+    .q-prog-fill{height:100%;background:linear-gradient(90deg,#b45309,#f5c542,#fde047);border-radius:99px}
+    .q-prog-txt{text-align:center;font-size:11px;color:#cdbd93;margin-top:4px;font-weight:700}
+    .q-under-txt{font-size:11.5px;color:#a9c6e8;margin:9px 4px 2px;line-height:1.5}
+    .q-sec-title{font-family:Georgia,serif;font-size:15px;font-weight:900;letter-spacing:1.5px;color:var(--gold2);margin:2px 2px 0}
+    #bio-task-card .q-rew .coin-sym{display:none}
+    #page-tasks .daily-grid{margin:10px 2px 2px}
     #page-tasks .daily-box{background:linear-gradient(180deg,#24334f,#131f36);border-color:rgba(212,175,55,.5);color:#d8c491}
     #page-tasks .daily-box.active{border-color:#8a6d35;background:linear-gradient(180deg,#f7dc6f,#c39a2e);color:#23160a}
     #page-tasks .daily-box.claimed{background:linear-gradient(180deg,#3f9e57,#256b38);color:#fff;border-color:#1d552c}
@@ -503,51 +520,73 @@
 
     <!-- 2. TASKS PAGE -->
     <div id="page-tasks" class="page">
-      <div class="card-3d">
-        <img src="assets/quests_plaque.webp" alt="Quests" class="quests-plaque" onerror="this.style.display='none'">
-        <div style="display:flex;justify-content:space-between;margin-bottom:8px;">
-          <h4 data-i18n="daily_login_title">🎁 Daily Login (7 Days)</h4>
+      <div class="pf-titlebar" data-i18n="quests_title">QUESTS</div>
+
+      <div class="q-wrap">
+        <div class="q-row">
+          <img class="q-scroll" src="assets/quest_scroll.webp" alt="">
+          <div class="q-row-in">
+            <img class="q-ic" src="assets/icon_q_sun.webp" alt="">
+            <div class="q-mid">
+              <div class="q-title" data-i18n="daily_login_title">🎁 Daily Login (7 Days)</div>
+              <div class="q-rew"><img src="assets/coin_icon.webp" alt=""><span id="daily-rew-amt">+25</span></div>
+            </div>
+            <button class="btn-3d-gold q-btn" id="btn-claim-daily" data-i18n="claim_daily_btn">Claim Daily Reward</button>
+          </div>
         </div>
         <div class="daily-grid" id="daily-streak-container"></div>
-        <button class="btn-3d-gold" id="btn-claim-daily" data-i18n="claim_daily_btn">Claim Daily Reward</button>
       </div>
 
-      <div class="card-3d">
-        <div style="display:flex;justify-content:space-between;margin-bottom:8px;">
-          <h4 id="ch-1-title" data-i18n="ch1_title">📢 Official Telegram Channel</h4>
-          <strong style="color:var(--gb);">+<span class="ui-task-rew">50</span> <span class="coin-sym">$VIKING</span></strong>
+      <div class="q-wrap">
+        <div class="q-row" id="ch1-row">
+          <img class="q-scroll" src="assets/quest_scroll.webp" alt="">
+          <div class="q-row-in">
+            <img class="q-ic" src="assets/icon_q_flag.webp" alt="">
+            <div class="q-mid">
+              <div class="q-title" id="ch-1-title" data-i18n="ch1_title">📢 Official Telegram Channel</div>
+              <div class="q-rew"><img src="assets/coin_icon.webp" alt="">+<span class="ui-task-rew">50</span> <span class="coin-sym">$VIKING</span></div>
+              <div class="q-hint" data-i18n="tap_open_hint">Tap the card to open</div>
+            </div>
+            <button class="btn-3d-gold q-btn" id="ch-task-1-btn" data-i18n="verify_btn">2. Verify ✅</button>
+          </div>
         </div>
-        <div class="grid-2">
-          <button class="btn-3d-dark" id="btn-open-ch1" data-i18n="open_ch">1. Open Channel</button>
-          <button class="btn-3d-gold" id="ch-task-1-btn" data-i18n="verify_btn">2. Verify ✅</button>
-        </div>
+        <button class="btn-3d-dark" id="btn-open-ch1" data-i18n="open_ch" style="display:none;">1. Open Channel</button>
       </div>
 
-      <div class="card-3d">
-        <div style="display:flex;justify-content:space-between;margin-bottom:8px;">
-          <h4 id="ch-2-title" data-i18n="ch2_title">💬 Payouts & Community Channel</h4>
-          <strong style="color:var(--gb);">+<span class="ui-task-rew">50</span> <span class="coin-sym">$VIKING</span></strong>
+      <div class="q-wrap">
+        <div class="q-row" id="ch2-row">
+          <img class="q-scroll" src="assets/quest_scroll.webp" alt="">
+          <div class="q-row-in">
+            <img class="q-ic" src="assets/icon_q_chest.webp" alt="">
+            <div class="q-mid">
+              <div class="q-title" id="ch-2-title" data-i18n="ch2_title">💬 Payouts & Community Channel</div>
+              <div class="q-rew"><img src="assets/coin_icon.webp" alt="">+<span class="ui-task-rew">50</span> <span class="coin-sym">$VIKING</span></div>
+              <div class="q-hint" data-i18n="tap_open_hint">Tap the card to open</div>
+            </div>
+            <button class="btn-3d-gold q-btn" id="ch-task-2-btn" data-i18n="verify_btn">2. Verify ✅</button>
+          </div>
         </div>
-        <div class="grid-2">
-          <button class="btn-3d-dark" id="btn-open-ch2" data-i18n="open_grp">1. Open Group</button>
-          <button class="btn-3d-gold" id="ch-task-2-btn" data-i18n="verify_btn">2. Verify ✅</button>
-        </div>
+        <button class="btn-3d-dark" id="btn-open-ch2" data-i18n="open_grp" style="display:none;">1. Open Group</button>
       </div>
 
-      <div class="card-3d" id="bio-task-card">
-        <div style="display:flex;justify-content:space-between;margin-bottom:8px;">
-          <h4>📝 Bio Task</h4>
-          <strong style="color:var(--gb);">+<span id="ui-bio-rew">50</span> <span class="coin-sym">$VIKING</span></strong>
+      <div class="q-wrap" id="bio-task-card">
+        <div class="q-row">
+          <img class="q-scroll" src="assets/quest_scroll.webp" alt="">
+          <div class="q-row-in">
+            <img class="q-ic" src="assets/icon_q_feather.webp" alt="">
+            <div class="q-mid">
+              <div class="q-title">📝 Bio Task</div>
+              <div class="q-rew"><img src="assets/coin_icon.webp" alt="">+<span id="ui-bio-rew">50</span> <span class="coin-sym">$VIKING</span></div>
+            </div>
+            <button class="btn-3d-gold q-btn" id="btn-bio-task">Verify in bot</button>
+          </div>
         </div>
-        <p style="font-size:12px;color:var(--gb);margin:4px 0 10px;" data-i18n="bio_task_desc">Add <strong id="bio-bot-username" style="color:#fff;">@BOT</strong> to your Telegram bio, then tap the button below and press Start in the bot — your reward is added automatically. Come back here and it will show as done.</p>
-        <button class="btn-3d-gold" id="btn-bio-task">Verify in bot</button>
+        <p class="q-under-txt" data-i18n="bio_task_desc">Add <strong id="bio-bot-username" style="color:#fff;">@BOT</strong> to your Telegram bio, then tap the button and press Start in the bot — your reward is added automatically. Come back here and it will show as done.</p>
       </div>
 
-      <div class="card-3d">
-        <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
-          <h4>🏆 Referral Milestones</h4>
-        </div>
-        <p style="font-size:11px;color:var(--m);margin:0 0 6px;">Only verified (active) referrals count — a friend becomes active after syncing a wallet with the required hold. Pending friends don't count.</p>
+      <div class="q-wrap">
+        <div class="q-sec-title">🏆 Referral Milestones</div>
+        <p class="q-under-txt" style="margin-top:4px;">Only verified (active) referrals count — a friend becomes active after syncing a wallet with the required hold. Pending friends don't count.</p>
         <div id="ref-ach-list"></div>
       </div>
     </div>
@@ -1264,7 +1303,7 @@
         my_referrals_title:"👥 My Invited Friends", pending_ref_title:"Pending Referral Profits", collect_ref_btn:"COLLECT",
         ton_wallet_title:"TON Blockchain Wallet", connect_wallet_btn:"Connect TON Wallet",
         sync_hold_btn:"Verify Wallet Hold", disconnect_wallet_btn:"Disconnect",
-        prof_page_title:"PROFILE", prof_username_lbl:"USERNAME", prof_wallet_lbl:"WALLET", prof_amount_lbl:"AMOUNT", buy_stonfi_btn:"Buy on STON.fi", set_sound_lbl:"SOUND", set_lang_lbl:"LANGUAGE", lock_verify:"Verify Your Wallet First", ref_banner_title:"REFERRAL SYSTEM", boost_banner_title:"LEVELS BOOST", ref_head_earn:"Earn 5% of your friends mining", ref_head_sub:"A friend activates at Level 2", ref_link_lbl:"REFERRAL LINK", ref_how_title:"HOW IT WORKS", ref_rule_100:"+100 coins for every ACTIVE referral", ref_rule_cond:"Activation: your friend reaches Level 2 — holding 200+ $VIKING in their wallet", ref_rule_5:"You earn 5% of everything your active referrals earn — automatically", ref_friends_title:"MY INVITED FRIENDS", ref_verified_pill:"VERIFIED", ref_pending_pill:"PENDING", ref_dup_pill:"DUPLICATE",
+        prof_page_title:"PROFILE", prof_username_lbl:"USERNAME", prof_wallet_lbl:"WALLET", prof_amount_lbl:"AMOUNT", buy_stonfi_btn:"Buy on STON.fi", set_sound_lbl:"SOUND", set_lang_lbl:"LANGUAGE", lock_verify:"Verify Your Wallet First", ref_banner_title:"REFERRAL SYSTEM", boost_banner_title:"LEVELS BOOST", quests_title:"QUESTS", tap_open_hint:"Tap the card to open", ref_head_earn:"Earn 5% of your friends mining", ref_head_sub:"A friend activates at Level 2", ref_link_lbl:"REFERRAL LINK", ref_how_title:"HOW IT WORKS", ref_rule_100:"+100 coins for every ACTIVE referral", ref_rule_cond:"Activation: your friend reaches Level 2 — holding 200+ $VIKING in their wallet", ref_rule_5:"You earn 5% of everything your active referrals earn — automatically", ref_friends_title:"MY INVITED FRIENDS", ref_verified_pill:"VERIFIED", ref_pending_pill:"PENDING", ref_dup_pill:"DUPLICATE",
         hold_wallet_lbl:"Wallet Hold", mine_wallet_lbl:"Mined Balance",
         withdraw_title:"Withdraw", min_wd_lbl:"Minimum:", wd_fee_lbl:"Fee (5%):", net_lbl:"Net:",
         hold_cond_lbl:"25% Hold Required:", your_hold_lbl:"Your Hold:", req_wd_btn:"Request Withdrawal",
@@ -1310,7 +1349,7 @@
         my_referrals_title:"👥 أصدقائي المدعوون", pending_ref_title:"أرباح الإحالات المعلقة", collect_ref_btn:"جمع أرباح الإحالات",
         ton_wallet_title:"محفظة شبكة TON", connect_wallet_btn:"ربط محفظة TON الآن",
         sync_hold_btn:"تحديث رصيد المحفظة", disconnect_wallet_btn:"إلغاء الربط",
-        prof_page_title:"الملف الشخصي", prof_username_lbl:"اسم المستخدم", prof_wallet_lbl:"المحفظة", prof_amount_lbl:"المبلغ", buy_stonfi_btn:"اشترِ من STON.fi", set_sound_lbl:"الصوت", set_lang_lbl:"اللغة", lock_verify:"قم بتوثيق محفظتك أولاً", ref_banner_title:"نظام الإحالة", boost_banner_title:"تعزيز المستوى", ref_head_earn:"اكسب 5% من تعدين أصدقائك", ref_head_sub:"الصديق بيتنشط عند المستوى 2", ref_link_lbl:"رابط الإحالة", ref_how_title:"إزاي بيشتغل", ref_rule_100:"+100 عملة عن كل إحالة نشطة", ref_rule_cond:"التنشيط: صديقك يوصل للمستوى 2 — يعني معاه 200+ $VIKING في محفظته", ref_rule_5:"بتكسب 5% من كل أرباح إحالاتك النشطة — تلقائيًا", ref_friends_title:"أصدقائي المدعوون", ref_verified_pill:"موثّق", ref_pending_pill:"قيد الانتظار", ref_dup_pill:"مكرر",
+        prof_page_title:"الملف الشخصي", prof_username_lbl:"اسم المستخدم", prof_wallet_lbl:"المحفظة", prof_amount_lbl:"المبلغ", buy_stonfi_btn:"اشترِ من STON.fi", set_sound_lbl:"الصوت", set_lang_lbl:"اللغة", lock_verify:"قم بتوثيق محفظتك أولاً", ref_banner_title:"نظام الإحالة", boost_banner_title:"تعزيز المستوى", quests_title:"المهام", tap_open_hint:"اضغط على الكارت للفتح", ref_head_earn:"اكسب 5% من تعدين أصدقائك", ref_head_sub:"الصديق بيتنشط عند المستوى 2", ref_link_lbl:"رابط الإحالة", ref_how_title:"إزاي بيشتغل", ref_rule_100:"+100 عملة عن كل إحالة نشطة", ref_rule_cond:"التنشيط: صديقك يوصل للمستوى 2 — يعني معاه 200+ $VIKING في محفظته", ref_rule_5:"بتكسب 5% من كل أرباح إحالاتك النشطة — تلقائيًا", ref_friends_title:"أصدقائي المدعوون", ref_verified_pill:"موثّق", ref_pending_pill:"قيد الانتظار", ref_dup_pill:"مكرر",
         hold_wallet_lbl:"عملات المحفظة (Hold)", mine_wallet_lbl:"رصيد التعدين",
         withdraw_title:"سحب", min_wd_lbl:"الحد الأدنى:", wd_fee_lbl:"رسوم (5%):", net_lbl:"الصافي:",
         hold_cond_lbl:"شرط 25% بالمحفظة:", your_hold_lbl:"رصيد محفظتك:", req_wd_btn:"طلب سحب الرصيد",
@@ -1356,7 +1395,7 @@
         my_referrals_title:"👥 Мои рефералы", pending_ref_title:"Ожидаемый доход", collect_ref_btn:"Собрать доход",
         ton_wallet_title:"Кошелек TON", connect_wallet_btn:"Подключить TON Кошелек",
         sync_hold_btn:"Обновить Холд", disconnect_wallet_btn:"Отключить",
-        prof_page_title:"ПРОФИЛЬ", prof_username_lbl:"ИМЯ ПОЛЬЗОВАТЕЛЯ", prof_wallet_lbl:"КОШЕЛЁК", prof_amount_lbl:"СУММА", buy_stonfi_btn:"Купить на STON.fi", set_sound_lbl:"ЗВУК", set_lang_lbl:"ЯЗЫК", lock_verify:"Сначала подтвердите кошелёк", ref_banner_title:"РЕФЕРАЛЬНАЯ СИСТЕМА", boost_banner_title:"УСИЛЕНИЕ УРОВНЕЙ", ref_head_earn:"Зарабатывайте 5% от майнинга друзей", ref_head_sub:"Друг активируется на уровне 2", ref_link_lbl:"РЕФЕРАЛЬНАЯ ССЫЛКА", ref_how_title:"КАК ЭТО РАБОТАЕТ", ref_rule_100:"+100 монет за каждого АКТИВНОГО реферала", ref_rule_cond:"Активация: друг достигает уровня 2 — держит 200+ $VIKING в кошельке", ref_rule_5:"Вы получаете 5% от всего заработка активных рефералов — автоматически", ref_friends_title:"МОИ ПРИГЛАШЁННЫЕ ДРУЗЬЯ", ref_verified_pill:"ПОДТВЕРЖДЁН", ref_pending_pill:"ОЖИДАЕТ", ref_dup_pill:"ДУБЛИКАТ",
+        prof_page_title:"ПРОФИЛЬ", prof_username_lbl:"ИМЯ ПОЛЬЗОВАТЕЛЯ", prof_wallet_lbl:"КОШЕЛЁК", prof_amount_lbl:"СУММА", buy_stonfi_btn:"Купить на STON.fi", set_sound_lbl:"ЗВУК", set_lang_lbl:"ЯЗЫК", lock_verify:"Сначала подтвердите кошелёк", ref_banner_title:"РЕФЕРАЛЬНАЯ СИСТЕМА", boost_banner_title:"УСИЛЕНИЕ УРОВНЕЙ", quests_title:"ЗАДАНИЯ", tap_open_hint:"Нажмите на карточку, чтобы открыть", ref_head_earn:"Зарабатывайте 5% от майнинга друзей", ref_head_sub:"Друг активируется на уровне 2", ref_link_lbl:"РЕФЕРАЛЬНАЯ ССЫЛКА", ref_how_title:"КАК ЭТО РАБОТАЕТ", ref_rule_100:"+100 монет за каждого АКТИВНОГО реферала", ref_rule_cond:"Активация: друг достигает уровня 2 — держит 200+ $VIKING в кошельке", ref_rule_5:"Вы получаете 5% от всего заработка активных рефералов — автоматически", ref_friends_title:"МОИ ПРИГЛАШЁННЫЕ ДРУЗЬЯ", ref_verified_pill:"ПОДТВЕРЖДЁН", ref_pending_pill:"ОЖИДАЕТ", ref_dup_pill:"ДУБЛИКАТ",
         hold_wallet_lbl:"В кошельке", mine_wallet_lbl:"Баланс майнинга",
         withdraw_title:"Вывод", min_wd_lbl:"Минимум:", wd_fee_lbl:"Комиссия (5%):", net_lbl:"Чистыми:",
         hold_cond_lbl:"Нужно 25% Холда:", your_hold_lbl:"Ваш Холд:", req_wd_btn:"Запросить вывод",
@@ -1549,6 +1588,8 @@
         return `<div class="${boxClass}"><span class="day-num">${dayNum}</span>${statusText}</div>`;
       }).join('');
 
+      const drAmt = document.getElementById('daily-rew-amt');
+      if (drAmt) drAmt.innerText = hasClaimedToday ? '✅' : '+' + DAILY_REWARDS[Math.min(dailyStreak, DAILY_REWARDS.length - 1)];
       const btn = document.getElementById('btn-claim-daily');
       if (hasClaimedToday) { btn.disabled = true; btn.style.opacity = 0.5; btn.innerText = I18N[currentLang].claimed; }
       else { btn.disabled = false; btn.style.opacity = 1; btn.innerHTML = `💰 ${I18N[currentLang].claim_daily_btn}`; }
@@ -2238,23 +2279,28 @@
       // activeRefs comes from the server; pending friends never count.
       const box = document.getElementById('ref-ach-list');
       if (!box) return;
+      const QICONS = { 1: 'warriors', 10: 'skull', 25: 'banner', 50: 'crown', 100: 'coins' };
       box.innerHTML = REF_MILESTONES.map(n => {
         const claimed = !!refAchClaimed[n];
         const reached = activeRefs >= n;
         const reward = config['refAchReward' + n] || 0;
         const pct = Math.min(100, Math.floor((activeRefs / n) * 100));
         return `
-          <div style="padding:8px 4px;border-bottom:1px solid rgba(255,255,255,0.06);">
-            <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
-              <div>
-                <strong style="color:#fff;">Invite ${n} active friend${n > 1 ? 's' : ''}</strong>
-                <div style="font-size:11px;color:var(--m);">${Math.min(activeRefs, n)}/${n} active · <span style="color:var(--gb);">+${reward} ${esc(config.coinSym)}</span></div>
+          <div style="margin-top:10px;">
+            <div class="q-row">
+              <img class="q-scroll" src="assets/quest_scroll.webp" alt="">
+              <div class="q-row-in">
+                <img class="q-ic" src="assets/icon_q_${QICONS[n] || 'warriors'}.webp" alt="">
+                <div class="q-mid">
+                  <div class="q-title">Invite ${n} active friend${n > 1 ? 's' : ''}</div>
+                  <div class="q-rew"><img src="assets/coin_icon.webp" alt="">+${reward} ${esc(config.coinSym)}</div>
+                </div>
+                ${claimed
+                  ? `<span class="q-claimed">✓ Claimed</span>`
+                  : `<button class="btn-3d-gold q-btn ref-ach-claim" data-n="${n}" ${reached ? '' : 'style="opacity:0.45;" disabled'}>Claim</button>`}
               </div>
-              ${claimed
-                ? `<span style="background:linear-gradient(180deg,#4ade80,#22c55e,#16a34a);color:#fff;font-weight:800;font-size:12px;white-space:nowrap;padding:8px 16px;border-radius:14px;box-shadow:0 4px 0 #14532d;display:inline-block;">✓ Claimed</span>`
-                : `<button class="btn-3d-gold ref-ach-claim" data-n="${n}" style="width:auto;padding:8px 16px;white-space:nowrap;${reached ? '' : 'opacity:0.45;'}" ${reached ? '' : 'disabled'}>Claim</button>`}
             </div>
-            <div class="prog-bg-3d" style="margin-top:6px;"><div class="prog-fill-3d" style="width:${pct}%;"></div></div>
+            <div class="q-prog"><div class="q-prog-bg"><div class="q-prog-fill" style="width:${pct}%;"></div></div><div class="q-prog-txt">${Math.min(activeRefs, n)}/${n}</div></div>
           </div>`;
       }).join('');
       box.querySelectorAll('.ref-ach-claim').forEach(b => b.addEventListener('click', async e => {
@@ -2584,6 +2630,8 @@
     let chV = {1:false, 2:false};
     document.getElementById('btn-open-ch1').addEventListener('click', () => { chV[1] = true; safeOpen(config.channel1); });
     document.getElementById('btn-open-ch2').addEventListener('click', () => { chV[2] = true; safeOpen(config.channel2); });
+    const ch1Row = document.getElementById('ch1-row'); if (ch1Row) ch1Row.addEventListener('click', e => { if (e.target.closest('button')) return; document.getElementById('btn-open-ch1').click(); });
+    const ch2Row = document.getElementById('ch2-row'); if (ch2Row) ch2Row.addEventListener('click', e => { if (e.target.closest('button')) return; document.getElementById('btn-open-ch2').click(); });
     [1, 2].forEach(n => document.getElementById(`ch-task-${n}-btn`).addEventListener('click', async e => {
       if (!isHumanClick(e)) return;
       if ((n === 1 && task1Done) || (n === 2 && task2Done)) return showToast("Already claimed!", "#f59e0b");
