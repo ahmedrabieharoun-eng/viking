@@ -928,6 +928,7 @@
         verify_notfound_toast:"Payment not found yet — wait a minute and tap Check verification.",
         verify_success_toast:"Wallet verified!", verify_too_new:"Wallet too new: %D% days, needs %N%",
         verify_manual_hint:"Send the exact amount with the exact comment using the details below.",
+        verify_rate_toast:"Too many checks — wait a few seconds and try again.",
         nav_mine:"Mine", nav_tasks:"Tasks", nav_boost:"Boost", nav_friends:"Friends", nav_profile:"Profile",
         tank_full:"🛑 24h Tank Full (100%) - Collect Now!", tank_fill:"⏳ 24h Mining Tank:",
         daily_login_title:"🎁 Daily Login (7 Days)", claim_daily_btn:"Claim Daily Reward",
@@ -966,6 +967,7 @@
         verify_notfound_toast:"الدفع لسه موصلش — استنى دقيقة ودوس التحقق من التوثيق.",
         verify_success_toast:"المحفظة اتوثّقت!", verify_too_new:"المحفظة جديدة: %D% يوم، محتاجة %N% يوم",
         verify_manual_hint:"ابعت المبلغ بالظبط بالتعليق بالظبط باستخدام البيانات اللي تحت.",
+        verify_rate_toast:"محاولات تحقق كتير — استنى ثواني وجرّب تاني.",
         nav_mine:"التعدين", nav_tasks:"المهام", nav_boost:"السرعة", nav_friends:"الأصدقاء", nav_profile:"حسابي",
         tank_full:"🛑 خزان 24 ساعة ممتلئ (100%) - اجمع الآن!", tank_fill:"⏳ خزان 24 ساعة:",
         daily_login_title:"🎁 تسجيل الدخول اليومي (7 أيام)", claim_daily_btn:"استلام المكافأة اليومية",
@@ -1004,6 +1006,7 @@
         verify_notfound_toast:"Платёж пока не найден — подождите минуту и нажмите «Проверить верификацию».",
         verify_success_toast:"Кошелёк подтверждён!", verify_too_new:"Кошелёк слишком новый: %D% дн., нужно %N%",
         verify_manual_hint:"Отправьте точную сумму с точным комментарием по реквизитам ниже.",
+        verify_rate_toast:"Слишком много проверок — подождите несколько секунд и попробуйте снова.",
         nav_mine:"Майнинг", nav_tasks:"Задания", nav_boost:"Буст", nav_friends:"Друзья", nav_profile:"Профиль",
         tank_full:"🛑 Бак 24ч полон (100%) - Соберите!", tank_fill:"⏳ Бак майнинга 24ч:",
         daily_login_title:"🎁 Ежедневный вход (7 Дней)", claim_daily_btn:"Получить награду",
@@ -1586,7 +1589,12 @@
           const r = await api("verifyCheck");
           if (r.verified) { SoundFX.buySuccess(); showToast("🎉 " + dict.verify_success_toast, "#10b981"); await refreshState(); return; }
         } catch (err) {
-          if (!/Payment not found/.test(err.message || "")) { showToast("❌ " + err.message, "#ef4444"); return; }
+          // "Payment not found" = not on-chain yet. A 429 ("Too many
+          // requests") = the rate limiter — the poll bursts count
+          // against it too. Both mean "still waiting": keep polling
+          // silently and never toast mid-poll.
+          const msg = err.message || "";
+          if (!/Payment not found/.test(msg) && !/Too many requests/.test(msg)) { showToast("❌ " + msg, "#ef4444"); return; }
         }
       }
       showToast("⏳ " + dict.verify_notfound_toast, "#f59e0b");
@@ -1600,7 +1608,13 @@
         const r = await api("verifyCheck");
         if (r.verified) { SoundFX.buySuccess(); showToast("🎉 " + (I18N[currentLang] || I18N.en).verify_success_toast, "#10b981"); }
         await refreshState();
-      } catch (err) { showToast("❌ " + err.message, "#ef4444"); }
+      } catch (err) {
+        // A 429 here is just the rate limiter (often the tail of an
+        // automatic poll burst) — show the calm localized hint instead
+        // of the raw server string.
+        if (/Too many requests/.test(err.message || "")) showToast("⏳ " + (I18N[currentLang] || I18N.en).verify_rate_toast, "#f59e0b");
+        else showToast("❌ " + err.message, "#ef4444");
+      }
       finally { verifyBusy = false; }
     }
 
