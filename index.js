@@ -491,7 +491,13 @@ function hit(key, max, windowMs) {
   if (hits.size > 20000) for (const [k, v] of hits) if (!v.length || now - v[v.length - 1] > 120000) hits.delete(k);
   return true;
 }
-const ACTION_LIMIT = { state: 20, collect: 6, daily: 6, task: 8, bioTask: 8, refAch: 8, wallet: 8, unlink: 6, refCollect: 6, withdraw: 4, verifyInfo: 8, verifyCheck: 6 }; // per user per minute
+// verifyInfo/verifyCheck get 20/min (not the usual single digits): both
+// are read-only or claim-guarded, and the Profile card BY DESIGN polls
+// verifyCheck 6x at 5s intervals after a TonConnect payment — one poll
+// burst plus a manual re-check must fit with room to spare, or the user
+// hits this limiter for doing exactly what the UI told them to do. The
+// global per-user (90/min) and per-IP caps still bound abuse.
+const ACTION_LIMIT = { state: 20, collect: 6, daily: 6, task: 8, bioTask: 8, refAch: 8, wallet: 8, unlink: 6, refCollect: 6, withdraw: 4, verifyInfo: 20, verifyCheck: 20 }; // per user per minute
 
 function verifyInitData(initData) {
   if (!BOT_TOKEN) return { error: 'config' };
