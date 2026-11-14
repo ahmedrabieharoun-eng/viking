@@ -1698,8 +1698,21 @@
     // the first state load, while the player has no avatar yet.
     let avatarPickBusy = false;
     function maybeShowAvatarPicker() {
-      if (myAvatar >= 1 && myAvatar <= 8) return;
-      const pk = document.getElementById('avatar-picker'); if (pk) pk.classList.add('show');
+      const pk = document.getElementById('avatar-picker'); if (!pk) return;
+      if (myAvatar >= 1 && myAvatar <= 8) {
+        pk.classList.remove('show');
+        try { localStorage.setItem('vk_avatar_' + CURRENT_UID, String(myAvatar)); } catch (e) {}
+        return;
+      }
+      // Owner report 2026-11-14: the picker kept reappearing after he
+      // had already chosen. His pick IS saved server-side, so never
+      // re-show the picker on a device that already confirmed a pick —
+      // a pick stored on this device wins over one state payload that
+      // comes back without the avatar field.
+      let savedPick = 0;
+      try { savedPick = Number(localStorage.getItem('vk_avatar_' + CURRENT_UID)) || 0; } catch (e) {}
+      if (savedPick >= 1 && savedPick <= 8) { myAvatar = savedPick; pk.classList.remove('show'); return; }
+      pk.classList.add('show');
     }
     // Dedicated warrior page (owner pick: showcase example 1, 2026-11-14):
     // tap a circle to preview the warrior in the great ring, then CONFIRM —
@@ -1721,8 +1734,9 @@
       if (!apSelected || avatarPickBusy) return; avatarPickBusy = true;
       try {
         const r = await api('setAvatar', { n: apSelected });
-        myAvatar = r.avatar;
-        const pav = document.getElementById('prof-avatar'); if (pav) pav.src = `assets/avatar_${r.avatar}.webp`;
+        myAvatar = Number(r.avatar) || apSelected;
+        try { localStorage.setItem('vk_avatar_' + CURRENT_UID, String(myAvatar)); } catch (e) {}
+        const pav = document.getElementById('prof-avatar'); if (pav) pav.src = `assets/avatar_${myAvatar}.webp`;
         SoundFX.buySuccess();
         setTimeout(() => { const pk = document.getElementById('avatar-picker'); if (pk) pk.classList.remove('show'); }, 500);
       } catch (err) {
