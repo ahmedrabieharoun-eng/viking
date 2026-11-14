@@ -2435,7 +2435,7 @@ async function attemptPayout(wdNum) {
    each other (owner correction 2026-11-14): the player's DM is the
    personal one (warrior banner, «Your Payout is Sent!», his wallet,
    the tx button), the payouts-channel post (cfg.channel2) is the
-   public proof (treasure-chest banner, «New Payout!», first name
+   public proof (treasure-chest banner, «New Payout!», full name
    only, NO wallet address).
    Exactly-once is enforced on the record itself: the caller claims
    `payoutNotifiedAt` in a transaction BEFORE sending anything, so
@@ -2491,14 +2491,15 @@ async function sendPayoutSuccess(wd, player, cfg) {
       const chanId = chatIdOf(cfg.channel2);
       if (chanId !== null && chanId !== '') {
         const fullName = (player && player.name) || wd.userName || '';
-        const firstName = esc(String(fullName).trim().split(/\s+/)[0] || 'Viking');
+        const displayName = esc(String(fullName).trim() || 'Viking');
         const rows = [];
         if (appUrl) rows.push([{ text: '⚔️ Start Mining Now', url: appUrl }]);
         if (txUrl) rows.push([{ text: '🔗 View Transaction', url: txUrl }]);
         const kb = rows.length ? { inline_keyboard: rows } : undefined;
         // Public proof style — different wording/layout from the DM:
-        // first name + amount + WD number, NO wallet address.
-        const caption = `🏆 New Payout!\n👤 <b>${firstName}</b>\n💰 <b>${amount} ${esc(cfg.coinSym)}</b>\n🔢 Withdrawal #${num}`;
+        // FULL name (owner order 2026-11-14) + amount + WD number,
+        // NO wallet address.
+        const caption = `🏆 New Payout!\n👤 <b>${displayName}</b>\n💰 <b>${amount} ${esc(cfg.coinSym)}</b>\n🔢 Withdrawal #${num}`;
         let ok = false;
         const photoRes = await tg('sendPhoto', { chat_id: chanId, photo: PAYOUT_CHANNEL_BANNER, caption, reply_markup: kb });
         if (photoRes && photoRes.ok) ok = true;
