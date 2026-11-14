@@ -289,7 +289,7 @@
     .fr-head{text-align:center;margin-bottom:16px}
     .fr-head-earn{font-family:Georgia,serif;font-size:14px;font-weight:700;color:#e8cf8f}
     .fr-head-sub{font-size:10.5px;color:#8fa3bd;margin-top:3px}
-    .fr-tablets{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin:0 22px 9px}
+    .fr-tablets{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin:0 0 9px}
     .fr-tablet{position:relative;background:url('assets/ref_stone_plain.webp') center/cover;border:1px solid rgba(212,175,55,.55);border-radius:12px;box-shadow:0 8px 18px rgba(0,0,0,.55),inset 0 0 0 1px rgba(255,255,255,.05);aspect-ratio:380/500;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:7px 2px;text-align:center}
     .fr-tab-notch{display:none}
     .fr-tablet small{display:block;font-size:9px;font-weight:900;letter-spacing:1.6px;color:#a9bcd8;text-transform:uppercase;margin-bottom:4px}
@@ -740,7 +740,7 @@
           <div class="pf-stat">
             <div class="pf-stat-ic"><svg viewBox="0 0 24 24" fill="none" stroke="#e8c766" stroke-width="1.9" stroke-linecap="round"><path d="M5.5 18.5L14.5 9.5"/><path d="M7.5 5C11 3.6 16.5 4.2 20.5 8.2 17 6.8 13 6.6 9.5 7.6"/></svg></div>
             <div class="pf-stat-lbl" data-i18n="mine_wallet_lbl">Mined Balance</div>
-            <div class="pf-stat-num"><span id="prof-mine-bal">0</span> <img src="assets/icon_crystal.webp" alt=""></div>
+            <div class="pf-stat-num"><span id="prof-mine-bal">0</span> <img src="assets/coin_icon.webp" alt=""></div>
           </div>
         </div>
       </section>
@@ -761,7 +761,7 @@
         <div class="pf-ribbon"><span data-i18n="withdraw_title">Withdraw</span> ⬇</div>
         <div class="pf-amt">
           <div class="pf-amt-lbl" data-i18n="prof_amount_lbl">AMOUNT</div>
-          <input type="number" id="wd-input-amt" value="5000" min="5000" step="500">
+          <input type="text" inputmode="numeric" id="wd-input-amt" value="5,000">
           <img src="assets/coin_icon.webp" alt="">
         </div>
         <div class="pf-lines">
@@ -1557,7 +1557,7 @@
       'assets/bg_wood.webp', 'assets/ref_stone_plain.webp', 'assets/coin_icon.webp',
       'assets/hero_tier1.webp',
       'assets/nav_mine.webp', 'assets/nav_tasks.webp', 'assets/nav_boost.webp', 'assets/nav_friends.webp', 'assets/nav_profile.webp',
-      'assets/icon_shield.webp', 'assets/icon_verified.webp', 'assets/icon_chest.webp', 'assets/icon_crystal.webp',
+      'assets/icon_shield.webp', 'assets/icon_verified.webp', 'assets/icon_chest.webp',
       'assets/quest_scroll.webp', 'assets/icon_q_sun.webp', 'assets/icon_q_flag.webp', 'assets/icon_q_feather.webp', 'assets/icon_q_chest.webp',
       'assets/picker_bg.webp', 'assets/avatar_ring.webp',
       'assets/avatar_1.webp', 'assets/avatar_2.webp', 'assets/avatar_3.webp', 'assets/avatar_4.webp',
@@ -2499,9 +2499,11 @@
       updateWdCalculation();
     }
 
+    function wdAmtVal() { const el = document.getElementById('wd-input-amt'); return parseFloat(String(el.value).replace(/[^\d.]/g, '')) || 0; }
+
     function updateWdCalculation() {
-      const rawAmt = parseFloat(document.getElementById('wd-input-amt').value) || 0;
-      const amt = Math.max(config.minWithdraw, parseFloat(document.getElementById('wd-input-amt').value) || config.minWithdraw);
+      const rawAmt = wdAmtVal();
+      const amt = Math.max(config.minWithdraw, wdAmtVal() || config.minWithdraw);
       const fee = Math.ceil(amt * (config.withdrawFeePercent / 100));
       const reqHold = Math.ceil(amt * (config.holdPercentReq / 100));
       document.getElementById('wd-min-ui').innerText = config.minWithdraw.toLocaleString();
@@ -2662,7 +2664,7 @@
     async function requestWithdrawal(e) {
       if (!isHumanClick(e)) return;
       if (!linkedWalletAddr) { SoundFX.error(); return showToast("❌ Connect TON Wallet first!", "#ef4444"); }
-      const amt = parseFloat(document.getElementById('wd-input-amt').value) || 0;
+      const amt = wdAmtVal();
       await withBtnBusy(e.currentTarget, async () => {
         try {
           const r = await api("withdraw", { amount: amt });
@@ -2728,7 +2730,11 @@
       try { navigator.clipboard.writeText(a); showToast("📋 Copied!"); } catch (e) {}
     });
     document.getElementById('btn-disconnect-wallet').addEventListener('click', disconnectTonWallet);
-    document.getElementById('wd-input-amt').addEventListener('input', updateWdCalculation);
+    document.getElementById('wd-input-amt').addEventListener('input', (e) => {
+      const digits = e.target.value.replace(/[^\d]/g, '').slice(0, 12);
+      e.target.value = digits ? Number(digits).toLocaleString('en-US') : '';
+      updateWdCalculation();
+    });
     document.getElementById('btn-request-wd').addEventListener('click', requestWithdrawal);
 
     document.getElementById('btn-open-ch1').addEventListener('click', () => { chV[1] = true; safeOpen(config.channel1); paintChBtn(1); });
