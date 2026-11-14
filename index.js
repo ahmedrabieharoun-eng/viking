@@ -36,12 +36,13 @@ const BASE_RATE = 250; // coins per day (same as before)
 const DAILY = [10, 20, 30, 50, 70, 100, 200];
 const DEFAULTS = {
   brandTitle: '$VIKING MINER', coinSym: '$VIKING', adReward: 5, maxAdsPerDay: 10, taskReward: 50,
+  bioReward: 50, refAchReward1: 50, refAchReward10: 100, refAchReward25: 250, refAchReward50: 500, refAchReward100: 1000,
   refClaimPercent: 5, refMinHold: 200, minWithdraw: 5000, holdPercentReq: 25, withdrawFeePercent: 5,
   lvl1PerDay: 250, payoutWallet: '', adsgramBlockId: '', payoutChannel: '@YGRAM1', adminChatId: '',
   buySwapUrl: 'https://app.ston.fi/swap?chartVisible=false&tt=' + JETTON + '&ft=GRAM',
   channel1: 'https://t.me/YGRAM1', channel2: 'https://t.me/telegram', botUsername: 'VIKINGMINER_BOT'
 };
-const NUM_KEYS = ['lvl1PerDay', 'adReward', 'maxAdsPerDay', 'taskReward', 'refClaimPercent', 'refMinHold', 'minWithdraw', 'holdPercentReq', 'withdrawFeePercent'];
+const NUM_KEYS = ['lvl1PerDay', 'adReward', 'maxAdsPerDay', 'taskReward', 'bioReward', 'refAchReward1', 'refAchReward10', 'refAchReward25', 'refAchReward50', 'refAchReward100', 'refClaimPercent', 'refMinHold', 'minWithdraw', 'holdPercentReq', 'withdrawFeePercent'];
 const STR_KEYS = ['brandTitle', 'coinSym', 'payoutWallet', 'adsgramBlockId', 'payoutChannel', 'adminChatId', 'channel1', 'channel2', 'botUsername', 'buySwapUrl'];
 
 /* ---------- helpers ---------- */
@@ -137,11 +138,21 @@ async function noteSignals(uid, keys) {
     await db.ref().update(updates);
   } catch (e) { console.error('signals', e.message); }
 }
+/* A referral counts as ACTIVE only once it is verified: wallet() flips the
+   inviter's referral entry to this status when the invitee syncs a wallet
+   meeting the hold requirement. 'Pending ⏳' and '⚠️ Duplicate' never count
+   (owner rule for the referral achievements). */
+const ACTIVE_REF_STATUS = 'Verified ✅';
+const countActiveRefs = (refs) => Object.values(refs || {}).filter((r) => r && String(r.status || '').trim() === ACTIVE_REF_STATUS).length;
 const publicPlayer = (d) => {
   const o = { ...(d || {}) };
   delete o.sigs;
   delete o.multiLinks; // owner-only detection data (adminState + alerts) — never shown to the player
   o.referrals = (o.referrals || []).map((r) => { const x = { ...r }; delete x.deviceHash; return x; });
+  // additive fields for the bio task + referral achievements (tasks tab)
+  o.bioTaskDone = o.bioTaskDone === true;
+  o.refAchClaimed = (o.refAchClaimed && typeof o.refAchClaimed === 'object') ? o.refAchClaimed : {};
+  o.activeRefs = countActiveRefs(o.referrals);
   return o;
 };
 const WHY = { cid: 'نفس نسخة التطبيق', dev: 'نفس الجهاز', ip: 'نفس الـ IP' };
@@ -257,7 +268,7 @@ async function getConfig() {
   cfgCache = { t: Date.now(), v };
   return v;
 }
-const PUBLIC_KEYS = ['brandTitle', 'coinSym', 'adReward', 'maxAdsPerDay', 'taskReward', 'refClaimPercent', 'refMinHold', 'minWithdraw', 'holdPercentReq', 'withdrawFeePercent', 'lvl1PerDay', 'adsgramBlockId', 'buySwapUrl', 'channel1', 'channel2', 'botUsername'];
+const PUBLIC_KEYS = ['brandTitle', 'coinSym', 'adReward', 'maxAdsPerDay', 'taskReward', 'bioReward', 'refAchReward1', 'refAchReward10', 'refAchReward25', 'refAchReward50', 'refAchReward100', 'refClaimPercent', 'refMinHold', 'minWithdraw', 'holdPercentReq', 'withdrawFeePercent', 'lvl1PerDay', 'adsgramBlockId', 'buySwapUrl', 'channel1', 'channel2', 'botUsername'];
 const publicConfig = (c) => Object.fromEntries(PUBLIC_KEYS.map((k) => [k, c[k]]));
 
 // simple in-memory rate limiter (per server instance)
@@ -271,7 +282,7 @@ function hit(key, max, windowMs) {
   if (hits.size > 20000) for (const [k, v] of hits) if (!v.length || now - v[v.length - 1] > 120000) hits.delete(k);
   return true;
 }
-const ACTION_LIMIT = { state: 20, collect: 6, daily: 6, ad: 12, task: 8, wallet: 8, unlink: 6, refCollect: 6, withdraw: 4 }; // per user per minute
+const ACTION_LIMIT = { state: 20, collect: 6, daily: 6, ad: 12, task: 8, bioTask: 8, refAch: 8, wallet: 8, unlink: 6, refCollect: 6, withdraw: 4 }; // per user per minute
 
 function verifyInitData(initData) {
   if (!BOT_TOKEN) return { error: 'config' };
@@ -340,6 +351,25 @@ async function isMember(url, userId) {
   return m === 'member' ? true : m === 'not-member' ? false : null;
 }
 
+/* The bot's own username, resolved from the Bot API (getMe) and cached in
+   process. The bio task verifies against the REAL username of the deployed
+   bot; if getMe is unreachable we fall back to the admin-set
+   settings.botUsername. A failed lookup is negatively cached for 60 s so
+   state() (a hot path) never hammers Telegram. */
+let botMeCache = { username: '', t: 0 };
+async function resolveBotUsername(cfg) {
+  if (botMeCache.username) return botMeCache.username;
+  if (!botMeCache.t || Date.now() - botMeCache.t >= 60000) {
+    botMeCache.t = Date.now();
+    const j = await tg('getMe');
+    if (j && j.ok && j.result && j.result.username) {
+      botMeCache.username = String(j.result.username).replace(/^@/, '').trim();
+      return botMeCache.username;
+    }
+  }
+  return String((cfg && cfg.botUsername) || '').replace(/^@/, '').trim() || null;
+}
+
 async function ton(path) {
   const r = await fetch('https://tonapi.io/v2' + path, { headers: TONAPI_KEY ? { Authorization: 'Bearer ' + TONAPI_KEY } : {}, signal: AbortSignal.timeout(10000) });
   if (r.status === 404 || r.status === 400) return null;
@@ -361,7 +391,7 @@ const newPlayer = (user, extra) => ({
   id: String(user.id), name: clean(user.first_name || 'Warrior', 64), username: clean(user.username || 'user', 64),
   deviceHash: '', mined: 0, hold: 0, lastCollectTime: Date.now(), walletAddr: '', banned: false, invitedBy: null,
   refBonusPaid: false, refCommissionEarned: 0, pendingRefComm: 0, lastWithdrawTime: 0, adsWatched: 0,
-  lastAdUtcDay: dayOf(Date.now()), task1Done: false, task2Done: false, dailyStreak: 0, lastDailyCheckIn: 0,
+  lastAdUtcDay: dayOf(Date.now()), task1Done: false, task2Done: false, bioTaskDone: false, dailyStreak: 0, lastDailyCheckIn: 0,
   lastSeen: Date.now(), referrals: [], createdAt: Date.now(), ...extra
 });
 
@@ -423,7 +453,11 @@ async function state(c) {
   // wrapped so it can never fail, block or meaningfully delay state.
   try { await updateMultiLinks(String(c.user.id)); } catch (e) { console.error('multiLinks', e.message); }
   const [player, wds] = await Promise.all([getVal(ref), withdrawalsOfUser(c.user.id)]);
-  return { player: publicPlayer(player), settings: publicConfig(c.cfg), withdrawals: wds, now: Date.now() };
+  // Expose the bot's REAL username (getMe, cached) so the bio task shows and
+  // verifies the right handle; falls back to the settings value inside
+  // resolveBotUsername, and publicConfig's copy is kept when both are empty.
+  const botUsername = await resolveBotUsername(c.cfg);
+  return { player: publicPlayer(player), settings: { ...publicConfig(c.cfg), ...(botUsername ? { botUsername } : {}) }, withdrawals: wds, now: Date.now() };
 }
 
 async function collect(c) {
@@ -508,6 +542,56 @@ async function task(c) {
     return {
       value: { ...d, [key]: true, mined: (Number(d.mined) || 0) + reward },
       out: { success: true, reward }
+    };
+  });
+}
+
+/* Bio task: the player adds the bot's username to their Telegram bio.
+   Verified server-side with getChat (the Bot API returns the other party's
+   bio for a private chat) against the bot's REAL username (getMe). Like the
+   channel tasks this fails CLOSED: if the bio cannot be read (the user
+   never pressed Start in the bot chat, Telegram error) nothing is granted
+   and a distinct 503 explains why. Granted once, flag bioTaskDone. */
+async function bioTask(c) {
+  const ref = await ensurePlayer(c);
+  const uname = await resolveBotUsername(c.cfg);
+  if (!uname) fail(503, 'Bio check unavailable — open the bot chat and press Start, then retry');
+  const j = await tg('getChat', { chat_id: Number(c.user.id) });
+  if (!j || !j.ok || !j.result) fail(503, 'Bio check unavailable — open the bot chat and press Start, then retry');
+  const bio = String(j.result.bio || '').toLowerCase();
+  if (!bio.includes(uname.toLowerCase())) fail(403, 'Add the bot username to your bio first');
+  return txUpdate(ref, (d) => {
+    if (d === null) return { error: new Fail(404, 'User not found') };
+    if (d.banned === true) return { error: new Fail(403, 'Account banned') };
+    if (d.bioTaskDone) return { error: new Fail(400, 'Already claimed') };
+    const reward = Number(c.cfg.bioReward) || 50;
+    return {
+      value: { ...d, bioTaskDone: true, mined: (Number(d.mined) || 0) + reward },
+      out: { success: true, reward }
+    };
+  });
+}
+
+/* Referral achievements: milestones for ACTIVE (verified) referrals only.
+   The count is recomputed inside the player transaction on the freshest
+   referrals array — 'Pending ⏳'/'⚠️ Duplicate' entries never count — and
+   each milestone can be claimed exactly once (refAchClaimed[n] = timestamp
+   is the dedupe memory). */
+const REF_ACH_MILESTONES = [1, 10, 25, 50, 100];
+async function refAch(c) {
+  const n = Number(c.body.n);
+  if (!REF_ACH_MILESTONES.includes(n)) fail(400, 'Bad milestone');
+  const ref = await ensurePlayer(c);
+  return txUpdate(ref, (d) => {
+    if (d === null) return { error: new Fail(404, 'User not found') };
+    if (d.banned === true) return { error: new Fail(403, 'Account banned') };
+    if (countActiveRefs(d.referrals) < n) return { error: new Fail(400, 'Not enough active referrals') };
+    const claimed = (d.refAchClaimed && typeof d.refAchClaimed === 'object') ? d.refAchClaimed : {};
+    if (claimed[n]) return { error: new Fail(400, 'Already claimed') };
+    const reward = Number(c.cfg['refAchReward' + n]) || 0;
+    return {
+      value: { ...d, mined: (Number(d.mined) || 0) + reward, refAchClaimed: { ...claimed, [n]: Date.now() } },
+      out: { success: true, reward, milestone: n }
     };
   });
 }
@@ -724,7 +808,7 @@ async function adminSettings(c) {
   return { success: true };
 }
 
-const ACTIONS = { state, collect, daily, ad, task, wallet, unlink, refCollect, withdraw, adminState, adminBan, adminAdjust, adminWd, adminSettings };
+const ACTIONS = { state, collect, daily, ad, task, bioTask, refAch, wallet, unlink, refCollect, withdraw, adminState, adminBan, adminAdjust, adminWd, adminSettings };
 
 functions.http('collectMining', async (req, res) => {
   res.set('Access-Control-Allow-Origin', ALLOWED_ORIGIN);
