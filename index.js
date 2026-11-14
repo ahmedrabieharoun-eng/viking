@@ -61,18 +61,35 @@ const getVal = async (ref) => (await ref.once('value')).val();
      { value, out }  -> commit `value` as the node's new content; txUpdate returns `out`
      { skip, out }   -> abort without error (a no-op the caller treats as done); returns `out`
      { error }       -> abort and throw that Fail (same status/message as the Firestore code)
-   fn may run several times under contention; only the last run's result counts. */
+   fn may run several times under contention; only the last run's result counts.
+
+   ROOT-CAUSE FIX (the live "User not found" bug): the JS RTDB client first
+   runs the update function against this process's LOCAL view of the node,
+   which is null for any node the process has not synced yet — including a
+   player that exists on the server (even one created seconds earlier by
+   this same process; reproduced against the RTDB emulator). Returning
+   undefined on that first pass aborts the transaction locally, BEFORE the
+   SDK ever asks the server for the real value, so every "abort" decision
+   (the actions' 404 'User not found', adminWd's 404, the banned/skip
+   guards) could fire spuriously for a real record. On an abort decision we
+   therefore return `cur` itself (identity) instead of undefined: that
+   forces the server round-trip — if the view was stale, fn re-runs with
+   the real value and decides again; if the value really is what fn saw,
+   the commit is a harmless no-op and the recorded decision is applied
+   below (throw err / return skip-out), so observable behaviour is
+   unchanged while the stale-view false decisions disappear. Value
+   decisions were never affected: they always round-tripped and re-ran. */
 async function txUpdate(ref, fn) {
   let out, err = null, skip = false;
   const res = await ref.transaction((cur) => {
     const r = fn(cur) || {};
-    if (r.error) { err = r.error; out = undefined; skip = false; return undefined; }
-    if (r.skip) { skip = true; err = null; out = r.out; return undefined; }
+    if (r.error || r.skip) { err = r.error || null; skip = !!r.skip; out = r.out; return cur; }
     skip = false; err = null; out = r.out;
     return r.value;
   });
   if (err) throw err;
-  if (!res.committed && !skip) throw new Fail(500, 'Server error');
+  if (skip) return out;
+  if (!res.committed) throw new Fail(500, 'Server error');
   return out;
 }
 
@@ -123,6 +140,7 @@ async function noteSignals(uid, keys) {
 const publicPlayer = (d) => {
   const o = { ...(d || {}) };
   delete o.sigs;
+  delete o.multiLinks; // owner-only detection data (adminState + alerts) — never shown to the player
   o.referrals = (o.referrals || []).map((r) => { const x = { ...r }; delete x.deviceHash; return x; });
   return o;
 };
@@ -175,6 +193,61 @@ async function riskOf(uid) {
   return { level, reasons, linked: rows };
 }
 
+/* ---------- multi-account links: REPORT-ONLY (owner order) ----------
+   Detection and owner notification ONLY. Nothing here bans, blocks or
+   delays any action: state() calls updateMultiLinks() inside a try/catch
+   after its main work, and the stored `banned` flag is never touched by
+   this code. A "link" between two accounts = same deviceHash (the primary
+   device registry, AdVOLT-style) OR a shared non-'cl:' signal key
+   (cid:/dev:/ip:) from the sigs lists. For signal keys, a key shared by
+   more accounts than riskOf()'s LIMIT is common infrastructure (CGNAT,
+   a widespread phone model), not a link — the same thresholds riskOf()
+   already applies, so the two systems agree. */
+const MULTI_IDS_CAP = 50;
+async function computeLinkedIds(uid, me) {
+  const linked = new Set();
+  const dh = String(me.deviceHash || '');
+  if (dh) {
+    const byDev = await getVal(rtdb().ref('players').orderByChild('deviceHash').equalTo(dh));
+    Object.keys(byDev || {}).forEach((id) => { if (id !== uid) linked.add(id); });
+  }
+  const keys = (me.sigs || []).filter((k) => !k.startsWith('cl:')).slice(0, 40);
+  if (keys.length) {
+    const docs = await Promise.all(keys.map((k) => getVal(sigDoc(k))));
+    docs.forEach((data, i) => {
+      if (!data) return;
+      const kind = keys[i].split(':')[0];
+      const users = (data.users || []).map(String).filter((x) => x !== uid);
+      if (!users.length || users.length > (LIMIT[kind] || 0)) return; // common signal, not a link
+      users.forEach((u) => linked.add(u));
+    });
+  }
+  return [...linked].sort();
+}
+async function updateMultiLinks(uid) {
+  const ref = P(uid);
+  const me = await getVal(ref);
+  if (!me) return;
+  const ids = (await computeLinkedIds(uid, me)).slice(0, MULTI_IDS_CAP);
+  const prev = (me.multiLinks && Array.isArray(me.multiLinks.ids)) ? me.multiLinks.ids.map(String) : null;
+  const changed = prev === null || prev.length !== ids.length || prev.some((x, i) => x !== ids[i]);
+  if (!changed) return; // nothing new: no write churn, and no duplicate alert
+  const fresh = ids.filter((id) => !(prev || []).includes(id));
+  // Persist BEFORE alerting: the stored list is the dedupe memory, so an
+  // alert-send failure can lose one message but can never duplicate one.
+  await ref.update({ multiLinks: { count: ids.length, ids, updatedAt: Date.now() } });
+  if (!fresh.length || !OWNER_ID) return; // alerts are skipped silently without an owner id
+  const rows = await Promise.all(fresh.slice(0, 15).map(async (id) => {
+    const d = (await getVal(P(id))) || {};
+    return { id, name: d.name || '', username: d.username || '' };
+  }));
+  const lines = rows.map((r) => `• <code>${esc(r.id)}</code> ${esc(r.name)}${r.username ? ' (@' + esc(r.username) + ')' : ''}`).join('\n');
+  await tg('sendMessage', {
+    chat_id: OWNER_ID, parse_mode: 'HTML',
+    text: `⚠️ <b>تعدد حسابات — روابط جديدة</b>\n👤 ${esc(me.name || '')} (<code>${esc(uid)}</code>)${me.username ? ' (@' + esc(me.username) + ')' : ''}\n🔗 إجمالي الحسابات المرتبطة: ${ids.length}\nحسابات ارتبطت حديثًا:\n${lines}${fresh.length > rows.length ? '\n… +' + (fresh.length - rows.length) + ' أخرى' : ''}`
+  });
+}
+
 let cfgCache = null;
 async function getConfig() {
   if (cfgCache && Date.now() - cfgCache.t < 20000) return cfgCache.v;
@@ -222,26 +295,53 @@ function verifyInitData(initData) {
   } catch (e) { return { error: 'invalid' }; }
 }
 
+const TG_API_BASE = (process.env.TG_API_BASE || 'https://api.telegram.org').replace(/\/+$/, ''); // env override exists for local testing (stub Telegram API)
 async function tg(method, body) {
   if (!BOT_TOKEN) return null;
   try {
-    const r = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/${method}`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+    const r = await fetch(`${TG_API_BASE}/bot${BOT_TOKEN}/${method}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+      signal: AbortSignal.timeout(10000) // never let a hung Telegram call wedge a request
     });
     return await r.json();
   } catch (e) { console.error('telegram', method, e.message); return null; }
 }
-async function isMember(url, userId) {
-  const m = /t\.me\/([A-Za-z][A-Za-z0-9_]{3,})/.exec(String(url || ''));
-  if (!m) return null;
-  const j = await tg('getChatMember', { chat_id: '@' + m[1], user_id: Number(userId) });
-  if (!j || !j.ok) return null; // bot cannot check this channel
+/* Resolve a configured channel value to a getChatMember chat_id: a numeric
+   id stored by the admin, an @handle, a public t.me/<name> (or t.me/s/<name>)
+   link, or a private t.me/c/<id> link (-> -100<id>). Anything else (e.g. a
+   t.me/+invite link) cannot be queried and returns null. */
+function chatIdOf(url) {
+  const s = String(url || '').trim();
+  if (!s) return null;
+  if (/^-?\d{5,}$/.test(s)) return Number(s);
+  const priv = /(?:t\.me|telegram\.me)\/c\/(\d+)/.exec(s);
+  if (priv) return Number('-100' + priv[1]);
+  const m = /^@([A-Za-z][A-Za-z0-9_]{3,})$/.exec(s) || /(?:t\.me|telegram\.me)\/(?:s\/)?([A-Za-z][A-Za-z0-9_]{3,})/.exec(s);
+  if (m) return '@' + m[1];
+  return null;
+}
+/* REAL server-side membership check via the bot (getChatMember).
+   Returns 'member' | 'not-member' | 'unknown'. 'unknown' means the check
+   itself could not be performed (unparseable channel config, Telegram
+   error — typically because the bot is not a member/admin of the channel,
+   or no bot token) and callers must fail CLOSED, never grant. */
+async function memberStatus(url, userId) {
+  const chatId = chatIdOf(url);
+  if (chatId === null) return 'unknown';
+  const j = await tg('getChatMember', { chat_id: chatId, user_id: Number(userId) });
+  if (!j || !j.ok || !j.result) return 'unknown'; // bot cannot check this channel
   const s = j.result.status;
-  return ['creator', 'administrator', 'member'].includes(s) || (s === 'restricted' && j.result.is_member === true);
+  if (s === 'creator' || s === 'administrator' || s === 'member') return 'member';
+  if (s === 'restricted') return j.result.is_member === true ? 'member' : 'not-member';
+  return 'not-member'; // left / kicked
+}
+async function isMember(url, userId) {
+  const m = await memberStatus(url, userId);
+  return m === 'member' ? true : m === 'not-member' ? false : null;
 }
 
 async function ton(path) {
-  const r = await fetch('https://tonapi.io/v2' + path, { headers: TONAPI_KEY ? { Authorization: 'Bearer ' + TONAPI_KEY } : {} });
+  const r = await fetch('https://tonapi.io/v2' + path, { headers: TONAPI_KEY ? { Authorization: 'Bearer ' + TONAPI_KEY } : {}, signal: AbortSignal.timeout(10000) });
   if (r.status === 404 || r.status === 400) return null;
   if (!r.ok) fail(502, 'TON network is busy, try again');
   return r.json();
@@ -264,6 +364,23 @@ const newPlayer = (user, extra) => ({
   lastAdUtcDay: dayOf(Date.now()), task1Done: false, task2Done: false, dailyStreak: 0, lastDailyCheckIn: 0,
   lastSeen: Date.now(), referrals: [], createdAt: Date.now(), ...extra
 });
+
+/* Create the caller's player record if it does not exist yet (same
+   newPlayer defaults as state, but with NO referral side-effects —
+   referral attribution happens only in state). Every player action calls
+   this first, so a legitimate first-run call can no longer hit the
+   'User not found' 404: the frontend fires `state` and TonConnect's
+   `wallet` independently at cold start (and taps can land before state),
+   and each action used to assume the record was already there. */
+async function ensurePlayer(c) {
+  const ref = P(c.user.id);
+  const dev = clean(c.body.deviceHash, 64);
+  await txUpdate(ref, (cur) => {
+    if (cur !== null) return { skip: true };
+    return { value: newPlayer(c.user, { deviceHash: dev, invitedBy: null }) };
+  });
+  return ref;
+}
 
 async function withdrawalsOfUser(uid) {
   const v = await getVal(rtdb().ref('withdrawals').orderByChild('userId').equalTo(String(uid)).limitToFirst(50));
@@ -294,18 +411,23 @@ async function state(c) {
       await txUpdate(invRef, (cur) => {
         if (cur === null) return { skip: true };
         const refs = cur.referrals || [];
+        if (refs.length >= 3000) return { skip: true }; // re-check the cap on the freshest value (the pre-read can race a burst of signups)
         if (refs.some((r) => String(r.id) === String(c.user.id))) return { skip: true };
         return { value: { ...cur, referrals: [...refs, entry] } };
       });
     }
   }
   await noteSignals(String(c.user.id), clientKeys(c.body.fp));
+  // Multi-account detection (report-only): refresh this player's linked
+  // accounts and alert the owner about NEW links. Strictly best-effort —
+  // wrapped so it can never fail, block or meaningfully delay state.
+  try { await updateMultiLinks(String(c.user.id)); } catch (e) { console.error('multiLinks', e.message); }
   const [player, wds] = await Promise.all([getVal(ref), withdrawalsOfUser(c.user.id)]);
   return { player: publicPlayer(player), settings: publicConfig(c.cfg), withdrawals: wds, now: Date.now() };
 }
 
 async function collect(c) {
-  const ref = P(c.user.id);
+  const ref = await ensurePlayer(c);
   const out = await txUpdate(ref, (d) => {
     if (d === null) return { error: new Fail(404, 'User not found') };
     if (d.banned === true) return { error: new Fail(403, 'Account banned') };
@@ -332,7 +454,7 @@ async function collect(c) {
 }
 
 async function daily(c) {
-  const ref = P(c.user.id);
+  const ref = await ensurePlayer(c);
   return txUpdate(ref, (d) => {
     if (d === null) return { error: new Fail(404, 'User not found') };
     if (d.banned === true) return { error: new Fail(403, 'Account banned') };
@@ -348,7 +470,7 @@ async function daily(c) {
 }
 
 async function ad(c) {
-  const ref = P(c.user.id);
+  const ref = await ensurePlayer(c);
   return txUpdate(ref, (d) => {
     if (d === null) return { error: new Fail(404, 'User not found') };
     if (d.banned === true) return { error: new Fail(403, 'Account banned') };
@@ -367,8 +489,17 @@ async function ad(c) {
 async function task(c) {
   const n = Number(c.body.n);
   if (n !== 1 && n !== 2) fail(400, 'Bad task');
-  if ((await isMember(c.cfg['channel' + n], c.user.id)) === false) fail(400, 'Join the channel first');
-  const ref = P(c.user.id), key = 'task' + n + 'Done';
+  const ref = await ensurePlayer(c);
+  // REAL membership verification through the bot (getChatMember) before any
+  // reward: not a member -> 403; the check itself unavailable (bot not in
+  // the channel / bad channel config) -> 503, fail CLOSED with a distinct
+  // error so the owner can tell the two apart. (Previously an unverifiable
+  // channel silently PASSED the check and the reward was granted on the
+  // client's say-so.)
+  const m = await memberStatus(c.cfg['channel' + n], c.user.id);
+  if (m === 'not-member') fail(403, 'Join the channel first');
+  if (m === 'unknown') fail(503, 'Channel check unavailable — bot must be an admin in the channel');
+  const key = 'task' + n + 'Done';
   return txUpdate(ref, (d) => {
     if (d === null) return { error: new Fail(404, 'User not found') };
     if (d.banned === true) return { error: new Fail(403, 'Account banned') };
@@ -382,9 +513,9 @@ async function task(c) {
 }
 
 async function wallet(c) {
-  const ref = P(c.user.id);
+  const ref = await ensurePlayer(c); // TonConnect can fire this before state at cold start — never 404 a first-run user
   const p = await getVal(ref);
-  if (!p) fail(404, 'User not found');
+  if (!p) fail(404, 'User not found'); // unreachable after ensurePlayer; kept as a guard
   if (p.banned === true) fail(403, 'Account banned');
   if (Date.now() - (p.lastSyncAt || 0) < 8000) fail(429, 'Please wait a few seconds');
   const raw = c.body.address ? await rawAddress(String(c.body.address).slice(0, 100)) : p.walletAddr;
@@ -419,7 +550,7 @@ async function wallet(c) {
 }
 
 async function unlink(c) {
-  const ref = P(c.user.id);
+  const ref = await ensurePlayer(c);
   const out = await txUpdate(ref, (d) => {
     if (d === null) return { error: new Fail(404, 'User not found') };
     return { value: { ...d, walletAddr: '', hold: 0 }, out: { oldAddr: d.walletAddr || '' } };
@@ -429,7 +560,7 @@ async function unlink(c) {
 }
 
 async function refCollect(c) {
-  const ref = P(c.user.id);
+  const ref = await ensurePlayer(c);
   return txUpdate(ref, (d) => {
     if (d === null) return { error: new Fail(404, 'User not found') };
     if (d.banned === true) return { error: new Fail(403, 'Account banned') };
@@ -443,7 +574,7 @@ async function refCollect(c) {
 }
 
 async function withdraw(c) {
-  const cfg = c.cfg, ref = P(c.user.id);
+  const cfg = c.cfg, ref = await ensurePlayer(c);
   const amt = Math.floor(Number(c.body.amount));
   const pre = await getVal(ref);
   if (!pre) fail(404, 'User not found');
@@ -499,6 +630,19 @@ async function adminState(c) {
   // RTDB queries return the newest N in ascending order — sort desc in code
   // to match Firestore's orderBy(..., 'desc') results.
   const players = Object.values(playersObj || {}).sort((a, b) => (b.lastSeen || 0) - (a.lastSeen || 0));
+  // Multi-account links (report-only): each entry's persisted multiLinks
+  // {count, ids} is enriched in the response with the linked users'
+  // names/usernames (from this page where possible, else a direct read).
+  const byId = new Map(players.map((p) => [String(p.id), p]));
+  await Promise.all(players.filter((p) => p.multiLinks && (p.multiLinks.ids || []).length).map(async (p) => {
+    const users = [];
+    for (const id of (p.multiLinks.ids || []).slice(0, MULTI_IDS_CAP)) {
+      let src = byId.get(String(id));
+      if (!src) { try { src = await getVal(P(id)); } catch (e) { src = null; } }
+      if (src) users.push({ id: String(id), name: src.name || '', username: src.username || '' });
+    }
+    p.multiLinks = { ...p.multiLinks, users };
+  }));
   const wds = Object.entries(wdsObj || {}).map(([docId, v]) => ({ docId, ...v })).sort((a, b) => (b.wdNum || 0) - (a.wdNum || 0));
   const pending = wds.filter((x) => String(x.status).includes('Pending')).slice(0, 15);
   await Promise.all(pending.map(async (x) => { try { x.risk = await riskOf(x.userId); } catch (e) { console.error('risk', e.message); } }));
@@ -519,7 +663,9 @@ async function adminBan(c) {
 async function adminAdjust(c) {
   owner(c);
   const amt = Number(c.body.amount);
-  if (!isId(c.body.id) || !Number.isFinite(amt)) fail(400, 'Bad input');
+  // |amt| bound: an unbounded value (e.g. 1e308 from a fat-fingered panel
+  // input) would make `mined` un-storable (Infinity) and fail writes later.
+  if (!isId(c.body.id) || !Number.isFinite(amt) || Math.abs(amt) > 1e12) fail(400, 'Bad input');
   const ref = P(c.body.id);
   if ((await getVal(ref)) === null) fail(500, 'Server error'); // same missing-doc behaviour as adminBan
   await ref.update({ mined: admin.database.ServerValue.increment(amt) });
@@ -528,7 +674,9 @@ async function adminAdjust(c) {
 
 async function adminWd(c) {
   owner(c);
-  const ref = rtdb().ref('withdrawals/' + String(c.body.docId));
+  const docId = String(c.body.docId || '');
+  if (!/^wd_\d+$/.test(docId)) fail(400, 'Bad id'); // docId is used as an RTDB path segment — never let it traverse
+  const ref = rtdb().ref('withdrawals/' + docId);
   const reject = c.body.decision === 'reject';
   const txHash = clean(c.body.txHash, 100).trim();
   // the status flip stays atomic on the withdrawal node (double-processing
@@ -541,7 +689,18 @@ async function adminWd(c) {
       : { status: 'Paid ✅', txLink: txHash ? 'https://tonviewer.com/transaction/' + encodeURIComponent(txHash) : 'https://tonviewer.com/' + encodeURIComponent(x.walletAddr) };
     return { value: { ...x, ...upd }, out: x };
   });
-  if (reject) await P(w.userId).update({ mined: admin.database.ServerValue.increment(w.amt) });
+  if (reject) {
+    try {
+      await P(w.userId).update({ mined: admin.database.ServerValue.increment(w.amt) });
+    } catch (e) {
+      // Never leave a withdrawal marked Rejected while its refund failed:
+      // flip it back to its Pending status so the owner can retry, then
+      // surface the error. (The Firestore original did flip+refund in one
+      // transaction; RTDB cannot — see PORT_NOTES.md.)
+      try { await ref.update({ status: w.status }); } catch (e2) { console.error('adminWd revert', e2.message); }
+      throw e;
+    }
+  }
   if (!reject && c.cfg.payoutChannel) {
     const url = txHash ? 'https://tonviewer.com/transaction/' + encodeURIComponent(txHash) : 'https://tonviewer.com/' + encodeURIComponent(w.walletAddr);
     const a = String(w.walletAddr);
@@ -557,7 +716,7 @@ async function adminWd(c) {
 async function adminSettings(c) {
   owner(c);
   const s = c.body.settings || {}, out = {};
-  for (const k of NUM_KEYS) if (s[k] !== undefined) { const v = Number(s[k]); if (!Number.isFinite(v) || v < 0) fail(400, 'Bad ' + k); out[k] = v; }
+  for (const k of NUM_KEYS) if (s[k] !== undefined) { const v = Number(s[k]); if (!Number.isFinite(v) || v < 0 || v > 1e12) fail(400, 'Bad ' + k); if ((k === 'withdrawFeePercent' || k === 'holdPercentReq') && v > 100) fail(400, 'Bad ' + k); out[k] = v; } // percents above 100 would make withdraw nets negative / holds impossible
   for (const k of STR_KEYS) if (s[k] !== undefined) out[k] = clean(s[k], 300);
   out.botToken = null; // was FieldValue.delete(): null in an RTDB update() deletes the child
   await rtdb().ref('settings/global').update(out);
@@ -587,6 +746,7 @@ functions.http('collectMining', async (req, res) => {
     const name = typeof body.action === 'string' ? body.action : 'collect';
     if (!Object.prototype.hasOwnProperty.call(ACTIONS, name)) return res.status(400).json({ error: 'Unknown action' });
     const uid = String(auth.user.id);
+    if (!/^\d+$/.test(uid)) return res.status(401).json({ error: 'Unauthorized' }); // Telegram user ids are numeric; anything else never reaches an RTDB path
     if (!hit('u:' + uid, 90, 60000) || !hit('a:' + uid + ':' + name, ACTION_LIMIT[name] || 60, 60000)) return res.status(429).json({ error: 'Too many requests, slow down' });
     const cfg = await getConfig();
     const result = await ACTIONS[name]({ user: auth.user, startParam: auth.startParam, authDate: auth.authDate, body, cfg, ip });
@@ -599,4 +759,4 @@ functions.http('collectMining', async (req, res) => {
   }
 });
 
-module.exports = { verifyInitData, clientKeys, riskOf, noteSignals, hit, publicConfig };
+module.exports = { verifyInitData, clientKeys, riskOf, noteSignals, hit, publicConfig, chatIdOf, memberStatus, updateMultiLinks };

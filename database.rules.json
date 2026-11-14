@@ -1,1 +1,8 @@
-{"rules":{".read":false,".write":false,"players":{".indexOn":["lastSeen"]},"withdrawals":{".indexOn":["userId","wdNum"]}}}
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "players": { ".indexOn": ["lastSeen", "deviceHash"] },
+    "withdrawals": { ".indexOn": ["userId", "wdNum"] }
+  }
+}
