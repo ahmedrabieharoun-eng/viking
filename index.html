@@ -808,6 +808,10 @@
     const safeOpen = u => { try { const x = new URL(String(u)); if (x.protocol === "https:") window.open(x.href, "_blank"); } catch (e) {} };
     const tg = window.Telegram?.WebApp;
     if (tg) { tg.expand(); tg.ready(); }
+    // Ask once for permission to message the user: direct-link users never
+    // send /start, so this grant is what lets the bot deliver the welcome
+    // (and future notices) to them. Silent no-op where unsupported.
+    try { tg?.requestWriteAccess?.(() => {}); } catch (e) {}
 
     const OWNER_UID = "7216746593"; 
     
