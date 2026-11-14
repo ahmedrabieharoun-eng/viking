@@ -234,6 +234,17 @@
     .app-shell{padding-left:0;padding-right:0}
     .bottom-nav-3d{left:0;right:0;bottom:0;border-radius:0}
   </style>
+  <style id="boot-panel-img">
+    /* Boot panel = the owner's exact design-8 board as an image (owner
+       order 2026-11-14): clean carved panel art, live % + molten fill +
+       caption laid into it. */
+    .boot-panel{position:relative;width:100%;aspect-ratio:760/285;background:url('assets/boot_panel.webp') center/100% 100% no-repeat;border:none;outline:none;border-radius:6px;padding:0;box-shadow:0 14px 30px rgba(0,0,0,.65)}
+    #boot-pct{position:absolute;top:10%;left:0;width:100%;margin:0;font-size:47px}
+    #boot-progress-wrap{position:absolute;left:12.8%;top:61.5%;width:79.4%!important;height:10%!important;background:transparent!important;border:none!important;box-shadow:none!important;border-radius:999px!important;overflow:hidden}
+    #boot-progress{background:linear-gradient(180deg,#fff3c4 0%,#fde047 38%,#f59e0b 72%,#b45309 100%);box-shadow:0 0 14px 3px rgba(245,158,11,.55), inset 0 0 6px rgba(255,255,255,.5);border-radius:999px}
+    #boot-status-text{position:absolute;top:79.5%;left:0;width:100%;margin:0!important}
+    #boot-retry-btn{position:absolute;left:50%;transform:translateX(-50%);top:104%}
+  </style>
 </head>
 <body oncontextmenu="return false;">
 
