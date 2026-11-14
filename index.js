@@ -38,6 +38,17 @@ const TON_API_KEY = process.env.TON_API_KEY || '';
 const TON_API_BASE = (process.env.TON_API_BASE || 'https://toncenter.com/api/v3').replace(/\/+$/, '');
 
 const JETTON = 'EQC6uN73kvaKh8LrTHQ8TQ5_vgqheI93iny5XUWkpQL9vjxI';
+/* Automatic $VIKING payouts (owner order 2026-11-14): when the
+   PAYOUT_MNEMONIC env var holds the payout wallet's 24 words,
+   withdraw() pays the net amount in the $VIKING jetton automatically
+   (see attemptPayout). The mnemonic lives ONLY in this env var — it
+   is never stored in settings, never logged, never sent anywhere.
+   PAYOUT_WALLET_VERSION selects the wallet contract the words open:
+   'v5' (WalletContractV5R1, the default) or 'v4'. Unset/invalid
+   mnemonic = the feature is off and withdrawals stay fully manual,
+   byte-for-byte the old behaviour. */
+const PAYOUT_MNEMONIC = String(process.env.PAYOUT_MNEMONIC || '').trim();
+const PAYOUT_WALLET_VERSION = String(process.env.PAYOUT_WALLET_VERSION || 'v5').trim().toLowerCase();
 const MAX_AUTH_AGE_SEC = 24 * 60 * 60;
 const MIN_COLLECT_SEC = 10;
 const BASE_RATE = 250; // coins per day (same as before)
@@ -986,6 +997,21 @@ async function jettonHold(raw) {
   const j = await ton('/accounts/' + encodeURIComponent(raw) + '/jettons/' + JETTON);
   if (!j) return 0;
   return parseFloat(j.balance || '0') / Math.pow(10, (j.jetton && j.jetton.decimals) || 9);
+}
+/* The jetton's decimals, resolved once from tonapi jetton info and
+   cached for the process — the same source and `decimals || 9`
+   semantics jettonHold uses (metadata.decimals arrives as a string).
+   A failed lookup is NOT cached: the caller gets the 9 fallback for
+   this call and the next call retries the resolution. */
+let _jettonDecimals = null;
+async function jettonDecimals() {
+  if (_jettonDecimals !== null) return _jettonDecimals;
+  try {
+    const j = await ton('/jettons/' + JETTON);
+    const n = Number(j && j.metadata ? j.metadata.decimals : undefined) || 9;
+    if (Number.isFinite(n) && n > 0 && n <= 18) { _jettonDecimals = n; return n; }
+  } catch (e) { /* fall through to the uncached fallback */ }
+  return 9;
 }
 
 /* ---------- wallet verification: TON Center v3 reads (owner order 2026-11-14) ---------- */
@@ -2164,6 +2190,14 @@ async function withdraw(c) {
   const num = await bumpCounter('withdrawals');
   const wd = { wdNum: num, userId: String(c.user.id), userName: clean(me.name, 64), walletAddr: addr, amt, net, fee, status: 'Pending ⏳', timestamp: Date.now() };
   await rtdb().ref('withdrawals/wd_' + num).set(wd);
+  // Automatic $VIKING payout (owner order 2026-11-14): fire-and-forget
+  // — the player's response must never hang on chain operations
+  // (a seqno confirmation alone can take most of a minute). The
+  // balance is already deducted and the record already exists, so
+  // the payout finishes asynchronously under its own state machine
+  // (attemptPayout); when the feature is disabled this is a no-op
+  // and the manual flow proceeds exactly as before.
+  if (payoutEnabled()) attemptPayout(wd.wdNum).catch((e) => console.error('payout', wd.wdNum, e.message));
   let rk = null;
   try { rk = await riskOf(c.user.id); } catch (e) { console.error('risk', e.message); }
   if (cfg.adminChatId) {
@@ -2173,6 +2207,336 @@ async function withdraw(c) {
     });
   }
   return { success: true, wdNum: wd.wdNum };
+}
+
+/* ---------- automatic $VIKING jetton payouts (owner order 2026-11-14) ----------
+   When PAYOUT_MNEMONIC is configured, withdraw() hands each new
+   record to attemptPayout(), which pays the NET amount in the
+   $VIKING jetton from the payout wallet to the player's bound
+   wallet. Safety comes from a tiny state machine on the withdrawal
+   record itself (field `payoutState`):
+
+     (absent)/'none'  --claim-->  'paying'  --confirmed-->  'paid'
+                                    |
+                                    +-- any failure -->  'failed'
+
+   - The claim is ONE transaction on the withdrawal node: only the
+     caller that flips absent/'none' -> 'paying' may broadcast, so
+     retries, double invocations and process restarts can never
+     produce a second transfer for the same record.
+   - 'paying' is hands-off forever: if the process dies mid-broadcast
+     the transfer may or may not have landed, and only a human may
+     resolve it (adminWd refuses to touch 'paying'/'paid' records).
+   - 'failed' is never auto-retried either: an explicit future admin
+     action is the only way back (out of scope here). A failure
+     NEVER re-credits the player automatically — the deduction made
+     by withdraw() stands, exactly like a manual payout that is still
+     waiting, and the owner is DM'd the reason.
+   - On success the record is flipped to status 'Paid ✅' with
+     payoutState 'paid', payoutTx (external tx hash when obtainable,
+     else the wallet seqno) and payoutAt.
+
+   The chain layer sits behind getPayoutClient(): production builds
+   the real @ton/ton client (createRealPayoutClient); local suites
+   point the PAYOUT_STUB_MODULE env var at a fake (the same
+   env-override style as TONAPI_BASE / TG_API_BASE) — the state
+   machine above never knows the difference. */
+function payoutEnabled() {
+  return PAYOUT_MNEMONIC.split(/\s+/).filter(Boolean).length === 24;
+}
+
+/* The @ton/* libraries are required lazily, only on the payout path:
+   a deployment without the feature must boot (and serve everything
+   else) even if the packages were somehow missing. */
+let _tonLibs = null;
+function tonLibs() {
+  if (_tonLibs) return _tonLibs;
+  _tonLibs = { ton: require('@ton/ton'), core: require('@ton/core'), tcrypto: require('@ton/crypto') };
+  return _tonLibs;
+}
+
+/* Derive the payout wallet contract address for a mnemonic + wallet
+   version ('v5' -> WalletContractV5R1, 'v4' -> WalletContractV4;
+   workchain 0, default wallet id — the derivation Tonkeeper uses).
+   With the owner's configured mnemonic and 'v5' this yields
+   EQANevKlqkfvfsF4vPfTpUxQs7ed92ZTkYi7JD7p0kgflaUA. */
+async function derivePayoutAddress(words, version) {
+  const { ton, tcrypto } = tonLibs();
+  const kp = await tcrypto.mnemonicToPrivateKey(words);
+  const Contract = version === 'v4' ? ton.WalletContractV4 : ton.WalletContractV5R1;
+  return Contract.create({ workchain: 0, publicKey: kp.publicKey }).address;
+}
+
+async function createRealPayoutClient() {
+  const { ton, core, tcrypto } = tonLibs();
+  const { Address, beginCell, toNano } = core;
+  const words = PAYOUT_MNEMONIC.split(/\s+/).filter(Boolean);
+  const keyPair = await tcrypto.mnemonicToPrivateKey(words);
+  // toncenter v2 JSON-RPC with the SAME key the v3 reads use.
+  const client = new ton.TonClient({ endpoint: 'https://toncenter.com/api/v2/jsonRPC', apiKey: TON_API_KEY || undefined });
+  const ownerAddr = await derivePayoutAddress(words, PAYOUT_WALLET_VERSION);
+  const Contract = PAYOUT_WALLET_VERSION === 'v4' ? ton.WalletContractV4 : ton.WalletContractV5R1;
+  const contract = Contract.create({ workchain: 0, publicKey: keyPair.publicKey });
+  const wallet = client.open(contract);
+  const masterAddr = Address.parse(JETTON);
+  // The payout wallet's own jetton wallet, resolved from the jetton
+  // master (get_wallet_address) — needed both to read the balance
+  // and as the destination of the internal transfer message.
+  async function myJettonWallet() {
+    const res = await client.runMethod(masterAddr, 'get_wallet_address', [
+      { type: 'slice', cell: beginCell().storeAddress(ownerAddr).endCell() }
+    ]);
+    return res.stack.readAddress();
+  }
+  return {
+    addressRaw: ownerAddr.toRawString(),
+    addressFriendly: ownerAddr.toString(),
+    async getTonBalance() { return client.getBalance(ownerAddr); },
+    async getJettonBalance() {
+      const res = await client.runMethod(await myJettonWallet(), 'get_wallet_data');
+      return res.stack.readBigNumber(); // stack: balance, owner, master, code
+    },
+    /* Standard TEP-74 jetton transfer (op 0x0f8a7ea5) from the payout
+       wallet's jetton wallet to the recipient's OWNER wallet (their
+       jetton wallet credits them), comment `WD-<wdNum>` as the
+       forward payload so every payout is traceable on-chain.
+       Returns after the wallet seqno has moved (the external message
+       has landed) — bounded at ~60 s. */
+    async sendJetton({ toRaw, amount, comment }) {
+      const dest = Address.parse(String(toRaw));
+      const jw = await myJettonWallet();
+      const seqno = await wallet.getSeqno();
+      const forwardPayload = beginCell().storeUint(0, 32).storeStringTail(String(comment || '')).endCell();
+      const body = beginCell()
+        .storeUint(0x0f8a7ea5, 32)          // transfer op
+        .storeUint(0, 64)                   // query id
+        .storeCoins(amount)                 // jetton amount, base units
+        .storeAddress(dest)                 // recipient owner wallet
+        .storeAddress(ownerAddr)            // response destination (excess TON returns here)
+        .storeBit(0)                        // no custom payload
+        .storeCoins(toNano('0.05'))         // forward TON amount (~0.05)
+        .storeBit(1)                        // forward payload in a ref
+        .storeRef(forwardPayload)
+        .endCell();
+      const msg = ton.internal({ to: jw, value: toNano('0.1'), body });
+      let txHash = '';
+      if (typeof wallet.createTransfer === 'function' && typeof wallet.send === 'function') {
+        const ext = await wallet.createTransfer({ seqno, secretKey: keyPair.secretKey, messages: [msg] });
+        txHash = ext.hash().toString('hex'); // the external message hash — the payout's on-chain tx id
+        await wallet.send(ext);
+      } else {
+        await wallet.sendTransfer({ seqno, secretKey: keyPair.secretKey, messages: [msg] });
+      }
+      const deadline = Date.now() + 60000;
+      let cur = seqno;
+      while (Date.now() < deadline) {
+        await txSleep(2500);
+        try { cur = await wallet.getSeqno(); } catch (e) { /* a lagging read is not a failure */ }
+        if (cur > seqno) break;
+      }
+      if (cur <= seqno) throw new Error('broadcast unconfirmed: seqno did not move within 60s');
+      return { seqno, txHash };
+    }
+  };
+}
+
+let _payoutClientPromise = null;
+function getPayoutClient() {
+  if (!_payoutClientPromise) {
+    _payoutClientPromise = (async () => {
+      const stubPath = String(process.env.PAYOUT_STUB_MODULE || '');
+      if (stubPath) { const m = require(stubPath); return m.createPayoutClient(); }
+      return createRealPayoutClient();
+    })();
+    // Construction sends nothing, so a failed build must not poison
+    // the process: drop the cached promise and let a later attempt
+    // rebuild (each attempt re-runs its own claim first anyway).
+    _payoutClientPromise.catch(() => { _payoutClientPromise = null; });
+  }
+  return _payoutClientPromise;
+}
+
+/* Owner alert for a failed automatic payout (Arabic admin style, via
+   tg() like the other owner DMs). Best-effort: a failed alert must
+   never mask the payout failure handling itself. */
+async function payoutAlert(wd, reason) {
+  if (!OWNER_ID || !wd) return;
+  try {
+    await tg('sendMessage', {
+      chat_id: OWNER_ID, parse_mode: 'HTML',
+      text: `🚨 <b>فشل الدفع التلقائي لسحب #${wd.wdNum}</b>\n👤 ${esc(wd.userName || '')} (<code>${esc(String(wd.userId || ''))}</code>)\n💎 <b>الصافي:</b> ${wd.net} $VIKING\n❌ <b>السبب:</b> ${esc(reason)}\nالسحب لسه «Pending» ورصيد اللاعب اتخصم خلاص — ادفع يدويًا أو ارفضه من لوحة التحكم.`
+    });
+  } catch (e) { console.error('payout alert', e.message); }
+}
+
+async function attemptPayout(wdNum) {
+  if (!payoutEnabled()) return;
+  const num = Math.floor(Number(wdNum));
+  if (!Number.isFinite(num) || num <= 0) return;
+  const ref = rtdb().ref('withdrawals/wd_' + num);
+  let wd = null;
+  try {
+    // 1) Atomic claim: only the invocation that flips the record
+    //    from absent/'none' to 'paying' may proceed; 'paying',
+    //    'paid' and 'failed' records are all hands-off (see header).
+    wd = await txUpdate(ref, (x) => {
+      if (x === null) return { skip: true, out: null };
+      if ((x.payoutState || 'none') !== 'none') return { skip: true, out: null };
+      return { value: { ...x, payoutState: 'paying', payoutAttemptAt: Date.now() }, out: x };
+    });
+    if (!wd) return; // claimed by someone else, or not in a payable state
+    const decimals = await jettonDecimals();
+    const amountBase = BigInt(Math.max(0, Math.floor(Number(wd.net) || 0))) * (10n ** BigInt(decimals));
+    const client = await getPayoutClient();
+    // 2) Balance gate: not enough jettons in the payout wallet is a
+    //    clean failure — no broadcast, the record stays Pending for
+    //    the manual flow, the owner hears about it once.
+    const bal = await client.getJettonBalance();
+    if (bal < amountBase) {
+      await ref.update({ payoutState: 'failed', payoutError: 'insufficient jetton balance' });
+      await payoutAlert(wd, 'insufficient jetton balance');
+      return;
+    }
+    // 3+4) Broadcast the jetton transfer and, once the seqno
+    //      confirms it landed, flip the record to Paid.
+    const sent = await client.sendJetton({ toRaw: wd.walletAddr, amount: amountBase, comment: 'WD-' + num });
+    const payoutTxVal = sent && sent.txHash ? String(sent.txHash) : (sent && sent.seqno !== undefined ? sent.seqno : '');
+    await ref.update({
+      status: 'Paid ✅', payoutState: 'paid',
+      payoutTx: payoutTxVal,
+      payoutAt: Date.now()
+    });
+    // The celebration (photo DM + payouts-channel post, exactly once
+    // via the payoutNotifiedAt claim). It must NEVER flip a completed
+    // payout into the failure path below: sendPayoutSuccess swallows
+    // its own errors, and this dedicated guard keeps even a surprise
+    // throw out of the catch.
+    try {
+      const cfg = await getConfig();
+      const p = await getVal(P(wd.userId)).catch(() => null);
+      await sendPayoutSuccess({ ...wd, payoutTx: payoutTxVal }, p, cfg);
+    } catch (e) { console.error('payout success notify', num, e.message); }
+  } catch (e) {
+    // 5) ANY failure lands here exactly once per attempt: mark the
+    //    record failed (status stays 'Pending ⏳'), never re-credit,
+    //    never broadcast again, and tell the owner why.
+    const reason = String((e && e.message) || e || 'unknown error').slice(0, 200);
+    console.error('payout', num, reason);
+    try { await ref.update({ payoutState: 'failed', payoutError: reason }); } catch (e2) { console.error('payout state write', num, e2.message); }
+    if (!wd) { try { wd = await getVal(ref); } catch (e3) { /* the alert tolerates a missing record */ } }
+    await payoutAlert(wd, reason);
+  }
+}
+
+/* ---------- payout success celebration (owner order 2026-11-14) ----------
+   ONE shared celebration for EVERY withdrawal that becomes Paid —
+   fired by attemptPayout's success path and by adminWd's manual
+   approve alike. Two FIXED designs, deliberately different from
+   each other (owner correction 2026-11-14): the player's DM is the
+   personal one (warrior banner, «Your Payout is Sent!», his wallet,
+   the tx button), the payouts-channel post (cfg.channel2) is the
+   public proof (treasure-chest banner, «New Payout!», first name
+   only, NO wallet address).
+   Exactly-once is enforced on the record itself: the caller claims
+   `payoutNotifiedAt` in a transaction BEFORE sending anything, so
+   retries, races and re-approvals can never double-send. The claim
+   is taken once the code is committed to attempting the user DM;
+   the channel post is best-effort afterwards — its failure is
+   logged and never re-opens the claim, never touches the payout
+   state (the bot is not yet an admin in that channel; the post will
+   simply start landing once the owner promotes it). */
+const PAYOUT_DM_BANNER = 'https://ahmedrabieharoun-eng.github.io/viking/payout-banner2.webp';       // warrior with the glowing coin
+const PAYOUT_CHANNEL_BANNER = 'https://ahmedrabieharoun-eng.github.io/viking/payout-banner.webp';   // treasure chest
+/* The on-chain link for a paid withdrawal: the auto path's payoutTx
+   when it is a real 64-hex transaction hash, else the txLink
+   adminWd stored on manual approval, else '' — no button is better
+   than a fake link. */
+function payoutTxUrl(wd) {
+  const h = String((wd && wd.payoutTx) || '').trim();
+  if (/^[0-9a-fA-F]{64}$/.test(h)) return 'https://tonviewer.com/transaction/' + h;
+  if (wd && wd.txLink) return String(wd.txLink);
+  return '';
+}
+const fmtCoins = (n) => (Number(n) || 0).toLocaleString('en-US');
+
+async function sendPayoutSuccess(wd, player, cfg) {
+  try {
+    if (!wd || !wd.wdNum || !cfg) return;
+    const num = wd.wdNum;
+    const claimed = await txUpdate(rtdb().ref('withdrawals/wd_' + num), (x) => {
+      if (x === null) return { skip: true, out: false };
+      if (x.payoutNotifiedAt) return { skip: true, out: false };
+      return { value: { ...x, payoutNotifiedAt: Date.now() }, out: true };
+    });
+    if (!claimed) return; // already celebrated (or the record is gone)
+    const amount = fmtCoins(wd.net);
+    const botUname = await resolveBotUsername(cfg);
+    const appUrl = botUname ? `https://t.me/${botUname}/app` : '';
+    const txUrl = payoutTxUrl(wd); // shared by BOTH messages' «View Transaction» buttons (owner order 2026-11-14)
+    /* ---- the player's DM ---- */
+    try {
+      const walletRaw = (player && player.walletAddr) || wd.walletAddr || '';
+      const rows = [];
+      if (appUrl) rows.push([{ text: '⚔️ Open VIKING', url: appUrl }]);
+      if (txUrl) rows.push([{ text: '🔗 View Transaction', url: txUrl }]);
+      const kb = rows.length ? { inline_keyboard: rows } : undefined;
+      const caption = `💸 Your Payout is Sent!\n💎 <b>+${amount} ${esc(cfg.coinSym)}</b>\n👛 Wallet: <code>${esc(shortFriendlyAddress(walletRaw))}</code>\n🔢 Withdrawal #${num}\n📅 ${fmtDayMonYear(Date.now())}`;
+      const photoRes = await tg('sendPhoto', { chat_id: String(wd.userId), photo: PAYOUT_DM_BANNER, caption, reply_markup: kb });
+      if (!photoRes || !photoRes.ok) {
+        await tg('sendMessage', { chat_id: String(wd.userId), text: caption, reply_markup: kb });
+      }
+    } catch (e) { console.error('payout success dm', num, e.message); }
+    /* ---- the payouts-channel post (best-effort) ---- */
+    try {
+      const chanId = chatIdOf(cfg.channel2);
+      if (chanId !== null && chanId !== '') {
+        const fullName = (player && player.name) || wd.userName || '';
+        const firstName = esc(String(fullName).trim().split(/\s+/)[0] || 'Viking');
+        const rows = [];
+        if (appUrl) rows.push([{ text: '⚔️ Start Mining Now', url: appUrl }]);
+        if (txUrl) rows.push([{ text: '🔗 View Transaction', url: txUrl }]);
+        const kb = rows.length ? { inline_keyboard: rows } : undefined;
+        // Public proof style — different wording/layout from the DM:
+        // first name + amount + WD number, NO wallet address.
+        const caption = `🏆 New Payout!\n👤 <b>${firstName}</b>\n💰 <b>${amount} ${esc(cfg.coinSym)}</b>\n🔢 Withdrawal #${num}`;
+        let ok = false;
+        const photoRes = await tg('sendPhoto', { chat_id: chanId, photo: PAYOUT_CHANNEL_BANNER, caption, reply_markup: kb });
+        if (photoRes && photoRes.ok) ok = true;
+        else {
+          const msgRes = await tg('sendMessage', { chat_id: chanId, text: caption, reply_markup: kb });
+          ok = !!(msgRes && msgRes.ok);
+        }
+        if (!ok) console.error('payout channel post failed', num);
+      }
+    } catch (e) { console.error('payout channel post failed', num, e.message); }
+  } catch (e) {
+    // The celebration must never break its callers (a completed
+    // payout in attemptPayout, an approval in adminWd).
+    console.error('payout success', wd && wd.wdNum, e.message);
+  }
+}
+
+/* Boot line (owner order 2026-11-14): one startup line, always —
+   the disabled line, or the live wallet + balances when enabled.
+   Balances are best-effort: a chain hiccup at boot is logged,
+   never fatal. */
+async function initPayout() {
+  if (!payoutEnabled()) {
+    console.log(PAYOUT_MNEMONIC ? '[payout] disabled (PAYOUT_MNEMONIC is not a 24-word mnemonic)' : '[payout] disabled (PAYOUT_MNEMONIC not set)');
+    return;
+  }
+  try {
+    const client = await getPayoutClient();
+    let tonTxt = '?', jTxt = '?';
+    try { tonTxt = (Number(await client.getTonBalance()) / 1e9).toFixed(4); } catch (e) { /* best-effort */ }
+    try {
+      const d = await jettonDecimals();
+      jTxt = (Number(await client.getJettonBalance()) / Math.pow(10, d)).toLocaleString('en-US');
+    } catch (e) { /* best-effort */ }
+    console.log(`[payout] wallet ${client.addressFriendly} | TON ${tonTxt} | VIKING ${jTxt}`);
+  } catch (e) {
+    console.error('[payout] init failed:', e.message);
+  }
 }
 
 /* ---------- owner-only actions ---------- */
@@ -2254,6 +2618,11 @@ async function adminWd(c) {
   // guard); the reject refund is applied right after — see PORT_NOTES.md
   const w = await txUpdate(ref, (x) => {
     if (x === null) return { error: new Fail(404, 'Not found') };
+    // The auto-payout state machine owns 'paying'/'paid' records: a
+    // manual decision here could double-pay (approve while a jetton
+    // broadcast is in flight) or double-credit (reject-refund a
+    // transfer that already landed). 'Paid ✅' via payout is final.
+    if (x.payoutState === 'paid' || x.payoutState === 'paying') return { error: new Fail(400, 'Already processed') };
     if (!String(x.status).includes('Pending')) return { error: new Fail(400, 'Already processed') };
     const upd = reject
       ? { status: 'Rejected ❌' }
@@ -2271,6 +2640,18 @@ async function adminWd(c) {
       try { await ref.update({ status: w.status }); } catch (e2) { console.error('adminWd revert', e2.message); }
       throw e;
     }
+  }
+  if (!reject) {
+    // The shared payout celebration (photo DM + payouts-channel
+    // post) — the same helper the automatic payout fires, exactly
+    // once via the payoutNotifiedAt claim, so a manually approved
+    // withdrawal celebrates identically and can never double-send
+    // (e.g. auto-paid first, approved later — already refused above
+    // by the payoutState guard, and the claim would stop it anyway).
+    try {
+      const txLink = txHash ? 'https://tonviewer.com/transaction/' + encodeURIComponent(txHash) : 'https://tonviewer.com/' + encodeURIComponent(w.walletAddr);
+      await sendPayoutSuccess({ ...w, txLink }, null, c.cfg);
+    } catch (e) { console.error('adminWd celebrate', e.message); }
   }
   if (!reject && c.cfg.payoutChannel) {
     const url = txHash ? 'https://tonviewer.com/transaction/' + encodeURIComponent(txHash) : 'https://tonviewer.com/' + encodeURIComponent(w.walletAddr);
@@ -2306,6 +2687,7 @@ const ACTIONS = { state, collect, daily, task, bioTask, refAch, wallet, unlink, 
 
 ensureWebhook(); // self-register the Telegram webhook once per process (never blocks boot)
 startVerifyWatcher(); // background deposit watcher (see verifyWatchTick; no-op when VERIFY_WATCH_MS=0)
+initPayout(); // automatic-payout boot line (disabled line, or wallet + balances when PAYOUT_MNEMONIC is set)
 
 functions.http('collectMining', async (req, res) => {
   res.set('Access-Control-Allow-Origin', ALLOWED_ORIGIN);
@@ -2370,4 +2752,4 @@ functions.http('collectMining', async (req, res) => {
   }
 });
 
-module.exports = { verifyInitData, clientKeys, riskOf, noteSignals, hit, publicConfig, chatIdOf, memberStatus, updateMultiLinks, completeVerification, verifyWatchTick, toFriendlyAddress, fmtDayMonYear, txUpdate };
+module.exports = { verifyInitData, clientKeys, riskOf, noteSignals, hit, publicConfig, chatIdOf, memberStatus, updateMultiLinks, completeVerification, verifyWatchTick, toFriendlyAddress, fmtDayMonYear, txUpdate, attemptPayout, derivePayoutAddress, payoutEnabled, sendPayoutSuccess };
