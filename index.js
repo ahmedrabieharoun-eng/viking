@@ -70,7 +70,7 @@ const DEFAULTS = {
   // and would sit retrying behind the loader instead of showing it.)
   ownerOnly: false,
   buySwapUrl: 'https://app.ston.fi/swap?chartVisible=false&tt=EQC6uN73kvaKh8LrTHQ8TQ5_vgqheI93iny5XUWkpQL9vjxI&ft=GRAM',
-  channel1: 'https://t.me/YGRAM1', channel2: 'https://t.me/telegram', botUsername: 'VIKINGMINER_BOT',
+  channel1: 'https://t.me/YGRAM1', channel2: 'https://t.me/telegram', botUsername: 'VIKING_MINER_BOT',
   // Wallet verification (owner order 2026-11-14): the fee is paid to
   // verifyDepositWallet with the comment VIKING-<userNo>; a wallet must
   // be at least verifyMinAgeDays old to be verified.
