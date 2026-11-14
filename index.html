@@ -1239,9 +1239,14 @@
     }
 
     function getLevelArtSVG(lvl) {
-      // Redesign: level cards carry the painted tier portrait (same
-      // three heroes as the Mine panel / Boost banner) instead of the
-      // old emblem SVGs. Name kept — renderLevelsGrid calls it as-is.
+      // Evolution system (owner order 2026-11-14): once the player has
+      // chosen an avatar, level cards carry HIS avatar's evolution
+      // portrait for that decade (10 images per avatar, one per 10
+      // levels). Without an avatar, fall back to the group heroes.
+      if (myAvatar >= 1 && myAvatar <= 8) {
+        const t = Math.min(10, Math.max(1, Math.ceil(lvl / 10)));
+        return `<img src="assets/evo_a${myAvatar}_t${t}.webp" alt="" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:50% 16%;border-radius:11px;">`;
+      }
       const tier = lvl <= 30 ? 1 : (lvl <= 70 ? 2 : 3);
       return `<img src="assets/hero_tier${tier}.webp" alt="" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:50% 16%;border-radius:11px;">`;
     }
@@ -2216,7 +2221,10 @@
       const perSec = cur.perDay / 86400;
       syncTierArt(cur.level);
       const rb = document.getElementById('mine-level-ribbon');
-      if (rb) rb.textContent = 'LEVEL ' + cur.level + ' - ' + String(cur.name || '').replace(/\s+\d+\s*$/, '').toUpperCase();
+      if (rb) {
+        const avName = (myAvatar >= 1 && myAvatar <= 8 && typeof AVATAR_NAMES !== 'undefined' && AVATAR_NAMES[myAvatar]) ? AVATAR_NAMES[myAvatar] : String(cur.name || '').replace(/\s+\d+\s*$/, '');
+        rb.textContent = 'LEVEL ' + cur.level + ' - ' + String(avName).toUpperCase();
+      }
 
       if (Date.now() < lastCollectTime - 60000) lastCollectTime = Date.now();
 
@@ -2242,15 +2250,28 @@
       }
     }
 
-    // Redesign: the hero portrait (Mine panel + Boost banner) follows
-    // the player's tier — 1 Shieldbearer / 2 Berserker / 3 Valhalla King.
-    let lastTierArt = 0;
+    // Evolution system (owner order 2026-11-14): the Mine hero shows
+    // the player's OWN avatar at his current evolution (one image per
+    // 10 levels); the Boost banner keeps following the group heroes.
+    let lastTierArt = '';
     function syncTierArt(level) {
-      const tier = level <= 30 ? 1 : (level <= 70 ? 2 : 3);
-      if (tier === lastTierArt) return; lastTierArt = tier;
-      const src = `assets/hero_tier${tier}.webp`;
-      const h = document.getElementById('hero-img'); if (h) h.src = src;
-      const b = document.getElementById('boost-hero'); if (b) b.src = src;
+      if (myAvatar >= 1 && myAvatar <= 8) {
+        const t = Math.min(10, Math.max(1, Math.ceil(level / 10)));
+        const key = 'evo' + myAvatar + '_' + t;
+        if (key !== lastTierArt) {
+          lastTierArt = key;
+          const h = document.getElementById('hero-img'); if (h) h.src = `assets/evo_a${myAvatar}_t${t}.webp`;
+        }
+      } else {
+        const tier = level <= 30 ? 1 : (level <= 70 ? 2 : 3);
+        const key = 'grp' + tier;
+        if (key !== lastTierArt) {
+          lastTierArt = key;
+          const h = document.getElementById('hero-img'); if (h) h.src = `assets/hero_tier${tier}.webp`;
+        }
+      }
+      const bt = level <= 30 ? 1 : (level <= 70 ? 2 : 3);
+      const b = document.getElementById('boost-hero'); if (b && !b.src.includes(`hero_tier${bt}.webp`)) b.src = `assets/hero_tier${bt}.webp`;
     }
 
     async function collectMining(e) {
