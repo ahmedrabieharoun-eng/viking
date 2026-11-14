@@ -1970,14 +1970,19 @@ async function verifyInfo(c) {
   };
 }
 
-/* The success messages (owner order 2026-11-14): fired ONCE, by
-   whichever path wins the verification flip — the Verify button's
-   check or the background watcher — never by a loser. The user gets
-   the celebratory photo DM (welcome banner + caption, premiumized
-   centrally by tg()); the owner gets a deposit alert with the tx
-   link. Both are best-effort: a user who never started the bot
-   cannot be DM'd, and a message failure must never fail (or roll
-   back) a completed verification. */
+/* The success messages (owner order 2026-11-14): fired ONCE PER
+   PAYMENT, by whichever path wins the verification flip — the
+   Verify button's check or the background watcher — never by a
+   loser, and never twice for the same payment: completeVerification
+   takes the payment's single notification slot (the claim record's
+   notifiedAt) before calling this, so a verification that is voided
+   (unlink / different-wallet bind) and later re-completed from the
+   SAME payment flips the player back to verified silently. The user
+   gets the celebratory photo DM (welcome banner + caption,
+   premiumized centrally by tg()); the owner gets a deposit alert
+   with the tx link. Both are best-effort: a user who never started
+   the bot cannot be DM'd, and a message failure must never fail (or
+   roll back) a completed verification. */
 async function sendVerificationMessages(uid, p, cfg, hash, ageDays) {
   const userNo = Number(p.userNo) || 0;
   try {
@@ -2010,7 +2015,8 @@ async function sendVerificationMessages(uid, p, cfg, hash, ageDays) {
    flips the player to verified in ONE transaction — only if still
    unverified for the same bound wallet — flags the wallets-registry
    node, syncs the inviter's referral entry, and, ONLY when this
-   caller won the flip, sends the success messages.
+   caller won the flip AND the payment has never been announced
+   (the claim's notifiedAt slot), sends the success messages.
    Returns { won:true, tx } to the winner; { won:false, reason } to
    everyone else ('already' | 'claimed' | 'banned' | 'nowallet' |
    'missing'). Throws Fail(409) if the bound wallet changed between
@@ -2067,7 +2073,31 @@ async function completeVerification(uid, hash, cfg) {
   await syncRefVerifiedFlag(uid, true);
   let ageDays = null;
   try { ageDays = await walletAgeDays(ref, flip.player, wallet); } catch (e) { /* the caption falls back to '—' */ }
-  await sendVerificationMessages(uid, flip.player, cfg, hash, ageDays);
+  /* Once per payment (owner order 2026-11-14): the flip above can
+     be won MORE than once for the same payment — void the
+     verification (unlink / different-wallet bind), rebind, and the
+     same-user claim fall-through up top completes it again. The
+     flip must still land (the player really is verified again),
+     but the messages may only ever be sent once for this payment,
+     so first take the notification slot on the claim record
+     atomically: mark-then-send. A claim stranded by a completion
+     that never won its flip has no notifiedAt yet, so its eventual
+     win still takes the slot and sends — that win IS the payment's
+     first (and only) announcement. If the Telegram send itself
+     fails after the mark, the messages are best-effort by design
+     and are NOT retried: the owner's "once only" outranks delivery
+     retries. If the mark itself fails, skip the send rather than
+     risk a duplicate later; a future re-completion can still take
+     the slot and announce. */
+  let notify = false;
+  try {
+    notify = await txUpdate(claimRef, (cur) => {
+      if (!cur || typeof cur !== 'object') return { skip: true, out: false }; // no claim record — defensive: never announce an unclaimed payment
+      if (cur.notifiedAt) return { skip: true, out: false }; // this payment already announced itself
+      return { value: { ...cur, notifiedAt: Date.now() }, out: true };
+    });
+  } catch (e) { console.error('verify notify-mark FAILED for uid', uid, 'hash', hash, '-', e.message); }
+  if (notify) await sendVerificationMessages(uid, flip.player, cfg, hash, ageDays);
   return { won: true, tx: hash };
 }
 
