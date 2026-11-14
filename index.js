@@ -91,19 +91,65 @@ const getVal = async (ref) => (await ref.once('value')).val();
    the commit is a harmless no-op and the recorded decision is applied
    below (throw err / return skip-out), so observable behaviour is
    unchanged while the stale-view false decisions disappear. Value
-   decisions were never affected: they always round-tripped and re-ran. */
-async function txUpdate(ref, fn) {
-  let out, err = null, skip = false;
+   decisions were never affected: they always round-tripped and re-ran.
+
+   SECOND HALF of the same bug (intermittent 'User not found' AND
+   'Server error' in the wild, typically right after a process
+   (re)start): the first local pass can hand fn `undefined` — not null
+   — for a node this process has never synced. Every callback is
+   written against null, so on undefined it either mis-decided (the
+   create-if-absent guards read `cur !== null` as "exists, skip", so
+   ensurePlayer created nothing) or crashed dereferencing it
+   (`d.banned` on undefined -> a bare 500), and the identity return
+   above handed `undefined` back to the SDK, which aborts the
+   transaction locally without ever asking the server. txUpdate
+   therefore NEVER lets fn see undefined: an undefined pass decides
+   nothing and returns null (never undefined) as a probe — the
+   compare-and-swap hash check guarantees the probe cannot overwrite
+   a real server value; if the server holds one, fn re-runs against
+   it inside the same transaction. If fn never ran against a
+   server-confirmed value at all (the node was truly empty and the
+   probe committed), the decision is taken afterwards on a direct
+   read, and a value decision is committed by one recursive pass —
+   the read has synced the node, so fn runs against the real value
+   there. Net effect: 'record missing' is only ever decided on a
+   value the server confirmed, so a legitimate ensured player can
+   no longer surface a spurious 404/500 from a stale local view. */
+async function txUpdate(ref, fn, _depth = 0) {
+  let out, err = null, skip = false, decided = false;
   const res = await ref.transaction((cur) => {
+    if (cur === undefined) return null; // unseen locally != missing: probe, decide nothing (see above)
+    decided = true;
     const r = fn(cur) || {};
     if (r.error || r.skip) { err = r.error || null; skip = !!r.skip; out = r.out; return cur; }
     skip = false; err = null; out = r.out;
     return r.value;
   });
+  if (!decided) {
+    if (_depth >= 1) throw new Fail(500, 'Server error'); // still undecided after a confirmed read: a genuine fault, not a stale view
+    const cur = await getVal(ref);
+    const r = fn(cur) || {};
+    if (r.error) throw r.error;
+    if (r.skip) return r.out;
+    return txUpdate(ref, fn, _depth + 1);
+  }
   if (err) throw err;
   if (skip) return out;
   if (!res.committed) throw new Fail(500, 'Server error');
   return out;
+}
+
+/* Increment one key of meta/counters atomically and return its new
+   value. Routed through txUpdate so the counters inherit the
+   unseen-node hardening above — the raw ref.transaction calls this
+   replaces computed from the (possibly unseen) local view and never
+   checked that the result had actually committed. */
+async function bumpCounter(key) {
+  return txUpdate(rtdb().ref('meta/counters'), (cur) => {
+    const base = (cur && typeof cur === 'object') ? cur : {};
+    const v = { ...base, [key]: (Number(base[key]) || 0) + 1 };
+    return { value: v, out: v[key] };
+  });
 }
 
 /* ---------- multi-account signals: for owner review only, nothing is blocked ---------- */
@@ -829,9 +875,14 @@ async function tonc(path) {
   if (!r.ok) fail(502, 'TON network is busy, try again');
   return r.json();
 }
-/* Transactions of one account, newest (desc) or oldest (asc) first. */
+/* Transactions of one account, newest (desc) or oldest (asc) first.
+   TON_API_BASE is toncenter v3, whose ordering parameter is
+   `sort=asc|desc`. (The tonapi.io name `sort_order` is silently
+   IGNORED by toncenter — every query then falls back to newest-first,
+   which once made the age lookup read the newest transaction instead
+   of the oldest. Regression-covered in test_local5 V14.) */
 async function toncTransactions(rawAddr, limit, order) {
-  const j = await tonc('/transactions?account=' + encodeURIComponent(rawAddr) + '&limit=' + limit + '&sort_order=' + order);
+  const j = await tonc('/transactions?account=' + encodeURIComponent(rawAddr) + '&limit=' + limit + '&sort=' + order);
   return (j && Array.isArray(j.transactions)) ? j.transactions : [];
 }
 /* Wallet age in whole days = time since the wallet's FIRST transaction
@@ -845,14 +896,19 @@ async function fetchWalletAgeDays(raw) {
 }
 /* The age is cached on the player (walletAgeDays/walletAgeAt/
    walletAgeFor) for at most WALLET_AGE_CACHE_MS and only ever for the
-   wallet it was computed for — a different wallet always recomputes. */
+   wallet it was computed for — a different wallet always recomputes.
+   The cache also carries a version stamp (walletAgeV): caches written
+   before the ascending-query fix (which, via the sort_order bug,
+   stored the age of the NEWEST transaction) carry no stamp and are
+   recomputed once, then stamped and behave as before. */
 const WALLET_AGE_CACHE_MS = 3 * 60 * 60 * 1000;
+const WALLET_AGE_CACHE_V = 2;
 async function walletAgeDays(ref, p, wallet) {
-  if (p.walletAgeFor === wallet && p.walletAgeAt && (Date.now() - p.walletAgeAt) < WALLET_AGE_CACHE_MS && Number(p.walletAgeDays) >= 0) {
+  if (p.walletAgeV === WALLET_AGE_CACHE_V && p.walletAgeFor === wallet && p.walletAgeAt && (Date.now() - p.walletAgeAt) < WALLET_AGE_CACHE_MS && Number(p.walletAgeDays) >= 0) {
     return Number(p.walletAgeDays);
   }
   const days = await fetchWalletAgeDays(wallet);
-  try { await ref.update({ walletAgeDays: days, walletAgeAt: Date.now(), walletAgeFor: wallet }); } catch (e) { /* the cache is advisory */ }
+  try { await ref.update({ walletAgeDays: days, walletAgeAt: Date.now(), walletAgeFor: wallet, walletAgeV: WALLET_AGE_CACHE_V }); } catch (e) { /* the cache is advisory */ }
   return days;
 }
 /* Decode the text comment of an incoming message, robustly:
@@ -933,19 +989,30 @@ async function ensurePlayer(c) {
    simply skipped (a gap), never reused. Best-effort: a numbering
    failure must never break the action that triggered it. */
 async function assignUserNo(uid) {
-  try {
-    const ref = P(uid);
-    const cur = await getVal(ref);
-    if (!cur || Number(cur.userNo) > 0) return Number(cur && cur.userNo) || 0;
-    const cres = await rtdb().ref('meta/counters').transaction((c) => ({ ...(c || {}), users: ((c && c.users) || 0) + 1 }));
-    const n = (cres.snapshot.val() || {}).users;
-    if (!n) return 0;
-    return await txUpdate(ref, (d) => {
-      if (d === null) return { skip: true, out: 0 };
-      if (Number(d.userNo) > 0) return { skip: true, out: Number(d.userNo) }; // a racer assigned first; n stays a gap
-      return { value: { ...d, userNo: n }, out: n };
-    });
-  } catch (e) { console.error('assignUserNo', e.message); return 0; }
+  // One full retry before giving up: the counter and the player write
+  // are both txUpdate-hardened now, so a failure here is transient
+  // (contention / a just-restarted process), and verifyInfo's
+  // last-resort 500 must stay reserved for genuinely impossible
+  // states — never for a real player on a cold process.
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const ref = P(uid);
+      const cur = await getVal(ref);
+      if (!cur) return 0; // no record to number — callers ensure it first; nothing to retry
+      if (Number(cur.userNo) > 0) return Number(cur.userNo);
+      const n = await bumpCounter('users');
+      if (!n) continue;
+      const out = await txUpdate(ref, (d) => {
+        if (d === null) return { skip: true, out: 0 };
+        if (Number(d.userNo) > 0) return { skip: true, out: Number(d.userNo) }; // a racer assigned first; n stays a gap
+        return { value: { ...d, userNo: n }, out: n };
+      });
+      if (out) return out;
+      const again = await getVal(ref); // out 0 with no error: re-read — a racer's number may have landed
+      if (again && Number(again.userNo) > 0) return Number(again.userNo);
+    } catch (e) { console.error('assignUserNo', e.message); }
+  }
+  return 0;
 }
 async function ensureUserNo(uid) {
   const p = await getVal(P(uid));
@@ -1677,8 +1744,7 @@ async function withdraw(c) {
       out: { name: d.name }
     };
   });
-  const cres = await rtdb().ref('meta/counters').transaction((cur) => ({ ...(cur || {}), withdrawals: ((cur && cur.withdrawals) || 0) + 1 }));
-  const num = cres.snapshot.val().withdrawals;
+  const num = await bumpCounter('withdrawals');
   const wd = { wdNum: num, userId: String(c.user.id), userName: clean(me.name, 64), walletAddr: addr, amt, net, fee, status: 'Pending ⏳', timestamp: Date.now() };
   await rtdb().ref('withdrawals/wd_' + num).set(wd);
   let rk = null;
