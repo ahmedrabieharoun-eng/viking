@@ -448,16 +448,205 @@ function verifyInitData(initData) {
   } catch (e) { return { error: 'invalid' }; }
 }
 
+/* ---------- Telegram Premium (custom) emoji — ported from the AdVOLT
+   messages bot (volt_messages_bot.js): the owner's own icon packs
+   (TONEmoji + NewsEmoji) and substitution table, copied verbatim.
+   Applied centrally in tg() for sendMessage below; on a Telegram
+   emoji/icon rejection the send retries once fully stripped. */
+// ─── Telegram Premium (custom) emoji ─────────────────────────────
+// Owner-chosen packs: TONEmoji + NewsEmoji (t.me/addemoji/TONEmoji,
+// t.me/addemoji/NewsEmoji). pz() wraps every matched emoji char in a
+// <tg-emoji> tag inside HTML messages; if Telegram rejects a send
+// (e.g. the bot owner's account has no Premium), callers fall back to
+// the plain text via pzStrip() — no message is ever lost.
+const PREMIUM_EMOJI = {
+  '❌': '5210952531676504517',
+  '⚠': '5447644880824181073',
+  '⚠️': '5447644880824181073',
+  '💰': '5417924076503062111',
+  '💎': '5462902520215002477',
+  '📊': '5203993413346680064',
+  '🔄': '5375338737028841420',
+  '⚡': '5456140674028019486',
+  '⚡️': '5456140674028019486',
+  '🔍': '5231012545799666522',
+  '🚫': '5240241223632954241',
+  '⛔': '5260293700088511294',
+  '⛔️': '5260293700088511294',
+  '💸': '5233326571099534068',
+  '🔗': '5440410042773824003',
+  '🏆': '5188344996356448758',
+  '🔴': '5411225014148014586',
+  '🔓': '5429405838345265327',
+  '🚀': '5188481279963715781',
+  '🎉': '5461151367559141950',
+  '💡': '5422439311196834318',
+  '🏷': '5298877105000439431',
+  '🏷️': '5298877105000439431',
+  '📩': '5472239203590888751',
+  '📌': '5397782960512444700',
+  '⚙': '5341715473882955310',
+  '⚙️': '5341715473882955310',
+  '🟢': '5416081784641168838',
+  '➕': '5397916757333654639',
+  '🚨': '5395695537687123235',
+  '🪙': '5382164415019768638',
+  '🔑': '5307843983102204243',
+  '💳': '5472250091332993630',
+  '🧾': '5204242830687494041',
+  '👛': '5215420556089776398',
+  '🏦': '5238132025323444613',
+  '🎮': '5361741454685256344',
+  '🔒': '5296369303661067030',
+  '📈': '5298614648138919107',
+  '💱': '5377336227533969892',
+  '🔖': '5222444124698853913',
+  'ℹ': '5334544901428229844',
+  'ℹ️': '5334544901428229844',
+};
+const PREMIUM_KEYS = Object.keys(PREMIUM_EMOJI).sort((a, b) => b.length - a.length);
+// Near-match substitutions (owner order 2026-11-11): bot emojis with no exact sticker in the
+// NewsEmoji/TONEmoji packs are rendered with the closest-looking pack sticker instead.
+// orig char -> [display char, custom_emoji_id]
+const PREMIUM_SUBS = {
+  '✅': ['✔️', '5206607081334906820'],
+  '🔹': ['💎', '5462902520215002477'],
+  '👤': ['🗣️', '5460795800101594035'],
+  '📭': ['✉️', '5253742260054409879'],
+  '📋': ['🧾', '5204242830687494041'],
+  '🆔': ['🔑', '5307843983102204243'],
+  '📬': ['📩', '5472239203590888751'],
+  '📤': ['🛫', '5463424023734014980'],
+  '🕐': ['⌛', '5386367538735104399'],
+  '📡': ['🌐', '5447410659077661506'],
+  '👥': ['🙂', '5461117441612462242'],
+  '📦': ['🛍', '5229064374403998351'],
+  '📢': ['📣', '5424818078833715060'],
+  '📥': ['📩', '5472239203590888751'],
+  '📝': ['✏️', '5395444784611480792'],
+  '🎁': ['🎉', '5461151367559141950'],
+  '📨': ['📩', '5472239203590888751'],
+  '📅': ['🗓', '5413879192267805083'],
+  '🟣': ['🔴', '5411225014148014586'],
+  '🔁': ['🔄', '5375338737028841420'],
+  '👋': ['🫴', '5440457429147997980'],
+  '🎨': ['✨', '5325547803936572038'],
+  '🖼': ['🖥', '5282843764451195532'],
+  '♻': ['🔄', '5375338737028841420'],
+  '♻️': ['🔄', '5375338737028841420'],
+  '💓': ['🔋', '5307905813451397794'],
+  '🪪': ['💳', '5472250091332993630'],
+  '🕒': ['⌛', '5386367538735104399'],
+  '🤝': ['👍', '5337080053119336309'],
+  '📰': ['📣', '5424818078833715060'],
+  '🕵': ['🔍', '5231012545799666522'],
+  '🎛': ['⚙️', '5341715473882955310'],
+  '🔢': ['⌨️', '5298975240708187753'],
+  '📺': ['🖥', '5282843764451195532'],
+  '🎬': ['▶️', '5264919878082509254'],
+  '📁': ['🧾', '5204242830687494041'],
+  '🔘': ['🎯', '5461009483314517035'],
+};
+const PREMIUM_SUB_KEYS = Object.keys(PREMIUM_SUBS).sort((a, b) => b.length - a.length);
+function pz(text) {
+  if (!text || typeof text !== 'string' || text.indexOf('tg-emoji') !== -1) return text;
+  let out = text;
+  for (const ch of PREMIUM_KEYS) {
+    if (out.indexOf(ch) === -1) continue;
+    out = out.split(ch).join('<tg-emoji emoji-id="' + PREMIUM_EMOJI[ch] + '">' + ch + '</tg-emoji>');
+  }
+  for (const orig of PREMIUM_SUB_KEYS) {
+    if (out.indexOf(orig) === -1) continue;
+    const sub = PREMIUM_SUBS[orig];
+    out = out.split(orig).join('<tg-emoji emoji-id="' + sub[1] + '">' + sub[0] + '</tg-emoji>');
+  }
+  return out;
+}
+function pzStrip(text) {
+  return String(text || '').replace(/<tg-emoji emoji-id="[^"]+">/g, '').replace(/<\/tg-emoji>/g, '');
+}
+
+// ─── Premium button icons ─────────────────────────────────────────────
+// Button TEXT always renders as plain text in Telegram, but an inline
+// button may carry a custom-emoji icon via icon_custom_emoji_id (verified
+// accepted for this bot, 2026-11-11). premiumizeKeyboard() adds the icon
+// matching the first mapped emoji in each button label. The Viking server
+// applies it centrally in tg() to every sendMessage, so all keyboards are
+// covered at once;
+// if Telegram ever rejects an icon, the send retries once with the icons
+// stripped — a message can never be lost over a button icon.
+function premiumIconFor(text) {
+  if (!text || typeof text !== 'string') return null;
+  for (const ch of PREMIUM_KEYS) if (text.indexOf(ch) !== -1) return { icon: PREMIUM_EMOJI[ch], ch };
+  for (const orig of PREMIUM_SUB_KEYS) if (text.indexOf(orig) !== -1) return { icon: PREMIUM_SUBS[orig][1], ch: orig };
+  return null;
+}
+function premiumizeKeyboard(rm) {
+  if (!rm || !Array.isArray(rm.inline_keyboard)) return rm;
+  for (const row of rm.inline_keyboard) {
+    if (!Array.isArray(row)) continue;
+    for (const b of row) {
+      if (!b || typeof b.text !== 'string' || b.icon_custom_emoji_id) continue;
+      const hit = premiumIconFor(b.text);
+      if (!hit) continue;
+      // Owner order 2026-11-11: once the premium icon is set, the plain emoji
+      // must come OUT of the label — one icon per button, not two.
+      const stripped = b.text.replace(hit.ch, '').replace(/\s+/g, ' ').trim();
+      if (!stripped) continue; // emoji-only label: leave the button untouched
+      b.icon_custom_emoji_id = hit.icon;
+      b.text = stripped;
+    }
+  }
+  return rm;
+}
+function stripPremiumIcons(rm) {
+  if (!rm || !Array.isArray(rm.inline_keyboard)) return rm;
+  for (const row of rm.inline_keyboard) {
+    if (!Array.isArray(row)) continue;
+    for (const b of row) if (b) delete b.icon_custom_emoji_id;
+  }
+  return rm;
+}
+
 const TG_API_BASE = (process.env.TG_API_BASE || 'https://api.telegram.org').replace(/\/+$/, ''); // env override exists for local testing (stub Telegram API)
 async function tg(method, body) {
   if (!BOT_TOKEN) return null;
-  try {
-    const r = await fetch(`${TG_API_BASE}/bot${BOT_TOKEN}/${method}`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
-      signal: AbortSignal.timeout(10000) // never let a hung Telegram call wedge a request
-    });
-    return await r.json();
-  } catch (e) { console.error('telegram', method, e.message); return null; }
+  let payload = body;
+  if (method === 'sendMessage' && body && typeof body === 'object') {
+    // Premium custom-emoji treatment, applied centrally like the VOLT bot:
+    // HTML parse mode when the caller didn't pick one, emoji wrapped via
+    // pz(), button icons via premiumizeKeyboard(). Work on copies so a
+    // caller-owned keyboard object is never mutated.
+    payload = { ...body };
+    if (typeof payload.text === 'string') {
+      if (!payload.parse_mode) payload.parse_mode = 'HTML';
+      payload.text = pz(payload.text);
+    }
+    if (payload.reply_markup) {
+      payload.reply_markup = premiumizeKeyboard(JSON.parse(JSON.stringify(payload.reply_markup)));
+    }
+  }
+  const send = async (p) => {
+    try {
+      const r = await fetch(`${TG_API_BASE}/bot${BOT_TOKEN}/${method}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(p),
+        signal: AbortSignal.timeout(10000) // never let a hung Telegram call wedge a request
+      });
+      return await r.json();
+    } catch (e) { console.error('telegram', method, e.message); return null; }
+  };
+  let res = await send(payload);
+  // Telegram rejected a custom emoji / button icon (e.g. EMOJI_ID_INVALID):
+  // retry exactly once with the plain, stripped variant — a message is
+  // never lost over an icon.
+  if (method === 'sendMessage' && res && !res.ok && /emoji/i.test(String(res.description || ''))) {
+    const stripped = { ...payload };
+    if (typeof stripped.text === 'string') stripped.text = pzStrip(stripped.text);
+    if (stripped.reply_markup) stripped.reply_markup = stripPremiumIcons(stripped.reply_markup);
+    const retry = await send(stripped);
+    if (retry) res = retry;
+  }
+  return res;
 }
 /* Resolve a configured channel value to a getChatMember chat_id: a numeric
    id stored by the admin, an @handle, a public t.me/<name> (or t.me/s/<name>)
@@ -775,24 +964,33 @@ function markUpdateSeen(updateId) {
 
 const BIO_TEXTS = {
   en: {
-    welcome: (brand) => `👋 Welcome to ${brand}!\nTap the button below to open the app and start mining.`,
+    welcome: (name) => `⚔️🔥 HALT, WARRIOR! 🔥⚔️\n\nWelcome, <b>${name}</b>, to <b>VIKING MINER$</b> — no place for the weak here, and the treasure waits only for those who dare! 🛡️❄️\n\n🌩️ In the frozen lands of the North, by Odin, your saga begins now:\nMine <b>VIKING$</b> every 24 hours, sharpen your axe, and rise from a rookie warrior (Level 1) to <b>a legend sung in Valhalla</b> (Level 100)! 🏆⚡️ Every level your sword crosses… your mining power multiplies and your vaults overflow with gold 💰\n\n⛏️ <b>Your road to glory:</b>\n• ⚔️ Mine every day and seize your share before others beat you to it\n• 🎯 Crush the tasks and collect their loot\n• 👥 Call your brothers-in-arms to your army — earn instant coins + <b>5% of their mining, forever!</b>\n\n💎 And the grand prize? Withdraw your earnings to your <b>TON</b> wallet — real gold in your hands, sell it or hoard it… one commander decides: <b>you</b>.\n\n🩸 The weak retreat. Vikings… <b>press the button!</b>\n\n👇 Press the button below, and let the mining begin:`,
+    warrior: 'Warrior',
     openApp: '⚔️ Open the app',
+    payoutsChannel: '💸 Payouts Channel',
+    newsChannel: '📢 News Channel',
     granted: (reward, sym) => `✅ Bio verified! +${reward} ${sym} was added to your balance.`,
     already: '✅ Your bio is already verified — the reward was already added.',
     instruct: (uname) => `📝 To verify your bio:\n1. Add @${uname} to your Telegram bio.\n2. Then open this link again and press Start: https://t.me/${uname}?start=bio`,
     retry: '⚠️ Could not check your bio right now — please try again in a minute.'
   },
   ar: {
-    welcome: (brand) => `👋 أهلًا بيك في ${brand}!\nدوس الزرار اللي تحت عشان تفتح التطبيق وتبدأ التعدين.`,
+    welcome: (name) => `⚔️🔥 توقّف أيها المحارب! 🔥⚔️\n\nأهلاً بك يا <b>${name}</b> في <b>VIKING MINER$</b> — حيث لا مكان للضعفاء، والكنز لا ينتظر إلا من يجرؤ! 🛡️❄️\n\n🌩️ في أراضي الشمال المتجمدة، وباسم أودين، تبدأ ملحمتك الآن:\nعدّن عملة <b>VIKING$</b> كل 24 ساعة، واشحذ فأسك، واصعد من محارب مبتدئ (مستوى 1) إلى <b>أسطورة تُروى في الفالهالا</b> (مستوى 100)! 🏆⚡️ وكل مستوى يعبره سيفك… تتضاعف قوة تعدينك وتفيض خزائنك بالذهب 💰\n\n⛏️ <b>طريقك إلى المجد:</b>\n• ⚔️ عدّن كل يوم واقتنص حصتك قبل ما غيرك يسبقك\n• 🎯 اسحق المهام واجمع غنائمها\n• 👥 استدعِ إخوتك في السلاح إلى جيشك — واربح عملات فورية + <b>5% من تعدينهم إلى الأبد!</b>\n\n💎 والغنيمة الكبرى؟ اسحب أرباحك على محفظة <b>TON</b> — ذهب حقيقي في إيدك، تبيعه أو تكنزه… القرار لقائد واحد: <b>انت</b>.\n\n🩸 الضعفاء يتراجعون، أما الفايكنج… <b>فيضغطون الزر!</b>\n\n👇 اضغط على الزر بالأسفل، وليبدأ التعدين الآن:`,
+    warrior: 'محارب',
     openApp: '⚔️ افتح التطبيق',
+    payoutsChannel: '💸 قناة السحوبات',
+    newsChannel: '📢 قناة الأخبار',
     granted: (reward, sym) => `✅ تم التحقق من البايو! اتضاف +${reward} ${sym} لرصيدك.`,
     already: '✅ البايو بتاعك متحقق منه قبل كده — المكافأة اتضافت خلاص.',
     instruct: (uname) => `📝 عشان يتحقق البايو:\n١. ضيف @${uname} في البايو بتاعك في تيليجرام.\n٢. وبعدين افتح اللينك ده تاني ودوس Start: https://t.me/${uname}?start=bio`,
     retry: '⚠️ مش قادر أتحقق من البايو دلوقتي — جرب تاني بعد دقيقة.'
   },
   ru: {
-    welcome: (brand) => `👋 Добро пожаловать в ${brand}!\nНажмите кнопку ниже, чтобы открыть приложение и начать майнинг.`,
+    welcome: (name) => `⚔️🔥 СТОЙ, ВОИН! 🔥⚔️\n\nДобро пожаловать, <b>${name}</b>, в <b>VIKING MINER$</b> — здесь нет места слабым, а сокровища ждут только тех, кто осмелится! 🛡️❄️\n\n🌩️ В замёрзших землях Севера, именем Одина, твоя сага начинается сейчас:\nМайни <b>VIKING$</b> каждые 24 часа, точи свой топор и поднимайся от новичка (уровень 1) до <b>легенды, которую поют в Вальхалле</b> (уровень 100)! 🏆⚡️ С каждым уровнем, что пройдёт твой меч… сила майнинга умножается, а хранилища переполняются золотом 💰\n\n⛏️ <b>Твой путь к славе:</b>\n• ⚔️ Майни каждый день и забирай свою долю, пока другие не опередили тебя\n• 🎯 Сокрушай задания и собирай добычу\n• 👥 Зови братьев по оружию в свою армию — получай монеты сразу + <b>5% от их майнинга навсегда!</b>\n\n💎 А главный трофей? Выводи заработок на свой <b>TON</b>-кошелёк — настоящее золото в твоих руках: продай его или храни… решает один командир: <b>ты</b>.\n\n🩸 Слабые отступают. Викинги… <b>нажимают кнопку!</b>\n\n👇 Нажми кнопку ниже — и да начнётся майнинг:`,
+    warrior: 'воин',
     openApp: '⚔️ Открыть приложение',
+    payoutsChannel: '💸 Канал выплат',
+    newsChannel: '📢 Канал новостей',
     granted: (reward, sym) => `✅ Био подтверждено! +${reward} ${sym} добавлено на ваш баланс.`,
     already: '✅ Ваше био уже подтверждено — награда уже была добавлена.',
     instruct: (uname) => `📝 Чтобы подтвердить био:\n1. Добавьте @${uname} в био вашего Telegram.\n2. Затем снова откройте эту ссылку и нажмите Start: https://t.me/${uname}?start=bio`,
@@ -834,9 +1032,21 @@ async function handleBotMessage(msg) {
     }
   }
   if (param !== 'bio') {
+    // Owner-approved welcome layout: Open App alone on row 1; payouts
+    // (cfg.channel2) and news (cfg.channel1) side by side on row 2, each
+    // included only when its cfg URL is a non-empty string. tg() attaches
+    // the premium button icons and strips the plain label emoji.
+    const rows = [[{ text: T.openApp, web_app: { url: APP_URL } }]];
+    const channelRow = [];
+    if (typeof cfg.channel2 === 'string' && cfg.channel2.trim()) channelRow.push({ text: T.payoutsChannel, url: cfg.channel2 });
+    if (typeof cfg.channel1 === 'string' && cfg.channel1.trim()) channelRow.push({ text: T.newsChannel, url: cfg.channel1 });
+    if (channelRow.length) rows.push(channelRow);
+    // The name lands inside an HTML message: escape it (tg() runs pz()
+    // over the composed text afterwards, which only wraps emoji chars).
+    const displayName = esc(String(from.first_name || '').trim() || T.warrior);
     await tg('sendMessage', {
-      chat_id: chatId, text: T.welcome(cfg.brandTitle),
-      reply_markup: { inline_keyboard: [[{ text: T.openApp, web_app: { url: APP_URL } }]] }
+      chat_id: chatId, text: T.welcome(displayName),
+      reply_markup: { inline_keyboard: rows }
     });
     if (outcome === 'granted') await tg('sendMessage', { chat_id: chatId, text: T.granted(reward, cfg.coinSym) });
     else if (outcome === 'already') await tg('sendMessage', { chat_id: chatId, text: T.already });
