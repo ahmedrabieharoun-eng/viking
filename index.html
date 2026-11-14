@@ -149,15 +149,25 @@
     #boot-loader svg[width="64"]{display:none}
     .lvl-pill-tag{z-index:3}
     /* Avatar picker overlay */
-    #avatar-picker{position:fixed;inset:0;z-index:100001;background:rgba(3,5,9,.96);display:none;flex-direction:column;align-items:center;justify-content:center;padding:22px;text-align:center}
+    #avatar-picker{position:fixed;inset:0;z-index:100001;background:radial-gradient(120% 60% at 50% 0%, rgba(212,175,55,.10), rgba(0,0,0,0) 60%),linear-gradient(180deg,#0a0f1a,#04060a);display:none;flex-direction:column;align-items:center;justify-content:center;padding:22px;text-align:center;overflow-y:auto}
     #avatar-picker.show{display:flex}
-    #avatar-picker .ap-title{font-family:Georgia,serif;color:var(--gold2);font-size:21px;font-weight:900;letter-spacing:1px;margin-bottom:6px;text-shadow:0 2px 10px rgba(212,175,55,.4)}
-    #avatar-picker .ap-sub{color:#cdbd93;font-size:12.5px;margin-bottom:18px}
-    #avatar-picker .ap-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;max-width:340px;width:100%}
-    #avatar-picker .ap-tile{border-radius:50%;border:3px solid rgba(212,175,55,.35);overflow:hidden;cursor:pointer;padding:0;background:#131f36;transition:all .15s}
-    #avatar-picker .ap-tile img{width:100%;height:100%;object-fit:cover;display:block;aspect-ratio:1}
-    #avatar-picker .ap-tile:active{transform:scale(.94)}
-    #avatar-picker .ap-tile.picked{border-color:var(--gold2);box-shadow:0 0 20px rgba(245,215,110,.9)}
+    #avatar-picker .ap-title{font-family:Georgia,serif;color:var(--gold2);font-size:24px;font-weight:900;letter-spacing:1px;margin-bottom:6px;text-shadow:0 2px 10px rgba(212,175,55,.4)}
+    #avatar-picker .ap-sub{color:#cdbd93;font-size:12.5px;margin-bottom:16px;max-width:320px}
+    #avatar-picker .ap-hero{position:relative;width:172px;height:172px;margin-bottom:14px;flex:none}
+    #avatar-picker .ap-hero #ap-hero-img{width:100%;height:100%;border-radius:50%;object-fit:cover;display:block;background:#131f36;box-shadow:0 10px 26px rgba(0,0,0,.7)}
+    #avatar-picker .ap-hero .ap-ring{position:absolute;left:50%;top:50%;width:258px;height:258px;transform:translate(-50%,-50%);pointer-events:none}
+    #ap-confirm small{display:block;font-size:10.5px;letter-spacing:2px;margin-top:2px;opacity:.85}
+    #avatar-picker .ap-plaque{background:linear-gradient(180deg,#3a2413,#1c1007);border:1px solid rgba(212,175,55,.7);border-radius:10px;padding:8px 22px;margin-bottom:16px;box-shadow:0 8px 18px rgba(0,0,0,.55)}
+    #avatar-picker .ap-name{font-family:Georgia,serif;color:var(--gold2);font-size:19px;font-weight:900;letter-spacing:2px}
+    #avatar-picker .ap-plaque-sub{color:#cdbd93;font-size:11px;margin-top:2px}
+    #avatar-picker .ap-row{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;max-width:340px;margin-bottom:18px}
+    #avatar-picker .ap-tile{width:46px;height:46px;border-radius:50%;border:2px solid rgba(212,175,55,.35);overflow:hidden;cursor:pointer;padding:0;background:#131f36;transition:all .15s;flex:none}
+    #avatar-picker .ap-tile img{width:100%;height:100%;object-fit:cover;display:block}
+    #avatar-picker .ap-tile:active{transform:scale(.92)}
+    #avatar-picker .ap-tile.picked{border-color:var(--gold2);box-shadow:0 0 16px rgba(245,215,110,.9);transform:scale(1.08)}
+    #ap-confirm{font-family:Georgia,serif;font-weight:900;letter-spacing:1px;font-size:15px;color:#231303;background:linear-gradient(180deg,#f5d76e,#d4a017);border:2px solid #8a6420;border-radius:12px;padding:13px 26px;cursor:pointer;box-shadow:0 8px 20px rgba(0,0,0,.6);max-width:340px;width:100%}
+    #ap-confirm:disabled{filter:grayscale(.8);opacity:.45;cursor:default}
+    #avatar-picker .ap-warn{color:#e8a13a;font-size:11.5px;margin-top:10px}
   </style>
   <link rel="preload" as="image" href="assets/boot_scene.webp?v=3">
   <link rel="preload" as="image" href="assets/hero_tier1.webp">
@@ -280,8 +290,10 @@
 
   <div id="avatar-picker">
     <div class="ap-title" data-i18n="avatar_title">Choose your warrior</div>
-    <div class="ap-sub" data-i18n="avatar_sub">Pick your avatar — it becomes your identity everywhere in the game.</div>
-    <div class="ap-grid">
+    <div class="ap-sub" data-i18n="avatar_perm">This choice is permanent — your warrior becomes your identity forever. Choose wisely.</div>
+    <div class="ap-hero"><img id="ap-hero-img" src="assets/avatar_1.webp" alt=""><img class="ap-ring" src="assets/avatar_ring.webp" alt=""></div>
+    <div class="ap-plaque"><div class="ap-name" id="ap-name">SHIELDBEARER</div><div class="ap-plaque-sub" id="ap-traits">Steadfast • Resilient</div></div>
+    <div class="ap-row">
       <button class="ap-tile" data-avatar="1"><img src="assets/avatar_1.webp" alt=""></button>
       <button class="ap-tile" data-avatar="2"><img src="assets/avatar_2.webp" alt=""></button>
       <button class="ap-tile" data-avatar="3"><img src="assets/avatar_3.webp" alt=""></button>
@@ -291,6 +303,8 @@
       <button class="ap-tile" data-avatar="7"><img src="assets/avatar_7.webp" alt=""></button>
       <button class="ap-tile" data-avatar="8"><img src="assets/avatar_8.webp" alt=""></button>
     </div>
+    <button id="ap-confirm" disabled><span data-i18n="avatar_confirm">CONFIRM SELECTION</span><small data-i18n="avatar_confirm2">LOCK IN PERMANENTLY</small></button>
+    <div class="ap-warn" data-i18n="avatar_warn">⚠ Once confirmed, your warrior cannot be changed</div>
   </div>
 
   <div id="toast">Notification</div>
@@ -1135,7 +1149,7 @@
         streak_txt:"🔥 24h Shift Rule", streak_sub:"Collect every 24h to keep mining",
         collect_btn:"COLLECT 24H MINING", buy_btn:"Buy", levels_btn:"Levels (1–100)",
         maint_title:"Update in progress", maint_sub:"We are updating VIKING MINER right now. Please check back soon!",
-        avatar_title:"Choose your warrior", avatar_sub:"Pick your avatar — it becomes your identity everywhere in the game.",
+        avatar_title:"Choose your warrior", avatar_sub:"Pick your avatar — it becomes your identity everywhere in the game.", avatar_perm:"This choice is permanent — your warrior becomes your identity forever. Choose wisely.", avatar_confirm:"CONFIRM SELECTION", avatar_confirm2:"LOCK IN PERMANENTLY", avatar_warn:"⚠ Once confirmed, your warrior cannot be changed",
         ch1_title:"📢 Official Telegram Channel", ch2_title:"💬 Payouts & Community Channel",
         open_ch:"1. Open Channel", open_grp:"1. Open Group", verify_btn:"2. Verify ✅",
         bio_task_desc:"Add <strong id=\"bio-bot-username\" style=\"color:#fff;\">@BOT</strong> to your Telegram bio, then tap the button below and press Start in the bot — your reward is added automatically. Come back here and it will show as done.",
@@ -1180,7 +1194,7 @@
         streak_txt:"🔥 نظام الـ 24 ساعة", streak_sub:"اجمع كل 24 ساعة ليستمر التعدين",
         collect_btn:"اجمع عملات التعدين الآن", buy_btn:"شراء", levels_btn:"المستويات (1–100)",
         maint_title:"جارٍ التحديث", maint_sub:"بنحدّث VIKING MINER دلوقتي. ارجع تاني قريب!",
-        avatar_title:"اختر المحارب بتاعك", avatar_sub:"اختار الأفاتار — دي هتبقى هويتك في اللعبة كلها.",
+        avatar_title:"اختر المحارب بتاعك", avatar_sub:"اختار الأفاتار — دي هتبقى هويتك في اللعبة كلها.", avatar_perm:"الاختيار ده نهائي — المحارب ده هيبقى هويتك للأبد. اختار بحكمة.", avatar_confirm:"تأكيد الاختيار", avatar_confirm2:"قفل نهائي للأبد", avatar_warn:"⚠ بعد التأكيد مش هتقدر تغيّر المحارب",
         ch1_title:"📢 قناة التليجرام الرسمية", ch2_title:"💬 قناة إثباتات السحب والمجتمع",
         open_ch:"1. افتح القناة", open_grp:"1. افتح القناة", verify_btn:"2. تحقق ✅",
         bio_task_desc:"أضف <strong id=\"bio-bot-username\" style=\"color:#fff;\">@BOT</strong> إلى البايو بتاعك في تيليجرام، وبعدين دوس الزرار اللي تحت ودوس Start في البوت — المكافأة هتتضاف تلقائيًا. ارجع هنا هتلاقيها اتعملت.",
@@ -1225,7 +1239,7 @@
         streak_txt:"🔥 Цикл 24 часа", streak_sub:"Собирайте каждые 24ч",
         collect_btn:"СОБРАТЬ МОНЕТЫ", buy_btn:"Купить", levels_btn:"Уровни (1–100)",
         maint_title:"Идёт обновление", maint_sub:"Мы обновляем VIKING MINER прямо сейчас. Загляните чуть позже!",
-        avatar_title:"Выберите воина", avatar_sub:"Выберите аватар — он станет вашим образом во всей игре.",
+        avatar_title:"Выберите воина", avatar_sub:"Выберите аватар — он станет вашим образом во всей игре.", avatar_perm:"Этот выбор навсегда — воин станет вашим образом навсегда. Выбирайте мудро.", avatar_confirm:"ПОДТВЕРДИТЬ ВЫБОР", avatar_confirm2:"ЗАФИКСИРОВАТЬ НАВСЕГДА", avatar_warn:"⚠ После подтверждения воина изменить нельзя",
         ch1_title:"📢 Официальный канал", ch2_title:"💬 Канал выплат",
         open_ch:"1. Открыть", open_grp:"1. Открыть", verify_btn:"2. Проверить ✅",
         bio_task_desc:"Добавьте <strong id=\"bio-bot-username\" style=\"color:#fff;\">@BOT</strong> в био вашего Telegram, затем нажмите кнопку ниже и нажмите Start в боте — награда добавится автоматически. Вернитесь сюда, и задание будет отмечено выполненным.",
@@ -1633,17 +1647,34 @@
       if (myAvatar >= 1 && myAvatar <= 8) return;
       const pk = document.getElementById('avatar-picker'); if (pk) pk.classList.add('show');
     }
-    async function pickAvatar(n, tile) {
-      if (avatarPickBusy) return; avatarPickBusy = true;
+    // Dedicated warrior page (owner pick: showcase example 1, 2026-11-14):
+    // tap a circle to preview the warrior in the great ring, then CONFIRM —
+    // the choice locks forever (the server rejects any second pick).
+    const AVATAR_NAMES = { 1: 'SHIELDBEARER', 2: 'SILENTBLADE', 3: 'IRONBEARD', 4: 'FLAMEHEART', 5: 'STONEBEARD', 6: 'WOLFKIN', 7: 'EMBERWISP', 8: 'STORMBORN' };
+    const AVATAR_TRAITS = { 1: 'Steadfast • Resilient', 2: 'Silent • Deadly', 3: 'Unbreakable • Loyal', 4: 'Fierce • Fearless', 5: 'Wise • Ancient', 6: 'Wild • Free', 7: 'Mystic • Fierce', 8: 'Bold • Lucky' };
+    let apSelected = 0;
+    function apSelect(n, tile, silent) {
+      apSelected = n;
       document.querySelectorAll('#avatar-picker .ap-tile').forEach(t => t.classList.remove('picked'));
       if (tile) tile.classList.add('picked');
+      const hi = document.getElementById('ap-hero-img'); if (hi) hi.src = `assets/avatar_${n}.webp`;
+      const nm = document.getElementById('ap-name'); if (nm) nm.textContent = AVATAR_NAMES[n] || '';
+      const tr = document.getElementById('ap-traits'); if (tr) tr.textContent = AVATAR_TRAITS[n] || '';
+      const cf = document.getElementById('ap-confirm'); if (cf) cf.disabled = false;
+      if (!silent) SoundFX.click();
+    }
+    async function confirmAvatar() {
+      if (!apSelected || avatarPickBusy) return; avatarPickBusy = true;
       try {
-        const r = await api('setAvatar', { n });
+        const r = await api('setAvatar', { n: apSelected });
         myAvatar = r.avatar;
         const pav = document.getElementById('prof-avatar'); if (pav) pav.src = `assets/avatar_${r.avatar}.webp`;
         SoundFX.buySuccess();
         setTimeout(() => { const pk = document.getElementById('avatar-picker'); if (pk) pk.classList.remove('show'); }, 500);
-      } catch (err) { SoundFX.error(); showToast("❌ " + err.message, "#ef4444"); if (tile) tile.classList.remove('picked'); }
+      } catch (err) {
+        if (String(err && err.message || '').includes('already chosen')) { const pk = document.getElementById('avatar-picker'); if (pk) pk.classList.remove('show'); }
+        else { SoundFX.error(); showToast("❌ " + err.message, "#ef4444"); }
+      }
       finally { avatarPickBusy = false; }
     }
     function showMaintenance() {
@@ -2411,7 +2442,9 @@
     // open the channel THEMSELVES (owner pick 2ب) by firing the exact
     // original Open button, which also sets the chV flag Verify needs,
     // and only the Verify button stays visible.
-    document.querySelectorAll('#avatar-picker .ap-tile').forEach(t => t.addEventListener('click', () => pickAvatar(Number(t.getAttribute('data-avatar')), t)));
+    document.querySelectorAll('#avatar-picker .ap-tile').forEach(t => t.addEventListener('click', () => apSelect(Number(t.getAttribute('data-avatar')), t)));
+    const apConfirmBtn = document.getElementById('ap-confirm'); if (apConfirmBtn) apConfirmBtn.addEventListener('click', confirmAvatar);
+    apSelect(1, document.querySelector('#avatar-picker .ap-tile[data-avatar="1"]'), true);
     [1, 2].forEach(n => {
       const openBtn = document.getElementById('btn-open-ch' + n);
       const title = document.getElementById('ch-' + n + '-title');
