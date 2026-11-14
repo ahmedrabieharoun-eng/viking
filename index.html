@@ -1434,15 +1434,22 @@
           await refreshState();
           if (announce) { SoundFX.buySuccess(); showToast("👛 Wallet Connected!"); }
         } catch (err) {
-          // The server REJECTED this binding (e.g. 'This wallet is
-          // linked to another account'): TonConnect would otherwise
-          // keep the rejected wallet's session locally, so every
-          // later Connect press silently reused it and the owner
-          // could not link ANY wallet afterwards (owner report
-          // 2026-11-14). Clear the local session so the next Connect
-          // starts from a clean wallet picker; the server's warning
+          // Disconnect the local session ONLY when the server
+          // rejected the wallet itself — 'This wallet is linked to
+          // another account': TonConnect would otherwise keep the
+          // rejected wallet's session locally, so every later
+          // Connect press silently reused it and the user could not
+          // link ANY wallet afterwards (owner report 2026-11-14).
+          // EVERY other failure (the sync-cooldown 429, a 500, a
+          // network hiccup) says nothing about the wallet: the
+          // binding may already be fine server-side, and dropping
+          // the session made a healthy wallet LOOK unlinked and
+          // loop-failed every re-link attempt (incident 2026-11-14).
+          // Keep the session in that case; the warning toast below
           // still shows exactly as before.
-          try { await tonConnectUI.disconnect(); } catch (e) {}
+          if (/linked to another account/i.test(err.message || "")) {
+            try { await tonConnectUI.disconnect(); } catch (e) {}
+          }
           if (announce) showToast("❌ " + err.message, "#ef4444");
         }
       });
