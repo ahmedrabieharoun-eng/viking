@@ -2334,6 +2334,11 @@ async function withdraw(c) {
   if (!pre) fail(404, 'User not found');
   const addr = pre.walletAddr;
   if (!addr) fail(400, 'Connect TON wallet first');
+  // Owner order 2026-11-14: no withdrawal without a VERIFIED wallet.
+  // Connecting is not enough — the 0.05 TON verification must be done
+  // (binding a different wallet voids it — see wallet()), so a true
+  // flag here always refers to the currently bound wallet.
+  if (pre.walletVerified !== true) fail(403, 'Verify your wallet first');
   if (!Number.isFinite(amt) || amt < Number(cfg.minWithdraw)) fail(400, 'Minimum is ' + cfg.minWithdraw);
   const hold = await jettonHold(addr); // re-checked on-chain at withdrawal time
   const needHold = Math.ceil(amt * Number(cfg.holdPercentReq) / 100);
