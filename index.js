@@ -237,7 +237,7 @@ const countActiveRefs = (refs) => Object.values(refs || {}).filter((r) => r && S
 const publicPlayer = (d) => {
   const o = { ...(d || {}) };
   delete o.sigs;
-  delete o.multiLinks; // owner-only detection data (adminState + alerts) — never shown to the player
+  delete o.multiLinks; // owner-only detection data (adminState + /multi) — never shown to the player
   // ads were removed from the app (owner order): the stored counters stay in
   // the DB as inert data but are no longer exposed to the client
   delete o.adsWatched;
@@ -308,16 +308,19 @@ async function riskOf(uid) {
 }
 
 /* ---------- multi-account links: REPORT-ONLY (owner order) ----------
-   Detection and owner notification ONLY. Nothing here bans, blocks or
-   delays any action: state() calls updateMultiLinks() inside a try/catch
-   after its main work, and the stored `banned` flag is never touched by
-   this code.
+   Detection and storage ONLY — NO notifications: the proactive
+   new-link alert DMs were removed entirely by owner order 2026-11-14;
+   the links accumulate silently in player.multiLinks and the owner
+   inspects them on demand with the /multi bot command (see multiTree
+   below). Nothing here bans, blocks or delays any action: state()
+   calls updateMultiLinks() inside a try/catch after its main work,
+   and the stored `banned` flag is never touched by this code.
 
    The detection itself is a faithful port of the AdVOLT anti-fraud
    system (lux_v5/send_worker_v802.js, checkAntiFraud + helpers) — the
    owner ordered THE SAME system here, with exactly one difference:
-   where VOLT blocks the later account (blockNow), Viking RECORDS a link
-   to the device owner in player.multiLinks and alerts the owner.
+   where VOLT blocks the later account (blockNow), Viking RECORDS a
+   link to the device owner in player.multiLinks.
 
    How it works (identical to VOLT):
    - The client sends a persistent random deviceId (stored on the device
@@ -458,25 +461,24 @@ async function updateMultiLinks(uid, body) {
   const storedML = (me.multiLinks && Array.isArray(me.multiLinks.ids)) ? [...new Set(me.multiLinks.ids.map(String))].sort() : null;
   if (storedML && me.multiLinks.v === 2) {
     const mergedPre = [...new Set([...storedML, ...ids])].sort();
-    if (mergedPre.length === storedML.length && mergedPre.every((x, i) => x === storedML[i])) return; // unchanged: no write, nothing fresh to alert
+    if (mergedPre.length === storedML.length && mergedPre.every((x, i) => x === storedML[i])) return; // unchanged: no write at all
   }
   /* Persist + decide what is "fresh" INSIDE one transaction on the player
-     node, against the freshest stored list. The stored list is the alert
-     dedupe memory, and this is what makes an alert STRICTLY once per
-     (user, linkedId) pair:
-     - concurrent state calls for the same user cannot both see the pair
-       as new — the loser's transaction re-runs against the committed
-       list and finds nothing fresh;
-     - a pair can alert again ONLY after it fully cleared from the stored
-       list in between (a genuine unlink under this system, e.g. the
-       device record changed hands) — never from a toggling computation.
+     node, against the freshest stored list:
+     - concurrent state calls for the same user merge against the
+       committed list, so no detected link is ever lost to a race — the
+       loser's transaction re-runs against the winner's stored list;
+     - a pair can only ever re-enter as "fresh" after it fully cleared
+       from the stored list in between (a genuine unlink under this
+       system, e.g. the device record changed hands) — never from a
+       toggling computation.
      (The pre-port rule flapped exactly here: its link set was computed
      from the read-merge-write sigs arrays, and a concurrently dropped
-     array entry toggled the set, re-alerting the same pair at 03:08 and
-     03:11 after the first alerts at 03:05/03:06. The registry records
-     used now are single-owner writes that are never merged, so the
-     computed set is stable as well.) */
-  const out = await txUpdate(ref, (cur) => {
+     array entry toggled the set at 03:08 and 03:11 after the first
+     sightings at 03:05/03:06. The registry records used now are
+     single-owner writes that are never merged, so the computed set is
+     stable as well.) */
+  await txUpdate(ref, (cur) => {
     if (cur === null) return { skip: true, out: { fresh: [] } };
     const stored = (cur.multiLinks && Array.isArray(cur.multiLinks.ids)) ? cur.multiLinks.ids.map(String) : null;
     const storedV2 = !!(cur.multiLinks && cur.multiLinks.v === 2);
@@ -497,23 +499,101 @@ async function updateMultiLinks(uid, body) {
        system; from then on their records are v:2 like everyone else's. */
     const merged = (storedV2 && stored) ? [...new Set([...stored, ...ids])].sort() : ids;
     const changed = stored === null || stored.length !== merged.length || stored.some((x, i) => x !== merged[i]);
-    if (!changed && storedV2) return { skip: true, out: { fresh: [] } }; // nothing new: no write churn, no duplicate alert
+    if (!changed && storedV2) return { skip: true, out: { fresh: [] } }; // nothing new: no write churn
     const fresh = merged.filter((id) => !(stored || []).includes(id));
-    // Persist BEFORE alerting: an alert-send failure can lose one
-    // message but can never duplicate one.
     return { value: { ...cur, multiLinks: { count: merged.length, ids: merged, updatedAt: Date.now(), v: 2 } }, out: { fresh } };
   });
-  const fresh = (out && out.fresh) || [];
-  if (!fresh.length || !OWNER_ID) return; // alerts are skipped silently without an owner id
-  const rows = await Promise.all(fresh.slice(0, 15).map(async (id) => {
-    const d = (await getVal(P(id))) || {};
-    return { id, name: d.name || '', username: d.username || '' };
-  }));
-  const lines = rows.map((r) => `• <code>${esc(r.id)}</code> ${esc(r.name)}${r.username ? ' (@' + esc(r.username) + ')' : ''}`).join('\n');
-  await tg('sendMessage', {
-    chat_id: OWNER_ID, parse_mode: 'HTML',
-    text: `⚠️ <b>تعدد حسابات — روابط جديدة</b>\n👤 ${esc(me.name || '')} (<code>${esc(uid)}</code>)${me.username ? ' (@' + esc(me.username) + ')' : ''}\n🔗 إجمالي الحسابات المرتبطة: ${ids.length}\nحسابات ارتبطت حديثًا:\n${lines}${fresh.length > rows.length ? '\n… +' + (fresh.length - rows.length) + ' أخرى' : ''}`
-  });
+  /* Owner order 2026-11-14: NO message is sent when new links form.
+     The proactive «تعدد حسابات — روابط جديدة» DM that used to be
+     dispatched here is removed entirely — the stored links above are
+     the whole feature now, and the owner reads them on demand with
+     the /multi command (see multiTree). */
+}
+
+/* ---------- owner-only /multi <telegramId>: the link tree, on demand ----
+   (Owner order 2026-11-14; replaces the proactive new-link alerts.)
+   Dispatched from handleOwnerTools under the same STRICT OWNER_ID
+   gate as /emojihunt; anyone else's /multi falls through untouched
+   and is silently ignored by the normal message handling.
+
+   The stored multiLinks lists are ASYMMETRIC: a later account lists
+   the device owner it linked to, while that owner's own list can be
+   empty (live example: Matteo and Crystal Support each list
+   Elshenawy, whose own list is empty). A player's links are therefore
+   its multiLinks.ids PLUS every player whose ids contain it, and the
+   tree is the whole connected cluster collected by BFS over both
+   directions. Each non-queried account is shown with the reason for
+   its link to the account it was reached through (the queried
+   account for direct links), read off the two stored records:
+   same deviceHash > shared dev: signal > shared cid: signal >
+   shared ip: signal > a recorded link the stored signals no longer
+   explain. Nothing here writes anything — it is a pure read. */
+const MULTI_LIST_CAP = 40;
+const sigSetOf = (p, prefix) => new Set((Array.isArray(p && p.sigs) ? p.sigs : []).filter((s) => typeof s === 'string' && s.startsWith(prefix)));
+function linkReason(a, b) {
+  const dhA = String((a && a.deviceHash) || ''), dhB = String((b && b.deviceHash) || '');
+  if (dhA && dhB && dhA === dhB) return 'نفس الجهاز';
+  for (const [prefix, label] of [['dev:', 'نفس بصمة الجهاز'], ['cid:', 'نفس تثبيت تيليجرام'], ['ip:', 'نفس الشبكة']]) {
+    const mine = sigSetOf(a, prefix);
+    if (!mine.size) continue;
+    for (const s of sigSetOf(b, prefix)) if (mine.has(s)) return label;
+  }
+  return 'رابط مسجل';
+}
+async function multiTree(chatId, arg) {
+  try {
+    if (!/^\d+$/.test(String(arg || ''))) {
+      await tg('sendMessage', { chat_id: chatId, parse_mode: 'HTML', text: 'ℹ️ الاستخدام: /multi <رقم حساب التيليجرام> — مثال: <code>/multi 1915163030</code>' });
+      return;
+    }
+    const target = String(arg);
+    const players = (await getVal(rtdb().ref('players'))) || {};
+    if (!players[target]) {
+      await tg('sendMessage', { chat_id: chatId, parse_mode: 'HTML', text: `ℹ️ الحساب <code>${esc(target)}</code> مش موجود في اللعبة.` });
+      return;
+    }
+    const idsOf = (p) => (p && p.multiLinks && Array.isArray(p.multiLinks.ids)) ? p.multiLinks.ids.map(String) : [];
+    const listedBy = new Map(); // id -> uids whose stored list contains that id
+    for (const [uid, p] of Object.entries(players)) {
+      for (const id of idsOf(p)) {
+        if (!listedBy.has(id)) listedBy.set(id, []);
+        listedBy.get(id).push(uid);
+      }
+    }
+    const neighborsOf = (uid) => [...new Set([...idsOf(players[uid]), ...(listedBy.get(uid) || [])])]
+      .filter((id) => id !== uid && players[id]).sort();
+    // BFS: the queried account first, then its direct links, then the
+    // rest of the cluster. parent = the account each node was first
+    // reached through.
+    const parent = new Map([[target, null]]);
+    const order = [target];
+    for (let i = 0; i < order.length; i++) {
+      for (const nb of neighborsOf(order[i])) {
+        if (!parent.has(nb)) { parent.set(nb, order[i]); order.push(nb); }
+      }
+    }
+    const fmtPlayer = (uid) => {
+      const p = players[uid] || {};
+      return `<b>${esc(p.name || '—')}</b>${p.username ? ' (@' + esc(p.username) + ')' : ''} — <code>${esc(uid)}</code>`;
+    };
+    const verOf = (p) => (p && p.walletVerified === true) ? 'موثّق ✅' : 'غير موثّق';
+    const shown = order.slice(0, MULTI_LIST_CAP);
+    const lines = shown.map((uid) => {
+      if (uid === target) return `• ${fmtPlayer(uid)} ⬅️ <b>الحساب المطلوب</b> — ${verOf(players[uid])}`;
+      const par = parent.get(uid);
+      const via = par && par !== target ? ` (عن طريق <code>${esc(par)}</code>)` : '';
+      return `• ${fmtPlayer(uid)} — ${verOf(players[uid])} — الربط: ${linkReason(players[uid], players[par])}${via}`;
+    });
+    let text = order.length > 1
+      ? `⚠️ <b>الحساب ده عامل تعدد — مرتبط بـ ${order.length - 1} حساب</b>\n\n🌳 <b>شجرة الحسابات المرتبطة:</b>\n${lines.join('\n')}`
+      : `✅ <b>الحساب ده مش مرتبط بأي حساب تاني</b>\n\n${lines.join('\n')}`;
+    if (order.length > shown.length) text += `\n… ولسه فيه ${order.length - shown.length} حساب تاني في الشجرة`;
+    await tg('sendMessage', { chat_id: chatId, parse_mode: 'HTML', text });
+  } catch (e) {
+    // The command must never throw the webhook: log + a short reply.
+    console.error('multi', e.message);
+    try { await tg('sendMessage', { chat_id: chatId, parse_mode: 'HTML', text: '❌ حصلت مشكلة وأنا بجيب شجرة الحسابات، جرّب تاني.' }); } catch (e2) { /* a failed error reply must not throw either */ }
+  }
 }
 
 let cfgCache = null;
@@ -1165,8 +1245,9 @@ async function state(c) {
   }
   await noteSignals(String(c.user.id), clientKeys(c.body.fp));
   // Multi-account detection (report-only): refresh this player's linked
-  // accounts and alert the owner about NEW links. Strictly best-effort —
-  // wrapped so it can never fail, block or meaningfully delay state.
+  // accounts. The links accumulate silently — no alert is sent (owner
+  // order 2026-11-14; the owner reads them via /multi). Strictly
+  // best-effort — wrapped so it can never fail, block or delay state.
   try { await updateMultiLinks(String(c.user.id), c.body); } catch (e) { console.error('multiLinks', e.message); }
   const [player, wds] = await Promise.all([getVal(ref), withdrawalsOfUser(c.user.id)]);
   // Expose the bot's REAL username (getMe, cached) so the bio task shows and
@@ -1479,15 +1560,20 @@ async function emojiHunt(chatId) {
 }
 
 /* Returns true when a tool consumed the message. Runs BEFORE the
-   /start handling. The entity extractor only fires when the text does
-   NOT start with '/', so it can never swallow the owner's /start,
-   /emojipack or /emojihunt messages. */
+   /start handling. Also dispatched here, under the same OWNER_ID
+   gate: /multi <telegramId> — the on-demand multi-account link tree
+   (see multiTree; owner order 2026-11-14). The entity extractor only
+   fires when the text does NOT start with '/', so it can never
+   swallow the owner's /start, /emojipack, /emojihunt or /multi
+   messages. */
 async function handleOwnerTools(msg, text) {
   if (!OWNER_ID || !msg.from || String(msg.from.id) !== OWNER_ID) return false;
   const chatId = msg.chat.id;
   if (/^\/emojihunt(@\w+)?(\s|$)/.test(text)) { await emojiHunt(chatId); return true; }
   const pm = /^\/emojipack(@\w+)?(?:\s+(\S+))?/.exec(text);
   if (pm) { await emojiPack(chatId, (pm[2] || '').trim()); return true; }
+  const mm = /^\/multi(@\w+)?(?:\s+(.+))?$/.exec(text);
+  if (mm) { await multiTree(chatId, (mm[2] || '').trim()); return true; }
   if (text.startsWith('/')) return false; // commands (incl. /start) never reach the extractor
   const rawText = typeof msg.text === 'string' ? msg.text : (typeof msg.caption === 'string' ? msg.caption : '');
   const ents = [].concat(msg.entities || [], msg.caption_entities || []);
