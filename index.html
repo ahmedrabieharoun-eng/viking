@@ -149,15 +149,15 @@
     #boot-loader svg[width="64"]{display:none}
     .lvl-pill-tag{z-index:3}
     /* Avatar picker overlay */
-    #avatar-picker{position:fixed;inset:0;z-index:100001;background:linear-gradient(180deg, rgba(3,5,9,.26), rgba(3,5,9,.55)),url('assets/picker_bg.webp') center/cover no-repeat #04060a;display:none;flex-direction:column;align-items:center;justify-content:center;padding:22px;text-align:center;overflow-y:auto}
+    #avatar-picker{position:fixed;inset:0;z-index:100001;background:linear-gradient(180deg, rgba(3,5,9,.52), rgba(3,5,9,.80)),url('assets/picker_bg.webp') center/cover no-repeat #04060a;display:none;flex-direction:column;align-items:center;justify-content:center;padding:22px;text-align:center;overflow-y:auto}
     #avatar-picker.show{display:flex}
     #avatar-picker .ap-title{font-family:Georgia,serif;color:var(--gold2);font-size:24px;font-weight:900;letter-spacing:1px;margin-bottom:6px;text-shadow:0 2px 10px rgba(212,175,55,.4)}
     #avatar-picker .ap-sub{color:#cdbd93;font-size:12.5px;margin-bottom:16px;max-width:320px}
     #avatar-picker .ap-hero{position:relative;width:172px;height:172px;margin-bottom:14px;flex:none}
     #avatar-picker .ap-hero #ap-hero-img{width:100%;height:100%;border-radius:50%;object-fit:cover;display:block;background:#131f36;box-shadow:0 10px 26px rgba(0,0,0,.7)}
     #avatar-picker .ap-hero .ap-ring{position:absolute;left:50%;top:50%;width:258px;height:258px;transform:translate(-50%,-50%);pointer-events:none}
-    #ap-confirm small{display:block;font-size:12.5px;letter-spacing:2.5px;margin-top:3px;opacity:1;font-weight:900}
-    #avatar-picker .ap-plaque{background:url('assets/plaque_bg2.webp') center/100% 100% no-repeat;border:none;border-radius:5px;padding:12px 30px 14px;margin-bottom:16px;box-shadow:0 10px 22px rgba(0,0,0,.6)}
+    #ap-confirm small{display:block;font-size:10.5px;letter-spacing:2px;margin-top:2px;opacity:.85}
+    #avatar-picker .ap-plaque{background:linear-gradient(180deg,#3a2413,#1c1007);border:1px solid rgba(212,175,55,.7);border-radius:10px;padding:8px 22px;margin-bottom:16px;box-shadow:0 8px 18px rgba(0,0,0,.55)}
     #avatar-picker .ap-name{font-family:Georgia,serif;color:var(--gold2);font-size:19px;font-weight:900;letter-spacing:2px}
     #avatar-picker .ap-plaque-sub{color:#cdbd93;font-size:11px;margin-top:2px}
     #avatar-picker .ap-row{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;max-width:340px;margin-bottom:18px}
@@ -165,7 +165,7 @@
     #avatar-picker .ap-tile img{width:100%;height:100%;object-fit:cover;display:block}
     #avatar-picker .ap-tile:active{transform:scale(.92)}
     #avatar-picker .ap-tile.picked{border-color:var(--gold2);box-shadow:0 0 16px rgba(245,215,110,.9);transform:scale(1.08)}
-    #ap-confirm{position:relative;overflow:hidden;font-family:Georgia,serif;font-weight:900;letter-spacing:1.5px;font-size:20px;color:#160b01;background:url('assets/button_bg.webp') center/100% 100% no-repeat;border:none;border-radius:8px;padding:0 26px;cursor:pointer;box-shadow:0 10px 24px rgba(0,0,0,.65);max-width:340px;width:100%;aspect-ratio:1000/300;display:flex;flex-direction:column;align-items:center;justify-content:center;text-shadow:0 1px 1px rgba(255,246,205,.65),0 0 7px rgba(255,240,190,.35),0 2px 5px rgba(59,36,0,.35);transition:transform .12s ease,box-shadow .12s ease}
+    #ap-confirm{position:relative;overflow:hidden;font-family:Georgia,serif;font-weight:900;letter-spacing:1px;font-size:15px;color:#231303;background:linear-gradient(180deg,#f5d76e,#d4a017);border:2px solid #8a6420;border-radius:12px;padding:13px 26px;cursor:pointer;box-shadow:0 8px 20px rgba(0,0,0,.6);max-width:340px;width:100%;transition:transform .12s ease,box-shadow .12s ease}
     #ap-confirm:active{transform:scale(.955) translateY(2px);box-shadow:0 4px 10px rgba(0,0,0,.65)}
     #ap-confirm::after{content:'';position:absolute;top:-10%;bottom:-10%;left:0;width:45%;background:linear-gradient(105deg,transparent,rgba(255,252,230,.55) 50%,transparent);transform:translateX(-240%) skewX(-18deg);pointer-events:none}
     #ap-confirm:active::after{transform:translateX(340%) skewX(-18deg);transition:transform .55s ease}
