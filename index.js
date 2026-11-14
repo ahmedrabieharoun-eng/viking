@@ -452,8 +452,9 @@ function verifyInitData(initData) {
 /* ---------- Telegram Premium (custom) emoji — ported from the AdVOLT
    messages bot (volt_messages_bot.js): the owner's own icon packs
    (TONEmoji + NewsEmoji) and substitution table, copied verbatim.
-   Applied centrally in tg() for sendMessage below; on a Telegram
-   emoji/icon rejection the send retries once fully stripped. */
+   Applied centrally in tg() for sendMessage text and sendPhoto
+   captions below; on a Telegram emoji/icon rejection the send
+   retries once fully stripped. */
 // ─── Telegram Premium (custom) emoji ─────────────────────────────
 // Owner-chosen packs: TONEmoji + NewsEmoji (t.me/addemoji/TONEmoji,
 // t.me/addemoji/NewsEmoji). pz() wraps every matched emoji char in a
@@ -634,8 +635,8 @@ function pzHarvested(text) {
 // button may carry a custom-emoji icon via icon_custom_emoji_id (verified
 // accepted for this bot, 2026-11-11). premiumizeKeyboard() adds the icon
 // matching the first mapped emoji in each button label. The Viking server
-// applies it centrally in tg() to every sendMessage, so all keyboards are
-// covered at once;
+// applies it centrally in tg() to every sendMessage and sendPhoto, so all
+// keyboards are covered at once;
 // if Telegram ever rejects an icon, the send retries once with the icons
 // stripped — a message can never be lost over a button icon.
 function premiumIconFor(text) {
@@ -676,15 +677,17 @@ const TG_API_BASE = (process.env.TG_API_BASE || 'https://api.telegram.org').repl
 async function tg(method, body) {
   if (!BOT_TOKEN) return null;
   let payload = body;
-  if (method === 'sendMessage' && body && typeof body === 'object') {
+  if ((method === 'sendMessage' || method === 'sendPhoto') && body && typeof body === 'object') {
     // Premium custom-emoji treatment, applied centrally like the VOLT bot:
-    // HTML parse mode when the caller didn't pick one, emoji wrapped via
-    // pz(), button icons via premiumizeKeyboard(). Work on copies so a
+    // HTML parse mode when the caller didn't pick one, the message text
+    // (sendMessage) or the photo caption (sendPhoto) wrapped via pz(),
+    // button icons via premiumizeKeyboard(). Work on copies so a
     // caller-owned keyboard object is never mutated.
     payload = { ...body };
-    if (typeof payload.text === 'string') {
+    const field = method === 'sendMessage' ? 'text' : 'caption';
+    if (typeof payload[field] === 'string') {
       if (!payload.parse_mode) payload.parse_mode = 'HTML';
-      payload.text = pz(payload.text);
+      payload[field] = pz(payload[field]);
     }
     if (payload.reply_markup) {
       payload.reply_markup = premiumizeKeyboard(JSON.parse(JSON.stringify(payload.reply_markup)));
@@ -703,9 +706,10 @@ async function tg(method, body) {
   // Telegram rejected a custom emoji / button icon (e.g. EMOJI_ID_INVALID):
   // retry exactly once with the plain, stripped variant — a message is
   // never lost over an icon.
-  if (method === 'sendMessage' && res && !res.ok && /emoji/i.test(String(res.description || ''))) {
+  if ((method === 'sendMessage' || method === 'sendPhoto') && res && !res.ok && /emoji/i.test(String(res.description || ''))) {
     const stripped = { ...payload };
     if (typeof stripped.text === 'string') stripped.text = pzStrip(stripped.text);
+    if (typeof stripped.caption === 'string') stripped.caption = pzStrip(stripped.caption);
     if (stripped.reply_markup) stripped.reply_markup = stripPremiumIcons(stripped.reply_markup);
     const retry = await send(stripped);
     if (retry) res = retry;
@@ -1029,7 +1033,7 @@ function markUpdateSeen(updateId) {
 
 const BIO_TEXTS = {
   en: {
-    welcome: (name) => `⚔️🔥 HALT, WARRIOR! 🔥⚔️\n\nWelcome, <b>${name}</b>, to <b>VIKING MINER$</b> — no place for the weak here, and the treasure waits only for those who dare! 🛡️❄️\n\n🌩️ In the frozen lands of the North, by Odin, your saga begins now:\nMine <b>VIKING$</b> every 24 hours, sharpen your axe, and rise from a rookie warrior (Level 1) to <b>a legend sung in Valhalla</b> (Level 100)! 🏆⚡️ Every level your sword crosses… your mining power multiplies and your vaults overflow with gold 💰\n\n⛏️ <b>Your road to glory:</b>\n• ⚔️ Mine every day and seize your share before others beat you to it\n• 🎯 Crush the tasks and collect their loot\n• 👥 Call your brothers-in-arms to your army — earn instant coins + <b>5% of their mining, forever!</b>\n\n💎 And the grand prize? Withdraw your earnings to your <b>TON</b> wallet — real gold in your hands, sell it or hoard it… one commander decides: <b>you</b>.\n\n🩸 The weak retreat. Vikings… <b>press the button!</b>\n\n👇 Press the button below, and let the mining begin:`,
+    welcome: (name) => `⚔️🔥 Welcome to VIKING MINER! 🔥⚔️\n\n${name}, your saga begins NOW!\n⛏ Mine VIKING every 24 hours and climb to Level 100!\n🏆 Every level forges more power — and your vaults overflow with gold! 💰\n🪙 Crush the tasks and seize the loot!\n😀 Summon your brothers-in-arms — earn 5% of their mining, forever!\n💎 Withdraw your treasure in TON, like a true Viking king! 👑\n\n🩸 The weak retreat… Vikings CONQUER!\n👇 Smash the button — let the mining begin!`,
     warrior: 'Warrior',
     openApp: '⚔️ Open the app',
     payoutsChannel: '💸 Payouts Channel',
@@ -1040,7 +1044,7 @@ const BIO_TEXTS = {
     retry: '⚠️ Could not check your bio right now — please try again in a minute.'
   },
   ar: {
-    welcome: (name) => `⚔️🔥 توقّف أيها المحارب! 🔥⚔️\n\nأهلاً بك يا <b>${name}</b> في <b>VIKING MINER$</b> — حيث لا مكان للضعفاء، والكنز لا ينتظر إلا من يجرؤ! 🛡️❄️\n\n🌩️ في أراضي الشمال المتجمدة، وباسم أودين، تبدأ ملحمتك الآن:\nعدّن عملة <b>VIKING$</b> كل 24 ساعة، واشحذ فأسك، واصعد من محارب مبتدئ (مستوى 1) إلى <b>أسطورة تُروى في الفالهالا</b> (مستوى 100)! 🏆⚡️ وكل مستوى يعبره سيفك… تتضاعف قوة تعدينك وتفيض خزائنك بالذهب 💰\n\n⛏️ <b>طريقك إلى المجد:</b>\n• ⚔️ عدّن كل يوم واقتنص حصتك قبل ما غيرك يسبقك\n• 🎯 اسحق المهام واجمع غنائمها\n• 👥 استدعِ إخوتك في السلاح إلى جيشك — واربح عملات فورية + <b>5% من تعدينهم إلى الأبد!</b>\n\n💎 والغنيمة الكبرى؟ اسحب أرباحك على محفظة <b>TON</b> — ذهب حقيقي في إيدك، تبيعه أو تكنزه… القرار لقائد واحد: <b>انت</b>.\n\n🩸 الضعفاء يتراجعون، أما الفايكنج… <b>فيضغطون الزر!</b>\n\n👇 اضغط على الزر بالأسفل، وليبدأ التعدين الآن:`,
+    welcome: (name) => `⚔️🔥 قف أيها المحارب! 🔥⚔️\n\nأهلًا بك يا ${name} في VIKING MINER — لا مكان للضعفاء هنا؛ الكنز لا ينتظر إلا من يجرؤ! 🛡️\n\n⛏ في أراضي الشمال المتجمدة تبدأ ملحمتك: عدّن VIKING كل ٢٤ ساعة، اشحذ فأسك، واصعد من محارب مبتدئ (المستوى 1) إلى أسطورة تُغنّى في فالهالا (المستوى 100)! 🏆 كل مستوى يضاعف قوة تعدينك — وخزائنك تفيض بالذهب 💰\n\nطريقك إلى المجد:\n• ⚔️ عدّن كل يوم واخطف حصتك قبل غيرك\n• 🪙 اسحق المهام واجمع غنائمها\n• 😀 ادعُ إخوتك في السلاح: عملات فورية + ٥٪ من تعدينهم، للأبد!\n\n💎 اسحب أرباحك إلى محفظة TON — ذهب حقيقي في يدك.\n\n🩸 الضعفاء يتراجعون. أيها الفايكنج… اضغط الزر! 👇`,
     warrior: 'محارب',
     openApp: '⚔️ افتح التطبيق',
     payoutsChannel: '💸 قناة السحوبات',
@@ -1051,7 +1055,7 @@ const BIO_TEXTS = {
     retry: '⚠️ مش قادر أتحقق من البايو دلوقتي — جرب تاني بعد دقيقة.'
   },
   ru: {
-    welcome: (name) => `⚔️🔥 СТОЙ, ВОИН! 🔥⚔️\n\nДобро пожаловать, <b>${name}</b>, в <b>VIKING MINER$</b> — здесь нет места слабым, а сокровища ждут только тех, кто осмелится! 🛡️❄️\n\n🌩️ В замёрзших землях Севера, именем Одина, твоя сага начинается сейчас:\nМайни <b>VIKING$</b> каждые 24 часа, точи свой топор и поднимайся от новичка (уровень 1) до <b>легенды, которую поют в Вальхалле</b> (уровень 100)! 🏆⚡️ С каждым уровнем, что пройдёт твой меч… сила майнинга умножается, а хранилища переполняются золотом 💰\n\n⛏️ <b>Твой путь к славе:</b>\n• ⚔️ Майни каждый день и забирай свою долю, пока другие не опередили тебя\n• 🎯 Сокрушай задания и собирай добычу\n• 👥 Зови братьев по оружию в свою армию — получай монеты сразу + <b>5% от их майнинга навсегда!</b>\n\n💎 А главный трофей? Выводи заработок на свой <b>TON</b>-кошелёк — настоящее золото в твоих руках: продай его или храни… решает один командир: <b>ты</b>.\n\n🩸 Слабые отступают. Викинги… <b>нажимают кнопку!</b>\n\n👇 Нажми кнопку ниже — и да начнётся майнинг:`,
+    welcome: (name) => `⚔️🔥 СТОЙ, ВОИН! 🔥⚔️\n\nДобро пожаловать, ${name}, в VIKING MINER — слабым здесь не место; сокровища ждут лишь тех, кто осмелится! 🛡️\n\n⛏ В ледяных землях Севера начинается твоя сага: добывай VIKING каждые 24 часа, точи свой топор и пройди путь от новичка (уровень 1) до легенды, воспетой в Вальхалле (уровень 100)! 🏆 Каждый уровень умножает твою силу добычи — а хранилища переполняются золотом 💰\n\nТвой путь к славе:\n• ⚔️ Добывай каждый день и забирай свою долю первым\n• 🪙 Сокрушай задания и собирай добычу\n• 😀 Зови братьев по оружию: мгновенные монеты + 5% от их добычи, навсегда!\n\n💎 Выводи заработок на свой TON-кошелёк — настоящее золото в твоих руках.\n\n🩸 Слабые отступают. Викинги… жмите кнопку! 👇`,
     warrior: 'воин',
     openApp: '⚔️ Открыть приложение',
     payoutsChannel: '💸 Канал выплат',
@@ -1063,8 +1067,16 @@ const BIO_TEXTS = {
   }
 };
 const bioLangOf = (from) => {
-  const lc = String((from && from.language_code) || '').toLowerCase();
-  return lc.startsWith('ar') ? 'ar' : lc.startsWith('ru') ? 'ru' : 'en';
+  // Owner order 2026-11-14: the bot's language is FIXED to English for
+  // everyone — the welcome and all bio replies are always the English
+  // texts, whatever the user's Telegram language_code says. The ar/ru
+  // text objects above stay in the code untouched for a possible
+  // future revert; just restore the language_code selection below.
+  void from;
+  return 'en';
+  // (previous selection, kept for the revert:)
+  // const lc = String((from && from.language_code) || '').toLowerCase();
+  // return lc.startsWith('ar') ? 'ar' : lc.startsWith('ru') ? 'ru' : 'en';
 };
 
 /* ---------- owner-only emoji-harvest tools ----------
@@ -1175,11 +1187,14 @@ async function handleOwnerTools(msg, text) {
    Param 'bio' = the dedicated verification flow: always answers with
    the outcome (granted / already / instructions / retry) and is the
    ONLY bot path that checks or credits the bio task. A plain /start
-   sends just the welcome photo + welcome text/keyboard and never
-   touches the bio task at all — no check, no credit, no grant or
-   'already verified' note (owner order 2026-11-14: bio messages only
-   when the bio task is explicitly requested). A matching unclaimed
-   bio is credited only via /start bio or the API bioTask action. */
+   sends ONE welcome message — the banner photo with the simple
+   welcome copy as its caption and the keyboard attached (owner order
+   2026-11-14; plain-text fallback only if the photo send fails) —
+   and never touches the bio task at all: no check, no credit, no
+   grant or 'already verified' note (owner order 2026-11-14: bio
+   messages only when the bio task is explicitly requested). A
+   matching unclaimed bio is credited only via /start bio or the API
+   bioTask action. */
 async function handleBotMessage(msg) {
   if (!msg || !msg.from || !msg.chat || msg.chat.type !== 'private') return;
   const text = typeof msg.text === 'string' ? msg.text.trim() : '';
@@ -1207,19 +1222,27 @@ async function handleBotMessage(msg) {
     if (typeof cfg.channel2 === 'string' && cfg.channel2.trim()) channelRow.push({ text: T.payoutsChannel, url: cfg.channel2 });
     if (typeof cfg.channel1 === 'string' && cfg.channel1.trim()) channelRow.push({ text: T.newsChannel, url: cfg.channel1 });
     if (channelRow.length) rows.push(channelRow);
-    // The name lands inside an HTML message: escape it (tg() runs pz()
-    // over the composed text afterwards, which only wraps emoji chars).
+    // The name lands inside an HTML caption: escape it (tg() runs pz()
+    // over the composed caption afterwards, which only wraps emoji chars).
     const displayName = esc(String(from.first_name || '').trim() || T.warrior);
-    // Owner-approved welcome photo (2026-11-14): sent FIRST, with NO
-    // caption — a photo caption cannot hold the full welcome text, so
-    // the text follows as its own message with the keyboard. A failed
-    // photo must never cost the user the greeting, so the result is
-    // ignored and the welcome send proceeds unconditionally.
-    try { await tg('sendPhoto', { chat_id: chatId, photo: WELCOME_IMAGE_URL }); } catch (e) { /* greeting still goes out */ }
-    await tg('sendMessage', {
-      chat_id: chatId, text: T.welcome(displayName),
-      reply_markup: { inline_keyboard: rows }
+    // Owner order 2026-11-14: the welcome is ONE message — the banner
+    // photo carrying the simple welcome copy as its caption and the
+    // keyboard attached, in a single sendPhoto (the copy is sized to
+    // fit Telegram's 1024-char caption limit). If that send fails
+    // (bad photo URL, Telegram hiccup), fall back to the plain text
+    // message with the same copy + keyboard so the greeting is never
+    // lost.
+    const welcomeKb = { inline_keyboard: rows };
+    const photoRes = await tg('sendPhoto', {
+      chat_id: chatId, photo: WELCOME_IMAGE_URL, caption: T.welcome(displayName),
+      reply_markup: welcomeKb
     });
+    if (!photoRes || !photoRes.ok) {
+      await tg('sendMessage', {
+        chat_id: chatId, text: T.welcome(displayName),
+        reply_markup: welcomeKb
+      });
+    }
     return;
   }
   // '/start bio' only from here on: the one bot path that checks the
