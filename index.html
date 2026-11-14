@@ -174,6 +174,64 @@
   </style>
   <link rel="preload" as="image" href="assets/boot_scene.webp?v=3">
   <link rel="preload" as="image" href="assets/hero_tier1.webp">
+  <style id="profile-replica">
+    /* Profile replica (owner order 2026-11-14): the profile page rebuilt
+       1:1 from his reference picture. Scoped to #page-profile only. */
+    .pf-titlebar{font-family:Georgia,serif;font-size:19px;font-weight:900;letter-spacing:5px;color:var(--gold2);text-align:center;border:1px solid rgba(212,175,55,.55);background:rgba(9,13,22,.65);padding:9px 0 8px;margin-bottom:16px}
+    .pf-sec{position:relative;background:linear-gradient(180deg,#0d1526,#080d18);border:1px solid rgba(212,175,55,.45);border-radius:8px;padding:16px 14px 14px;margin:0 0 14px}
+    .pf-sec + .pf-sec{margin-top:24px}
+    .pf-ribbon{position:absolute;top:-12px;left:50%;transform:translateX(-50%);background:linear-gradient(180deg,#3a2413,#1c1007);border:1px solid rgba(212,175,55,.85);color:var(--gold2);font-family:Georgia,serif;font-size:12px;font-weight:900;letter-spacing:2.5px;padding:4px 30px;white-space:nowrap;clip-path:polygon(10px 0,calc(100% - 10px) 0,100% 50%,calc(100% - 10px) 100%,10px 100%,0 50%);text-transform:uppercase}
+    .pf-id{display:flex;gap:14px;align-items:stretch}
+    #page-profile #prof-avatar{width:148px!important;height:auto!important;min-height:148px;border-radius:6px!important;border:2px solid rgba(212,175,55,.8)!important;object-fit:cover;flex:none;box-shadow:0 8px 20px rgba(0,0,0,.6)!important;background:#131f36}
+    .pf-id-info{display:flex;flex-direction:column;justify-content:center;min-width:0}
+    #page-profile #prof-name{font-size:29px!important;letter-spacing:1.5px;text-transform:uppercase;line-height:1.05;margin-bottom:10px}
+    .pf-lvl{display:flex;align-items:center;gap:9px;background:linear-gradient(180deg,#2a1c0d,#170e05);border:1px solid rgba(212,175,55,.75);border-radius:6px;padding:5px 12px 5px 6px;margin-bottom:11px;width:max-content;max-width:100%}
+    .pf-lvl img{width:40px;height:40px;border-radius:4px;display:block}
+    .pf-lvl-num{font-family:Georgia,serif;font-weight:900;color:var(--gold2);font-size:15.5px;letter-spacing:1px;line-height:1.1}
+    .pf-lvl-group{font-family:Georgia,serif;font-weight:900;color:#e8cf8f;font-size:10.5px;letter-spacing:2px}
+    .pf-meta{font-size:11.5px;color:#8fa8c8;letter-spacing:.6px;margin-top:5px;direction:ltr;text-align:left}
+    .pf-meta span:first-child{color:#63738c;font-weight:700}
+    .pf-meta span:last-child{color:#a9c6e8}
+    .pf-wallet-row{display:flex;align-items:center;gap:10px;direction:ltr;margin:4px 0 10px}
+    #pf-verified-ic{width:36px;height:36px;flex:none}
+    #prof-wallet-addr-display{font-size:15.5px;color:#dbe7f5;letter-spacing:.8px;font-weight:700}
+    #connected-wallet-actions{margin-left:auto;flex:none}
+    .pf-disconnect{background:linear-gradient(180deg,#5d3c1a,#38220d);border:1px solid #9a6d2f;color:#f0d9a0;font-family:Georgia,serif;font-weight:900;font-size:10.5px;letter-spacing:1.2px;padding:8px 13px;border-radius:6px;cursor:pointer;box-shadow:0 4px 10px rgba(0,0,0,.5)}
+    .pf-disconnect:active{transform:scale(.95)}
+    .pf-stats{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:20px}
+    .pf-stat{position:relative;border:1px solid rgba(212,175,55,.35);background:rgba(7,11,20,.6);border-radius:6px;padding:24px 8px 13px;text-align:center}
+    .pf-stat-ic{position:absolute;top:-15px;left:10px;width:32px;height:32px;background:linear-gradient(180deg,#1a2438,#0c1322);border:1px solid rgba(212,175,55,.6);border-radius:5px;display:flex;align-items:center;justify-content:center}
+    .pf-stat-ic svg{width:19px;height:19px}
+    .pf-stat-lbl{font-size:10.5px;letter-spacing:2px;color:#cdbd93;font-weight:800;text-transform:uppercase;margin-bottom:5px}
+    .pf-stat-num{font-family:Georgia,serif;font-size:26px;font-weight:900;color:var(--gold2);display:flex;align-items:center;justify-content:center;gap:7px}
+    .pf-stat-num img{width:21px;height:21px}
+    #page-profile #verify-card{background:linear-gradient(180deg,#0d1526,#080d18);border:1px solid rgba(212,175,55,.45);border-radius:8px}
+    .pf-amt{position:relative;margin-top:18px}
+    .pf-amt-lbl{position:absolute;top:-10px;left:50%;transform:translateX(-50%);background:linear-gradient(180deg,#3a2413,#1c1007);border:1px solid rgba(212,175,55,.85);color:var(--gold2);font-family:Georgia,serif;font-size:10px;font-weight:900;letter-spacing:2.5px;padding:3px 20px;clip-path:polygon(8px 0,calc(100% - 8px) 0,100% 50%,calc(100% - 8px) 100%,8px 100%,0 50%);z-index:2}
+    .pf-amt input{width:100%;background:#04070d;border:1px solid rgba(212,175,55,.45);border-radius:8px;color:#fff;font-size:17.5px;font-weight:700;padding:14px 46px 13px 15px;direction:ltr;box-sizing:border-box}
+    .pf-amt img{position:absolute;right:13px;top:50%;transform:translateY(-50%);width:23px;height:23px}
+    .pf-lines{margin:13px 2px 14px;font-size:13.5px;line-height:1.75;color:#c7d3e4;direction:ltr;text-align:left}
+    .pf-lines .pf-neg{color:#f0b429}
+    .pf-lines .pf-net{color:var(--gold2);font-size:15px}
+    .pf-line-sub{font-size:11px;color:var(--m);line-height:1.5;margin-top:3px}
+    .pf-wd-btn{width:100%;display:flex;align-items:center;justify-content:center;gap:9px;background:linear-gradient(180deg,#f5d76e,#c99612);border:2px solid #8a6420;border-radius:8px;color:#231303;font-family:Georgia,serif;font-weight:900;font-size:15.5px;letter-spacing:1px;padding:12px 10px;cursor:pointer;box-shadow:0 8px 20px rgba(0,0,0,.6);margin-bottom:9px;text-transform:uppercase}
+    .pf-wd-btn img{width:25px;height:25px;border-radius:4px}
+    .pf-wd-btn:active{transform:scale(.98)}
+    .pf-wd-btn.btn-wd-locked{filter:grayscale(.85);opacity:.55}
+    .pf-contract{font-size:9.5px;color:var(--m);direction:ltr;word-break:break-all;border:1px solid rgba(212,175,55,.25);border-radius:8px;padding:9px 11px;margin-bottom:24px;background:rgba(7,11,20,.5)}
+    .pf-contract span{font-family:ui-monospace,Menlo,Consolas,monospace}
+    .pf-contract .btn-3d-dark{width:auto;padding:2px 8px;font-size:10px}
+    #wd-history-box{font-size:12px;color:var(--m)}
+    .pf-hist-row{display:flex;align-items:center;gap:9px;background:rgba(9,14,25,.7);border:1px solid rgba(212,175,55,.18);border-radius:8px;padding:8px 10px;margin-bottom:7px;direction:ltr}
+    .pf-hist-clock{flex:none;display:flex}
+    .pf-hist-clock svg{width:16px;height:16px}
+    .pf-hist-date{flex:1;font-size:11.5px;color:#c7d3e4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .pf-hist-amt{font-size:13px;font-weight:800;color:#d8b36a}
+    .pf-pill{font-size:9px;font-weight:900;letter-spacing:.6px;padding:3.5px 9px;border-radius:20px;flex:none}
+    .pf-pill.ok{background:#2e5d33;color:#b9f0c0;border:1px solid #4c8a54}
+    .pf-pill.wait{background:#5d4a1f;color:#ffe1a0;border:1px solid #8a6d2f}
+    .pf-pill.bad{background:#5d2626;color:#ffb0b0;border:1px solid #8a4040}
+  </style>
   <style id="epic-replica">
     /* Replica pass (owner order 2026-11-14): every page rebuilt from
        the approved reference pictures — carved frame on all screens,
@@ -514,35 +572,57 @@
 
     <!-- 5. PROFILE PAGE -->
     <div id="page-profile" class="page">
-      <div class="card-3d" style="display:flex;gap:12px;align-items:center;">
-        <img id="prof-avatar" src="assets/avatar_1.webp" alt="">
-        <div>
-          <h3 id="prof-name">MANSAWY</h3>
-          <div style="font-size:11.5px;color:var(--m);direction:ltr;" id="prof-username">@mansawy1</div>
-          <div style="font-size:10.5px;color:#64748b;direction:ltr;" id="prof-id">ID 7216746593</div>
-        </div>
-      </div>
+      <!-- Profile replica (owner order 2026-11-14): built 1:1 from his
+           reference picture — title bar, big square evolution portrait,
+           level plaque, ribbon sections for wallet / verification /
+           withdraw / history. Every pre-existing element id is kept. -->
+      <div class="pf-titlebar" data-i18n="prof_page_title">PROFILE</div>
 
-      <div class="card-3d">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-          <div>
-            <h4 data-i18n="ton_wallet_title">TON Blockchain Wallet</h4>
-            <p style="font-size:11px;color:var(--m);direction:ltr;" id="prof-wallet-addr-display">Not connected yet</p>
+      <section class="pf-sec pf-id">
+        <img id="prof-avatar" src="assets/avatar_1.webp" alt="">
+        <div class="pf-id-info">
+          <h3 id="prof-name">MANSAWY</h3>
+          <div class="pf-lvl">
+            <img src="assets/icon_shield.webp" alt="">
+            <div>
+              <div class="pf-lvl-num">LV. <span id="prof-lvl-num">1</span></div>
+              <div class="pf-lvl-group" id="prof-lvl-group">SHIELDBEARER</div>
+            </div>
           </div>
-          <span class="badge-tag" id="wallet-badge-status" style="background:#ef4444;">Disconnected</span>
+          <div class="pf-meta"><span data-i18n="prof_username_lbl">USERNAME</span> — <span id="prof-username">@mansawy1</span></div>
+          <div class="pf-meta"><span>ID</span> — <span id="prof-id">7216746593</span></div>
+        </div>
+      </section>
+
+      <section class="pf-sec">
+        <div class="pf-ribbon" data-i18n="prof_wallet_lbl">WALLET</div>
+        <div class="pf-wallet-row">
+          <img id="pf-verified-ic" src="assets/icon_verified.webp" alt="" style="display:none;">
+          <span id="prof-wallet-addr-display">Not connected yet</span>
+          <span class="badge-tag" id="wallet-badge-status" style="background:#ef4444;display:none;">Disconnected</span>
+          <div id="connected-wallet-actions" style="display:none;">
+            <button class="pf-disconnect" id="btn-disconnect-wallet"><span data-i18n="disconnect_wallet_btn">DISCONNECT</span></button>
+          </div>
         </div>
         <button class="btn-3d-gold" id="btn-connect-wallet">👛 <span data-i18n="connect_wallet_btn">Connect TON Wallet</span></button>
-        <div id="connected-wallet-actions" style="display:none;margin-top:8px;">
-          <button class="btn-3d-danger" id="btn-disconnect-wallet">🔌 <span data-i18n="disconnect_wallet_btn">Disconnect</span></button>
-        </div>
         <div id="ton-connect-container" style="display:none;"></div>
-      </div>
+        <div class="pf-stats">
+          <div class="pf-stat">
+            <div class="pf-stat-ic"><svg viewBox="0 0 24 24" fill="none" stroke="#e8c766" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h13a1 1 0 0 1 1 1v1"/><path d="M3 7v10a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-8a1 1 0 0 0-1-1H5a2 2 0 0 1-2-2z"/><circle cx="16.6" cy="14" r="1.2" fill="#e8c766" stroke="none"/></svg></div>
+            <div class="pf-stat-lbl" data-i18n="hold_wallet_lbl">Wallet Hold (On-Chain)</div>
+            <div class="pf-stat-num"><span id="prof-hold-bal">0</span> <img src="assets/coin_icon.webp" alt=""></div>
+          </div>
+          <div class="pf-stat">
+            <div class="pf-stat-ic"><svg viewBox="0 0 24 24" fill="none" stroke="#e8c766" stroke-width="1.9" stroke-linecap="round"><path d="M5.5 18.5L14.5 9.5"/><path d="M7.5 5C11 3.6 16.5 4.2 20.5 8.2 17 6.8 13 6.6 9.5 7.6"/></svg></div>
+            <div class="pf-stat-lbl" data-i18n="mine_wallet_lbl">Mined Balance</div>
+            <div class="pf-stat-num"><span id="prof-mine-bal">0</span> <img src="assets/icon_crystal.webp" alt=""></div>
+          </div>
+        </div>
+      </section>
 
-      <!-- Wallet verification card (owner order 2026-11-14): extends the
-           wallet card above — connect state, disconnect and hold sync
-           stay there; this card shows the bound wallet's on-chain age
-           and the 0.05 TON comment-payment verification flow. All rows
-           and actions are rendered by renderVerifyCard(). -->
+      <!-- Wallet verification (owner order 2026-11-14): the bound
+           wallet's on-chain age + the 0.05 TON comment-payment flow.
+           All rows and actions are rendered by renderVerifyCard(). -->
       <div class="card-3d" id="verify-card">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
           <h4>🛡️ <span data-i18n="verify_title">Wallet Verification</span></h4>
@@ -552,32 +632,31 @@
         <div id="verify-actions"></div>
       </div>
 
-      <div class="grid-2" style="margin-bottom:9px;">
-        <div class="card-3d" style="margin:0;"><small style="color:var(--m);" data-i18n="hold_wallet_lbl">Wallet Hold (On-Chain)</small><div style="font-size:17px;font-weight:900;color:var(--gb);"><span id="prof-hold-bal">0</span> 🪙</div></div>
-        <div class="card-3d" style="margin:0;"><small style="color:var(--m);" data-i18n="mine_wallet_lbl">Mined Balance</small><div style="font-size:17px;font-weight:900;"><span id="prof-mine-bal">0</span> 🪙</div></div>
-      </div>
-
-      <div class="card-3d">
-        <h4 style="margin-bottom:6px;"><span data-i18n="withdraw_title">Withdraw</span> <span class="coin-sym">$VIKING</span></h4>
-        <input type="number" id="wd-input-amt" class="input-3d" value="5000" min="5000" step="500">
-        <div class="sub-3d" style="margin-bottom:8px;font-size:11.5px;line-height:1.6;">
-          • <span data-i18n="min_wd_lbl">Minimum:</span> <strong id="wd-min-ui">5,000</strong><br>
-          • <span data-i18n="wd_fee_lbl">Fee (5%):</span> <strong style="color:#f87171;">-<span id="wd-fee-calc">250</span></strong> (<span data-i18n="net_lbl">Net:</span> <strong style="color:#22c55e;" id="wd-net-calc">4,750</strong>)<br>
-          • <span data-i18n="hold_cond_lbl">25% Hold Required:</span> <strong style="color:var(--gb);" id="wd-req-hold-num">1,250</strong> (<span data-i18n="your_hold_lbl">Your Hold:</span> <strong id="wd-cur-hold-num">0</strong>)
+      <section class="pf-sec">
+        <div class="pf-ribbon"><span data-i18n="withdraw_title">Withdraw</span> ⬇</div>
+        <div class="pf-amt">
+          <div class="pf-amt-lbl" data-i18n="prof_amount_lbl">AMOUNT</div>
+          <input type="number" id="wd-input-amt" value="5000" min="5000" step="500">
+          <img src="assets/coin_icon.webp" alt="">
         </div>
-        <button class="btn-3d-gold" id="btn-request-wd" style="margin-bottom:8px;"><span id="wd-btn-arrow">↗</span> <span id="wd-btn-label" data-i18n="req_wd_btn">Request Withdrawal</span></button>
+        <div class="pf-lines">
+          <div><span data-i18n="wd_fee_lbl">Fee (5%):</span> <strong class="pf-neg">-<span id="wd-fee-calc">250</span></strong></div>
+          <div><span data-i18n="net_lbl">Net:</span> <strong class="pf-net" id="wd-net-calc">4,750</strong></div>
+          <div class="pf-line-sub"><span data-i18n="min_wd_lbl">Minimum:</span> <strong id="wd-min-ui">5,000</strong> · <span data-i18n="hold_cond_lbl">25% Hold Required:</span> <strong id="wd-req-hold-num">1,250</strong> (<span data-i18n="your_hold_lbl">Your Hold:</span> <strong id="wd-cur-hold-num">0</strong>)</div>
+        </div>
+        <button class="pf-wd-btn" id="btn-request-wd"><img src="assets/icon_chest.webp" alt=""><span id="wd-btn-arrow">↗</span> <span id="wd-btn-label" data-i18n="req_wd_btn">Request Withdrawal</span></button>
         <button class="btn-3d-bronze btn-stonfi-buy">🪙 <span data-i18n="buy_hold_btn">Buy on STON.fi to Unlock 25% Hold</span></button>
         <button class="btn-3d-bronze btn-tonkeeper-buy" style="margin-top:8px;">💎 <span data-i18n="buy_tonkeeper_btn">Buy on Tonkeeper</span></button>
+      </section>
+
+      <div class="pf-contract">
+        <strong>OFFICIAL CONTRACT:</strong> <span id="official-contract-addr">EQC6uN73kvaKh8LrTHQ8TQ5_vgqheI93iny5XUWkpQL9vjxI</span> <button class="btn-3d-dark" id="btn-copy-contract" data-i18n="verify_copy_btn">Copy</button>
       </div>
 
-      <div class="card-3d" style="font-size:10px;color:var(--m);direction:ltr;word-break:break-all;">
-        <strong>OFFICIAL CONTRACT:</strong> <span id="official-contract-addr" style="font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace;">EQC6uN73kvaKh8LrTHQ8TQ5_vgqheI93iny5XUWkpQL9vjxI</span> <button class="btn-3d-dark" id="btn-copy-contract" data-i18n="verify_copy_btn" style="width:auto;padding:2px 8px;font-size:10px;">Copy</button>
-      </div>
-
-      <div class="card-3d">
-        <h4 style="margin-bottom:6px;" data-i18n="wd_hist_title">Withdrawal History</h4>
-        <div id="wd-history-box" style="font-size:11.5px;color:var(--m);text-align:center;">No withdrawals yet.</div>
-      </div>
+      <section class="pf-sec">
+        <div class="pf-ribbon" data-i18n="wd_hist_title">Withdrawal History</div>
+        <div id="wd-history-box">No withdrawals yet.</div>
+      </section>
     </div>
 
     <!-- 6. OWNER ADMIN PANEL -->
@@ -1111,7 +1190,8 @@
         my_referrals_title:"👥 My Invited Friends", pending_ref_title:"Pending Referral Profits", collect_ref_btn:"Collect Referral Profits",
         ton_wallet_title:"TON Blockchain Wallet", connect_wallet_btn:"Connect TON Wallet",
         sync_hold_btn:"Verify Wallet Hold", disconnect_wallet_btn:"Disconnect",
-        hold_wallet_lbl:"Wallet Hold (On-Chain)", mine_wallet_lbl:"Mined Balance",
+        prof_page_title:"PROFILE", prof_username_lbl:"USERNAME", prof_wallet_lbl:"WALLET", prof_amount_lbl:"AMOUNT",
+        hold_wallet_lbl:"Wallet Hold", mine_wallet_lbl:"Mined Balance",
         withdraw_title:"Withdraw", min_wd_lbl:"Minimum:", wd_fee_lbl:"Fee (5%):", net_lbl:"Net:",
         hold_cond_lbl:"25% Hold Required:", your_hold_lbl:"Your Hold:", req_wd_btn:"Request Withdrawal",
         lock_connect:"Connect Wallet First", lock_min:"Minimum {n} Required", lock_balance:"Insufficient Balance", lock_hold:"Need {n} in Wallet Hold", lock_cooldown:"Wait {t}",
@@ -1156,6 +1236,7 @@
         my_referrals_title:"👥 أصدقائي المدعوون", pending_ref_title:"أرباح الإحالات المعلقة", collect_ref_btn:"جمع أرباح الإحالات",
         ton_wallet_title:"محفظة شبكة TON", connect_wallet_btn:"ربط محفظة TON الآن",
         sync_hold_btn:"تحديث رصيد المحفظة", disconnect_wallet_btn:"إلغاء الربط",
+        prof_page_title:"الملف الشخصي", prof_username_lbl:"اسم المستخدم", prof_wallet_lbl:"المحفظة", prof_amount_lbl:"المبلغ",
         hold_wallet_lbl:"عملات المحفظة (Hold)", mine_wallet_lbl:"رصيد التعدين",
         withdraw_title:"سحب", min_wd_lbl:"الحد الأدنى:", wd_fee_lbl:"رسوم (5%):", net_lbl:"الصافي:",
         hold_cond_lbl:"شرط 25% بالمحفظة:", your_hold_lbl:"رصيد محفظتك:", req_wd_btn:"طلب سحب الرصيد",
@@ -1201,6 +1282,7 @@
         my_referrals_title:"👥 Мои рефералы", pending_ref_title:"Ожидаемый доход", collect_ref_btn:"Собрать доход",
         ton_wallet_title:"Кошелек TON", connect_wallet_btn:"Подключить TON Кошелек",
         sync_hold_btn:"Обновить Холд", disconnect_wallet_btn:"Отключить",
+        prof_page_title:"ПРОФИЛЬ", prof_username_lbl:"ИМЯ ПОЛЬЗОВАТЕЛЯ", prof_wallet_lbl:"КОШЕЛЁК", prof_amount_lbl:"СУММА",
         hold_wallet_lbl:"В кошельке", mine_wallet_lbl:"Баланс майнинга",
         withdraw_title:"Вывод", min_wd_lbl:"Минимум:", wd_fee_lbl:"Комиссия (5%):", net_lbl:"Чистыми:",
         hold_cond_lbl:"Нужно 25% Холда:", your_hold_lbl:"Ваш Холд:", req_wd_btn:"Запросить вывод",
@@ -2147,11 +2229,21 @@
 
       document.getElementById('prof-name').innerHTML = esc(tgUser.first_name || "MANSAWY") + (myWalletVerified ? verifiedBadgeSVG() : '');
       document.getElementById('prof-username').innerText = tgUser.username ? "@" + tgUser.username : "@user";
-      document.getElementById('prof-id').innerText = "ID " + CURRENT_UID;
-      // Redesign (owner pick 3+4): the chosen painted avatar IS the
-      // identity image; a player who never picked gets the picker.
+      document.getElementById('prof-id').innerText = CURRENT_UID;
+      // Profile replica (owner order 2026-11-14): the big square
+      // portrait is the player's CURRENT EVOLUTION image (his avatar
+      // at his level's tier); the plaque shows his level + group, and
+      // the wallet row carries the verified shield when verified.
       const pavEl = document.getElementById('prof-avatar');
-      if (pavEl) pavEl.src = `assets/avatar_${(myAvatar >= 1 && myAvatar <= 8) ? myAvatar : 1}.webp`;
+      if (pavEl) {
+        if (myAvatar >= 1 && myAvatar <= 8) {
+          const tNow = Math.min(10, Math.max(1, Math.ceil(cur.level / 10)));
+          pavEl.src = `assets/evo_a${myAvatar}_t${tNow}.webp`;
+        } else pavEl.src = 'assets/avatar_1.webp';
+      }
+      const pln = document.getElementById('prof-lvl-num'); if (pln) pln.innerText = cur.level;
+      const plg = document.getElementById('prof-lvl-group'); if (plg) plg.innerText = String(cur.name || '').replace(/\s+\d+\s*$/, '').toUpperCase();
+      const pvi = document.getElementById('pf-verified-ic'); if (pvi) pvi.style.display = myWalletVerified ? 'block' : 'none';
       maybeShowAvatarPicker();
 
       const isConn = linkedWalletAddr && linkedWalletAddr.length > 8;
@@ -2332,7 +2424,14 @@
     function renderWithdrawHistory() {
       const box = document.getElementById('wd-history-box');
       if (!wdHistory.length) { box.innerHTML = "No withdrawals yet."; return; }
-      box.innerHTML = wdHistory.map(w => `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.06);direction:ltr;"><span><strong>Withdrawal #${esc(w.wdNum || 1)}</strong> · ${esc(w.status)} (Net: ${esc(w.net)})</span><strong style="color:#ef4444;">-${esc(w.amt)} 🪙</strong></div>`).join('');
+      const clock = '<svg viewBox="0 0 24 24" fill="none" stroke="#c9a86a" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>';
+      box.innerHTML = wdHistory.map(w => {
+        const d = w.timestamp ? new Date(w.timestamp) : null;
+        const dateStr = d ? (d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) + ' • ' + d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })) : ('Withdrawal #' + (w.wdNum || 1));
+        const st = String(w.status || '');
+        const pill = st.includes('Paid') ? '<span class="pf-pill ok">COMPLETED</span>' : (st.includes('Reject') ? '<span class="pf-pill bad">REJECTED</span>' : '<span class="pf-pill wait">PENDING</span>');
+        return `<div class="pf-hist-row"><span class="pf-hist-clock">${clock}</span><span class="pf-hist-date">${esc(dateStr)}</span><span class="pf-hist-amt">-${Number(w.amt || 0).toLocaleString()}</span>${pill}</div>`;
+      }).join('');
     }
 
 
