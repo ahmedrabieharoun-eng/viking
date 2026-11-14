@@ -935,6 +935,25 @@ function decodeTextComment(inMsg) {
   return null;
 }
 const inMsgSourceRaw = (inMsg) => toRawAddress((inMsg && typeof inMsg.source === 'object' && inMsg.source) ? (inMsg.source.address || '') : ((inMsg && inMsg.source) || ''));
+/* toncenter v3 returns tx.hash in BASE64 (44 chars, may contain '+',
+   '/' and a trailing '='), NOT hex. Canonicalise to lowercase hex
+   before ANY use: the hex form is the verifyClaims RTDB key (a base64
+   '/' would be an illegal, path-splitting RTDB key) and the stored
+   verifyTx (hex is what tonviewer links expect). A 64-char hex string
+   passes through lowercased; a base64 string (standard or URL-safe
+   alphabet) is used only if it decodes to exactly 32 bytes; anything
+   else yields '' and the transaction is skipped as malformed. */
+function txHashHex(h) {
+  const s = String(h || '').trim();
+  if (/^[0-9a-fA-F]{64}$/.test(s)) return s.toLowerCase();
+  if (/^[A-Za-z0-9+/_-]+={0,2}$/.test(s)) {
+    try {
+      const buf = Buffer.from(s.replace(/-/g, '+').replace(/_/g, '/'), 'base64');
+      if (buf.length === 32) return buf.toString('hex');
+    } catch (e) { /* fall through */ }
+  }
+  return '';
+}
 /* Keep the inviter's referral entry for this player in sync with the
    player's verified state (the Friends list renders the entry's flag —
    storing it on the entry keeps state() free of per-referral lookups).
@@ -1671,8 +1690,8 @@ async function verifyCheck(c) {
     if (val < minNano) continue;
     const text = decodeTextComment(inMsg);
     if (!text || text.trim() !== comment) continue;
-    const hash = String(tx.hash || '');
-    if (!/^[0-9a-fA-F]{16,128}$/.test(hash)) continue;
+    const hash = txHashHex(tx.hash); // toncenter v3 sends base64 — canonical hex before the guard/claim/store
+    if (!/^[0-9a-fA-F]{64}$/.test(hash)) continue;
     const claimRef = rtdb().ref('verifyClaims/' + hash);
     const prior = await getVal(claimRef);
     if (prior && String(prior.userId) !== uid) continue; // claimed by someone else — never reusable
