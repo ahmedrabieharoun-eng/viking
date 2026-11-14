@@ -79,6 +79,7 @@
     .badge-tag{display:inline-block;padding:2px 7px;border-radius:8px;font-size:10px;font-weight:800}
     #boot-loader{position:fixed;inset:0;background:#05070b;z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center;overflow:hidden}
     #banned-screen{position:fixed;inset:0;background:#05070b;z-index:99999;display:none;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center}
+    #maintenance-screen{position:fixed;inset:0;background:#05070b;z-index:100005;display:none;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center}
     #toast{position:fixed;top:14px;left:50%;transform:translateX(-50%);background:#d97706;color:#fff;padding:8px 16px;border-radius:18px;font-size:12px;font-weight:800;display:none;z-index:100000;border:1px solid var(--gb);text-align:center;min-width:240px}
     .daily-grid{display:flex;justify-content:space-between;gap:4px;margin-bottom:8px}
     .daily-box{flex:1;background:#0b0f17;border:1px solid #334155;border-radius:8px;padding:6px 2px;text-align:center;font-size:9px;color:#94a3b8;position:relative}
@@ -109,6 +110,12 @@
     <div style="font-size:58px;">🚫</div>
     <h2 style="color:#ef4444;margin:8px 0;">ACCOUNT BANNED</h2>
     <p style="color:#94a3b8;font-size:13px;max-width:300px;line-height:1.5;">Your account has been banned by the security system for violating rules or using multiple accounts.</p>
+  </div>
+
+  <div id="maintenance-screen">
+    <div style="font-size:58px;">🔧</div>
+    <h2 style="color:var(--gb);margin:8px 0;" data-i18n="maint_title">Update in progress</h2>
+    <p style="color:#94a3b8;font-size:13px;max-width:300px;line-height:1.5;" data-i18n="maint_sub">We are updating VIKING MINER right now. Please check back soon!</p>
   </div>
 
   <div id="toast">Notification</div>
@@ -901,6 +908,7 @@
         mining_rate:"MINING RATE", current_rank:"WALLET LEVEL", claimed_in_app:"Claimed in the app",
         streak_txt:"🔥 24h Shift Rule", streak_sub:"Collect every 24h to keep mining",
         collect_btn:"COLLECT 24H MINING", buy_btn:"Buy", levels_btn:"Levels (1–100)",
+        maint_title:"Update in progress", maint_sub:"We are updating VIKING MINER right now. Please check back soon!",
         ch1_title:"📢 Official Telegram Channel", ch2_title:"💬 Payouts & Community Channel",
         open_ch:"1. Open Channel", open_grp:"1. Open Group", verify_btn:"2. Verify ✅",
         bio_task_desc:"Add <strong id=\"bio-bot-username\" style=\"color:#fff;\">@BOT</strong> to your Telegram bio, then tap the button below and press Start in the bot — your reward is added automatically. Come back here and it will show as done.",
@@ -944,6 +952,7 @@
         mining_rate:"سرعة التعدين", current_rank:"مستوى المحفظة", claimed_in_app:"رصيدك المجموع بالتطبيق",
         streak_txt:"🔥 نظام الـ 24 ساعة", streak_sub:"اجمع كل 24 ساعة ليستمر التعدين",
         collect_btn:"اجمع عملات التعدين الآن", buy_btn:"شراء", levels_btn:"المستويات (1–100)",
+        maint_title:"جارٍ التحديث", maint_sub:"بنحدّث VIKING MINER دلوقتي. ارجع تاني قريب!",
         ch1_title:"📢 قناة التليجرام الرسمية", ch2_title:"💬 قناة إثباتات السحب والمجتمع",
         open_ch:"1. افتح القناة", open_grp:"1. افتح القناة", verify_btn:"2. تحقق ✅",
         bio_task_desc:"أضف <strong id=\"bio-bot-username\" style=\"color:#fff;\">@BOT</strong> إلى البايو بتاعك في تيليجرام، وبعدين دوس الزرار اللي تحت ودوس Start في البوت — المكافأة هتتضاف تلقائيًا. ارجع هنا هتلاقيها اتعملت.",
@@ -987,6 +996,7 @@
         mining_rate:"СКОРОСТЬ", current_rank:"УРОВЕНЬ КОШЕЛЬКА", claimed_in_app:"Собрано в боте",
         streak_txt:"🔥 Цикл 24 часа", streak_sub:"Собирайте каждые 24ч",
         collect_btn:"СОБРАТЬ МОНЕТЫ", buy_btn:"Купить", levels_btn:"Уровни (1–100)",
+        maint_title:"Идёт обновление", maint_sub:"Мы обновляем VIKING MINER прямо сейчас. Загляните чуть позже!",
         ch1_title:"📢 Официальный канал", ch2_title:"💬 Канал выплат",
         open_ch:"1. Открыть", open_grp:"1. Открыть", verify_btn:"2. Проверить ✅",
         bio_task_desc:"Добавьте <strong id=\"bio-bot-username\" style=\"color:#fff;\">@BOT</strong> в био вашего Telegram, затем нажмите кнопку ниже и нажмите Start в боте — награда добавится автоматически. Вернитесь сюда, и задание будет отмечено выполненным.",
@@ -1248,6 +1258,11 @@
         const j = await r.json().catch(() => ({}));
         if (!r.ok || j.error) {
           const msg = j.error || "Server error";
+          // Owner-only maintenance (owner order 2026-11-14): the
+          // server gates non-owners with {maintenance:true} — swap
+          // the whole app for the «update in progress» screen and
+          // stop every retry loop (boot + interval) from spinning.
+          if (j.maintenance) { showMaintenance(); const me = new Error(msg); me.maintenance = true; throw me; }
           // Self-heal: a 'User not found' on a safe action means this
           // client's view of the player record raced its creation —
           // refresh state once (state re-creates/syncs the record
@@ -1372,10 +1387,15 @@
       for (let i = 0; ; i++) {
         try { await refreshState(); return; }
         catch (err) {
+          if (err && err.maintenance) return; // update-in-progress screen is already up
           if (i >= BOOT_RETRY_WAITS.length) { showBootRetry(); return; }
           await new Promise((res) => setTimeout(res, BOOT_RETRY_WAITS[i]));
         }
       }
+    }
+    function showMaintenance() {
+      const bl = document.getElementById('boot-loader'); if (bl) bl.style.display = 'none';
+      const ms = document.getElementById('maintenance-screen'); if (ms) ms.style.display = 'flex';
     }
     function showBootRetry() {
       const btn = document.getElementById('boot-retry-btn');
