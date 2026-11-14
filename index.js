@@ -1033,11 +1033,14 @@ function markUpdateSeen(updateId) {
 
 const BIO_TEXTS = {
   en: {
-    welcome: (name) => `⚔️🔥 Welcome to VIKING MINER! 🔥⚔️\n\n${name}, your saga begins NOW!\n⛏ Mine VIKING every 24 hours and climb to Level 100!\n🏆 Every level forges more power — and your vaults overflow with gold! 💰\n🪙 Crush the tasks and seize the loot!\n😀 Summon your brothers-in-arms — earn 5% of their mining, forever!\n💎 Withdraw your treasure in TON, like a true Viking king! 👑\n\n🩸 The weak retreat… Vikings CONQUER!\n👇 Smash the button — let the mining begin!`,
+    // AdVOLT-mirrored copy (owner order 2026-11-14): NO name line —
+    // header / intro / 3 bullets / closing, one sentence per line.
+    // (The name argument is kept for signature parity with ar/ru.)
+    welcome: (name) => `⚔️ Welcome to VIKING MINER! ⚔️\n\nJump in and start your Viking saga:\n⛏ Mine VIKING daily and climb from level 1 to 100.\n🪙 Crush tasks & seize loot to fill your vaults.\n😀 Invite friends, earn 5% of their mining!\n\nTap the button below and start mining now! 🚀`,
     warrior: 'Warrior',
-    openApp: '⚔️ Open the app',
-    payoutsChannel: '💸 Payouts Channel',
-    newsChannel: '📢 News Channel',
+    openApp: '⚔️ Open VIKING',
+    payoutsChannel: '💸 Payouts',
+    newsChannel: '📰 News',
     granted: (reward, sym) => `✅ Bio verified! +${reward} ${sym} was added to your balance.`,
     already: '✅ Your bio is already verified — the reward was already added.',
     instruct: (uname) => `📝 To verify your bio:\n1. Add @${uname} to your Telegram bio.\n2. Then open this link again and press Start: https://t.me/${uname}?start=bio`,
@@ -1194,7 +1197,55 @@ async function handleOwnerTools(msg, text) {
    grant or 'already verified' note (owner order 2026-11-14: bio
    messages only when the bio task is explicitly requested). A
    matching unclaimed bio is credited only via /start bio or the API
-   bioTask action. */
+   bioTask action. A message carrying write_access_allowed — first
+   contact via the direct app link, where the user never sends
+   /start — triggers the same welcome, but ONLY for a genuinely new
+   player (owner order 2026-11-14). */
+
+/* The welcome message itself: ONE sendPhoto — the banner photo
+   carrying the welcome copy as its caption and the keyboard attached
+   (owner order 2026-11-14; the copy is sized to fit Telegram's
+   1024-char caption limit). If that send fails (bad photo URL,
+   Telegram hiccup), fall back to the plain text message with the
+   same copy + keyboard so the greeting is never lost. Shared by
+   plain /start and the write_access_allowed trigger below — both
+   deliver the identical message. */
+async function sendWelcome(chatId, cfg, T, displayName) {
+  // Owner-approved welcome layout: Open App alone on row 1; news
+  // (cfg.channel1) then payouts (cfg.channel2) side by side on row 2 —
+  // AdVOLT's order (News | Payments), owner order 2026-11-14 — each
+  // included only when its cfg URL is a non-empty string. tg() attaches
+  // the premium button icons and strips the plain label emoji.
+  // Row 1 is a plain URL button to the bot's own app link
+  // (https://t.me/<bot>/app), NOT a web_app button: Telegram renders a
+  // web_app button as a detached bar under the message, while a URL
+  // button renders glued to the message as a classic inline keyboard —
+  // the AdVOLT welcome look (owner order 2026-11-14). The username is
+  // resolved at runtime via resolveBotUsername (getMe-cached); only if
+  // it cannot be resolved do we fall back to the web_app button, so
+  // the Open button never breaks.
+  const botUname = await resolveBotUsername(cfg);
+  const openBtn = botUname
+    ? { text: T.openApp, url: `https://t.me/${botUname}/app` }
+    : { text: T.openApp, web_app: { url: APP_URL } };
+  const rows = [[openBtn]];
+  const channelRow = [];
+  if (typeof cfg.channel1 === 'string' && cfg.channel1.trim()) channelRow.push({ text: T.newsChannel, url: cfg.channel1 });
+  if (typeof cfg.channel2 === 'string' && cfg.channel2.trim()) channelRow.push({ text: T.payoutsChannel, url: cfg.channel2 });
+  if (channelRow.length) rows.push(channelRow);
+  const welcomeKb = { inline_keyboard: rows };
+  const photoRes = await tg('sendPhoto', {
+    chat_id: chatId, photo: WELCOME_IMAGE_URL, caption: T.welcome(displayName),
+    reply_markup: welcomeKb
+  });
+  if (!photoRes || !photoRes.ok) {
+    await tg('sendMessage', {
+      chat_id: chatId, text: T.welcome(displayName),
+      reply_markup: welcomeKb
+    });
+  }
+}
+
 async function handleBotMessage(msg) {
   if (!msg || !msg.from || !msg.chat || msg.chat.type !== 'private') return;
   const text = typeof msg.text === 'string' ? msg.text.trim() : '';
@@ -1202,47 +1253,41 @@ async function handleBotMessage(msg) {
   // consume the message when they fire. For everyone else — and for the
   // owner's own /start — they are completely silent (see handleOwnerTools).
   if (await handleOwnerTools(msg, text)) return;
+  const from = msg.from;
+  if (!/^\d+$/.test(String(from.id))) return;
+  const chatId = msg.chat.id;
+  // First contact via the DIRECT APP LINK: those users never send
+  // /start, so Telegram's write_access_allowed service message — sent
+  // when the user grants the Mini App write access (the app requests
+  // it on launch) and carrying NO text — is their welcome trigger, and
+  // it is handled here, BEFORE the text//start gate below. The welcome
+  // goes out ONLY for a genuinely new player: read the player first,
+  // create after the check (ensurePlayer does not report creation).
+  // An existing player re-granting access hears nothing at all.
+  // (Owner order 2026-11-14.)
+  if (msg.write_access_allowed) {
+    const cfgW = await getConfig();
+    const existed = (await getVal(P(from.id))) !== null;
+    await ensurePlayer({ user: from, body: {} }); // same creation path as the API actions
+    if (!existed) {
+      const TW = BIO_TEXTS[bioLangOf(from)];
+      await sendWelcome(chatId, cfgW, TW, esc(String(from.first_name || '').trim() || TW.warrior));
+    }
+    return;
+  }
   if (!text.startsWith('/start')) return;
   const parts = text.split(/\s+/);
   if (!/^\/start(@[A-Za-z0-9_]+)?$/.test(parts[0])) return;
   const param = parts[1] || '';
-  const from = msg.from;
-  if (!/^\d+$/.test(String(from.id))) return;
-  const chatId = msg.chat.id;
   const cfg = await getConfig();
   await ensurePlayer({ user: from, body: {} }); // same creation path as the API actions
   const T = BIO_TEXTS[bioLangOf(from)];
   if (param !== 'bio') {
-    // Owner-approved welcome layout: Open App alone on row 1; payouts
-    // (cfg.channel2) and news (cfg.channel1) side by side on row 2, each
-    // included only when its cfg URL is a non-empty string. tg() attaches
-    // the premium button icons and strips the plain label emoji.
-    const rows = [[{ text: T.openApp, web_app: { url: APP_URL } }]];
-    const channelRow = [];
-    if (typeof cfg.channel2 === 'string' && cfg.channel2.trim()) channelRow.push({ text: T.payoutsChannel, url: cfg.channel2 });
-    if (typeof cfg.channel1 === 'string' && cfg.channel1.trim()) channelRow.push({ text: T.newsChannel, url: cfg.channel1 });
-    if (channelRow.length) rows.push(channelRow);
-    // The name lands inside an HTML caption: escape it (tg() runs pz()
-    // over the composed caption afterwards, which only wraps emoji chars).
-    const displayName = esc(String(from.first_name || '').trim() || T.warrior);
-    // Owner order 2026-11-14: the welcome is ONE message — the banner
-    // photo carrying the simple welcome copy as its caption and the
-    // keyboard attached, in a single sendPhoto (the copy is sized to
-    // fit Telegram's 1024-char caption limit). If that send fails
-    // (bad photo URL, Telegram hiccup), fall back to the plain text
-    // message with the same copy + keyboard so the greeting is never
-    // lost.
-    const welcomeKb = { inline_keyboard: rows };
-    const photoRes = await tg('sendPhoto', {
-      chat_id: chatId, photo: WELCOME_IMAGE_URL, caption: T.welcome(displayName),
-      reply_markup: welcomeKb
-    });
-    if (!photoRes || !photoRes.ok) {
-      await tg('sendMessage', {
-        chat_id: chatId, text: T.welcome(displayName),
-        reply_markup: welcomeKb
-      });
-    }
+    // The EN caption no longer interpolates the name (AdVOLT-style copy,
+    // owner order 2026-11-14); displayName is still composed — escaped —
+    // because the ar/ru texts kept in the file for a possible revert do
+    // use it. tg() runs pz() over the caption, which only wraps emoji.
+    await sendWelcome(chatId, cfg, T, esc(String(from.first_name || '').trim() || T.warrior));
     return;
   }
   // '/start bio' only from here on: the one bot path that checks the
@@ -1479,10 +1524,17 @@ async function adminWd(c) {
   if (!reject && c.cfg.payoutChannel) {
     const url = txHash ? 'https://tonviewer.com/transaction/' + encodeURIComponent(txHash) : 'https://tonviewer.com/' + encodeURIComponent(w.walletAddr);
     const a = String(w.walletAddr);
+    // 'Start Mining Now' points at the direct app link built from the
+    // RESOLVED real username (getMe, via resolveBotUsername) — the
+    // admin-set cfg.botUsername goes stale (owner order 2026-11-14).
+    // Only if no username can be resolved at all do we keep the old
+    // ?startapp construction so the button still renders.
+    const startUname = (await resolveBotUsername(c.cfg)) || String(c.cfg.botUsername || '').replace(/^@/, '').trim();
+    const startUrl = startUname ? `https://t.me/${startUname}/app` : `https://t.me/${c.cfg.botUsername}?startapp`;
     await tg('sendMessage', {
       chat_id: c.cfg.payoutChannel, parse_mode: 'HTML',
       text: `✅ <b>Successful Withdrawal Proof #${w.wdNum} | ${esc(c.cfg.brandTitle)}</b>\n\n🔢 <b>Operation ID:</b> <code>#${w.wdNum}</code>\n👤 <b>Player:</b> ${esc(w.userName)} (<code>${esc(String(w.userId).slice(0, 4))}***</code>)\n💰 <b>Withdrawn Amount:</b> ${w.amt} ${esc(c.cfg.coinSym)}\n💎 <b>Net Sent:</b> ${w.net} ${esc(c.cfg.coinSym)}\n👛 <b>Receiver Wallet:</b> <code>${esc(a.slice(0, 6) + '...' + a.slice(-6))}</code>\n\n@${esc(c.cfg.botUsername)}`,
-      reply_markup: { inline_keyboard: [[{ text: '🔗 View Real TX Link', url }], [{ text: '⚔️ Start Mining Now', url: `https://t.me/${c.cfg.botUsername}?startapp` }]] }
+      reply_markup: { inline_keyboard: [[{ text: '🔗 View Real TX Link', url }], [{ text: '⚔️ Start Mining Now', url: startUrl }]] }
     });
   }
   return { success: true };
