@@ -172,7 +172,7 @@
     #ap-confirm:disabled{filter:grayscale(.8);opacity:.45;cursor:default}
     #avatar-picker .ap-warn{color:#e8a13a;font-size:11.5px;margin-top:10px}
   </style>
-  <link rel="preload" as="image" href="assets/boot_scene.webp?v=3">
+  <link rel="preload" as="image" href="assets/boot_scene.webp?v=4">
   <link rel="preload" as="image" href="assets/hero_tier1.webp">
   <style id="profile-replica">
     /* Profile replica (owner order 2026-11-14): the profile page rebuilt
@@ -240,6 +240,46 @@
     .pf-pill.ok{background:#2e5d33;color:#b9f0c0;border:1px solid #4c8a54}
     .pf-pill.wait{background:#5d4a1f;color:#ffe1a0;border:1px solid #8a6d2f}
     .pf-pill.bad{background:#5d2626;color:#ffb0b0;border:1px solid #8a4040}
+  </style>
+  <style id="friends-replica">
+    /* Friends/referral replica (owner order 2026-11-14): the page
+       rebuilt 1:1 from his reference picture. Scoped to #page-friends. */
+    .fr-banner{position:relative;margin-bottom:12px}
+    .fr-banner img{width:100%;display:block;border-radius:6px}
+    .fr-banner-title{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:Georgia,serif;font-size:20px;font-weight:900;letter-spacing:3px;color:#f5d76e;text-shadow:0 2px 8px rgba(0,0,0,.9),0 0 22px rgba(212,175,55,.35);text-align:center;padding:0 12%}
+    .fr-head{text-align:center;margin-bottom:16px}
+    .fr-head-earn{font-family:Georgia,serif;font-size:16.5px;font-weight:700;color:#e8cf8f}
+    .fr-head-sub{font-size:11.5px;color:#8fa3bd;margin-top:3px}
+    .fr-tablets{display:grid;grid-template-columns:1fr 1fr 1fr;gap:9px;margin-bottom:14px}
+    .fr-tablet{position:relative;background:linear-gradient(180deg,#182741,#0b1322);border:1px solid rgba(212,175,55,.55);border-radius:8px;box-shadow:inset 0 0 0 3px rgba(6,9,16,.85),inset 0 0 18px rgba(0,0,0,.55);padding:15px 4px 11px;text-align:center}
+    .fr-tab-notch{position:absolute;top:-6px;left:50%;width:11px;height:11px;transform:translateX(-50%) rotate(45deg);background:linear-gradient(135deg,#f5d76e,#a97b12);border:1px solid #6e5210;box-shadow:0 2px 6px rgba(0,0,0,.6)}
+    .fr-tablet small{display:block;font-size:9px;font-weight:900;letter-spacing:1.6px;color:#a9bcd8;text-transform:uppercase;margin-bottom:4px}
+    .fr-tab-num{font-family:Georgia,serif;font-size:29px;font-weight:900;color:var(--gold2);line-height:1.05}
+    .fr-num-pending{color:#f5d76e}
+    .fr-sec{background:linear-gradient(180deg,#0d1526,#080d18);border:1px solid rgba(212,175,55,.45);border-radius:8px;padding:13px 13px 14px;margin-bottom:13px}
+    .fr-sec-lbl{font-size:11px;font-weight:900;letter-spacing:2px;color:var(--gold2);text-transform:uppercase;margin-bottom:10px}
+    .fr-link-row{display:flex;gap:8px;direction:ltr}
+    .fr-link-row input{flex:1.25;min-width:0;background:#04070d;border:1px solid rgba(212,175,55,.4);border-radius:7px;color:#9fc3e8;font-size:11px;padding:10px 10px;direction:ltr}
+    .fr-gold-btn{flex:1;background:linear-gradient(180deg,#f5d76e,#c99612);border:2px solid #8a6420;border-radius:8px;color:#231303;font-weight:900;font-size:12px;letter-spacing:.6px;padding:9px 4px;cursor:pointer;box-shadow:0 5px 12px rgba(0,0,0,.55);text-transform:uppercase;white-space:nowrap}
+    .fr-gold-btn:active{transform:scale(.96)}
+    .fr-profits-num{font-family:Georgia,serif;font-size:38px;font-weight:900;color:var(--gold2);text-align:center;margin:2px 0 12px;text-shadow:0 3px 12px rgba(212,175,55,.25)}
+    .fr-collect{width:100%;background:linear-gradient(180deg,#f5d76e,#c99612);border:2px solid #8a6420;border-radius:8px;color:#231303;font-family:Georgia,serif;font-weight:900;font-size:16px;letter-spacing:2.5px;padding:12px;cursor:pointer;box-shadow:0 8px 18px rgba(0,0,0,.6);text-transform:uppercase}
+    .fr-collect:active{transform:scale(.98)}
+    .fr-rule{display:flex;gap:9px;align-items:flex-start;font-size:12px;line-height:1.55;color:#dbe7f5;padding:5px 0}
+    .fr-rule-ic{flex:none;font-size:13px}
+    .fr-friends-head{font-size:11.5px;font-weight:900;letter-spacing:2px;color:var(--gold2);margin:4px 0 9px;text-transform:uppercase}
+    #my-referrals-list{max-height:330px;overflow-y:auto}
+    .fr-row{display:flex;align-items:center;gap:10px;background:linear-gradient(180deg,#101b30,#0a111f);border:1px solid rgba(212,175,55,.3);border-radius:9px;padding:8px 11px;margin-bottom:8px}
+    .fr-ava{width:46px!important;height:46px!important;border-radius:50%!important;border:2px solid rgba(212,175,55,.85)!important;object-fit:cover;flex:none;box-shadow:0 0 0 3px rgba(20,14,4,.9),0 4px 10px rgba(0,0,0,.6)}
+    .fr-row-main{flex:1;min-width:0}
+    .fr-row-name{color:#fff;font-weight:800;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .fr-row-id{font-size:9.5px;color:var(--m);direction:ltr;text-align:left}
+    .fr-pill{font-size:9px;font-weight:900;letter-spacing:.6px;padding:4px 9px;border-radius:20px;flex:none}
+    .fr-pill.ok{background:#2e5d33;color:#b9f0c0;border:1px solid #4c8a54}
+    .fr-pill.wait{background:#232a3a;color:#c7d3e4;border:1px solid #46536b}
+    .fr-pill.bad{background:#5d2626;color:#ffb0b0;border:1px solid #8a4040}
+    .fr-row-profit{display:flex;align-items:center;gap:4px;font-size:12.5px;font-weight:800;color:var(--gold2);flex:none;min-width:64px;justify-content:flex-end}
+    .fr-row-profit img{width:15px;height:15px}
   </style>
   <style id="epic-replica">
     /* Replica pass (owner order 2026-11-14): every page rebuilt from
@@ -329,7 +369,7 @@
 <body oncontextmenu="return false;">
 
   <div id="boot-loader">
-    <img src="assets/boot_scene.webp?v=3" alt="Viking" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;" onerror="this.style.display='none'">
+    <img src="assets/boot_scene.webp?v=4" alt="Viking" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;" onerror="this.style.display='none'">
     <div style="position:absolute;inset:0;background:linear-gradient(180deg, rgba(5,7,11,0.30) 0%, rgba(5,7,11,0) 30%, rgba(5,7,11,0) 52%, rgba(5,7,11,0.60) 100%);"></div>
     <div style="position:relative;z-index:2;width:88%;max-width:340px;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:space-between;padding:36px 0 34px;">
       <img src="assets/boot_plaque.webp?v=3" alt="VIKING MINER" class="boot-plaque" onerror="this.style.display='none'">
@@ -531,36 +571,44 @@
 
     <!-- 4. FRIENDS PAGE -->
     <div id="page-friends" class="page">
-      <div class="card-3d">
-        <h3 style="color:var(--gb);margin-bottom:6px;" data-i18n="ref_rule_title">⚠️ Referral System (5% Mining)</h3>
-        <p style="font-size:11.5px;line-height:1.6;color:#e2e8f0;" data-i18n="ref_rule_desc">
-          1️⃣ Activation: Referral activates when your friend reaches Level 2 (holds 200+ coins from STON.fi).<br>
-          2️⃣ 5% Mining Bonus: Every time your active friend collects their mining, you automatically receive 5% of their mined coins!
-        </p>
+      <!-- Referral replica (owner order 2026-11-14): built 1:1 from his
+           reference picture — carved banner, three stone tablets, link
+           panel, pending-profits plaque, rules card, friend rows.
+           Every pre-existing element id is kept. -->
+      <div class="fr-banner">
+        <img src="assets/ref_banner.webp" alt="">
+        <div class="fr-banner-title" data-i18n="ref_banner_title">REFERRAL SYSTEM</div>
       </div>
-      <div class="grid-3" style="margin-bottom:10px;text-align:center;">
-        <div class="card-3d" style="margin:0;"><small style="color:var(--m);" data-i18n="ref_pending">Pending</small><div style="font-size:16px;font-weight:900;color:#facc15;" id="ref-pending-count">0</div></div>
-        <div class="card-3d" style="margin:0;"><small style="color:var(--m);" data-i18n="ref_verified">Active</small><div style="font-size:16px;font-weight:900;color:#22c55e;" id="ref-verified-count">0</div></div>
-        <div class="card-3d" style="margin:0;"><small style="color:var(--m);" data-i18n="ref_earned">5% Earned</small><div style="font-size:16px;font-weight:900;color:var(--gb);" id="ref-earned-total">0</div></div>
+      <div class="fr-head">
+        <div class="fr-head-earn" data-i18n="ref_head_earn">Earn 5% of your friends mining</div>
+        <div class="fr-head-sub" data-i18n="ref_head_sub">A friend activates at Level 2</div>
       </div>
-      <div class="card-3d">
-        <input type="text" id="ref-link-box" class="input-3d" readonly style="direction:ltr;">
-        <div class="grid-2">
-          <button class="btn-3d-gold" id="btn-copy-ref">📋 <span data-i18n="copy_btn">Copy Link</span></button>
-          <button class="btn-3d-bronze" id="btn-share-ref">🔗 <span data-i18n="share_btn">Share</span></button>
+      <div class="fr-tablets">
+        <div class="fr-tablet"><div class="fr-tab-notch"></div><small data-i18n="ref_pending">Pending</small><div class="fr-tab-num fr-num-pending" id="ref-pending-count">0</div></div>
+        <div class="fr-tablet"><div class="fr-tab-notch"></div><small data-i18n="ref_verified">Active</small><div class="fr-tab-num" id="ref-verified-count">0</div></div>
+        <div class="fr-tablet"><div class="fr-tab-notch"></div><small data-i18n="ref_earned">5% Earned</small><div class="fr-tab-num" id="ref-earned-total">0</div></div>
+      </div>
+      <section class="fr-sec">
+        <div class="fr-sec-lbl">🔗 <span data-i18n="ref_link_lbl">REFERRAL LINK</span></div>
+        <div class="fr-link-row">
+          <input type="text" id="ref-link-box" readonly>
+          <button class="fr-gold-btn" id="btn-copy-ref">📋 <span data-i18n="copy_btn">Copy Link</span></button>
+          <button class="fr-gold-btn" id="btn-share-ref">🔗 <span data-i18n="share_btn">Share</span></button>
         </div>
-      </div>
-      
-      <div class="card-3d">
-        <h4 style="margin-bottom:4px;" data-i18n="pending_ref_title">Pending Referral Profits</h4>
-        <div style="font-size:24px;font-weight:900;color:var(--gb);margin-bottom:8px;" id="pending-ref-comm-display">0.0000</div>
-        <button class="btn-3d-gold" id="btn-collect-ref">💰 <span data-i18n="collect_ref_btn">Collect Referral Profits</span></button>
-      </div>
-
-      <div class="card-3d">
-        <h4 data-i18n="my_referrals_title">👥 My Invited Friends</h4>
-        <div id="my-referrals-list" style="font-size:11.5px;margin-top:6px;max-height:180px;overflow-y:auto;"></div>
-      </div>
+      </section>
+      <section class="fr-sec">
+        <div class="fr-sec-lbl">💰 <span data-i18n="pending_ref_title">Pending Referral Profits</span></div>
+        <div class="fr-profits-num" id="pending-ref-comm-display">0.00</div>
+        <button class="fr-collect" id="btn-collect-ref"><span data-i18n="collect_ref_btn">Collect Referral Profits</span></button>
+      </section>
+      <section class="fr-sec">
+        <div class="fr-sec-lbl">📜 <span data-i18n="ref_how_title">HOW IT WORKS</span></div>
+        <div class="fr-rule"><span class="fr-rule-ic">🎁</span><span data-i18n="ref_rule_100">+100 coins for every ACTIVE referral</span></div>
+        <div class="fr-rule"><span class="fr-rule-ic">⚡</span><span data-i18n="ref_rule_cond">Activation: your friend reaches Level 2 — holding 200+ $VIKING in their wallet</span></div>
+        <div class="fr-rule"><span class="fr-rule-ic">💰</span><span data-i18n="ref_rule_5">You earn 5% of everything your active referrals earn — automatically</span></div>
+      </section>
+      <div class="fr-friends-head">ᚱ <span data-i18n="ref_friends_title">MY INVITED FRIENDS</span></div>
+      <div id="my-referrals-list"></div>
     </div>
 
     <!-- 5. PROFILE PAGE -->
@@ -1204,7 +1252,7 @@
         my_referrals_title:"👥 My Invited Friends", pending_ref_title:"Pending Referral Profits", collect_ref_btn:"Collect Referral Profits",
         ton_wallet_title:"TON Blockchain Wallet", connect_wallet_btn:"Connect TON Wallet",
         sync_hold_btn:"Verify Wallet Hold", disconnect_wallet_btn:"Disconnect",
-        prof_page_title:"PROFILE", prof_username_lbl:"USERNAME", prof_wallet_lbl:"WALLET", prof_amount_lbl:"AMOUNT", buy_stonfi_btn:"Buy on STON.fi", set_sound_lbl:"SOUND", set_lang_lbl:"LANGUAGE",
+        prof_page_title:"PROFILE", prof_username_lbl:"USERNAME", prof_wallet_lbl:"WALLET", prof_amount_lbl:"AMOUNT", buy_stonfi_btn:"Buy on STON.fi", set_sound_lbl:"SOUND", set_lang_lbl:"LANGUAGE", lock_verify:"Verify Your Wallet First", ref_banner_title:"REFERRAL SYSTEM", ref_head_earn:"Earn 5% of your friends mining", ref_head_sub:"A friend activates at Level 2", ref_link_lbl:"REFERRAL LINK", ref_how_title:"HOW IT WORKS", ref_rule_100:"+100 coins for every ACTIVE referral", ref_rule_cond:"Activation: your friend reaches Level 2 — holding 200+ $VIKING in their wallet", ref_rule_5:"You earn 5% of everything your active referrals earn — automatically", ref_friends_title:"MY INVITED FRIENDS", ref_verified_pill:"VERIFIED", ref_pending_pill:"PENDING", ref_dup_pill:"DUPLICATE",
         hold_wallet_lbl:"Wallet Hold", mine_wallet_lbl:"Mined Balance",
         withdraw_title:"Withdraw", min_wd_lbl:"Minimum:", wd_fee_lbl:"Fee (5%):", net_lbl:"Net:",
         hold_cond_lbl:"25% Hold Required:", your_hold_lbl:"Your Hold:", req_wd_btn:"Request Withdrawal",
@@ -1250,7 +1298,7 @@
         my_referrals_title:"👥 أصدقائي المدعوون", pending_ref_title:"أرباح الإحالات المعلقة", collect_ref_btn:"جمع أرباح الإحالات",
         ton_wallet_title:"محفظة شبكة TON", connect_wallet_btn:"ربط محفظة TON الآن",
         sync_hold_btn:"تحديث رصيد المحفظة", disconnect_wallet_btn:"إلغاء الربط",
-        prof_page_title:"الملف الشخصي", prof_username_lbl:"اسم المستخدم", prof_wallet_lbl:"المحفظة", prof_amount_lbl:"المبلغ", buy_stonfi_btn:"اشترِ من STON.fi", set_sound_lbl:"الصوت", set_lang_lbl:"اللغة",
+        prof_page_title:"الملف الشخصي", prof_username_lbl:"اسم المستخدم", prof_wallet_lbl:"المحفظة", prof_amount_lbl:"المبلغ", buy_stonfi_btn:"اشترِ من STON.fi", set_sound_lbl:"الصوت", set_lang_lbl:"اللغة", lock_verify:"قم بتوثيق محفظتك أولاً", ref_banner_title:"نظام الإحالة", ref_head_earn:"اكسب 5% من تعدين أصدقائك", ref_head_sub:"الصديق بيتنشط عند المستوى 2", ref_link_lbl:"رابط الإحالة", ref_how_title:"إزاي بيشتغل", ref_rule_100:"+100 عملة عن كل إحالة نشطة", ref_rule_cond:"التنشيط: صديقك يوصل للمستوى 2 — يعني معاه 200+ $VIKING في محفظته", ref_rule_5:"بتكسب 5% من كل أرباح إحالاتك النشطة — تلقائيًا", ref_friends_title:"أصدقائي المدعوون", ref_verified_pill:"موثّق", ref_pending_pill:"قيد الانتظار", ref_dup_pill:"مكرر",
         hold_wallet_lbl:"عملات المحفظة (Hold)", mine_wallet_lbl:"رصيد التعدين",
         withdraw_title:"سحب", min_wd_lbl:"الحد الأدنى:", wd_fee_lbl:"رسوم (5%):", net_lbl:"الصافي:",
         hold_cond_lbl:"شرط 25% بالمحفظة:", your_hold_lbl:"رصيد محفظتك:", req_wd_btn:"طلب سحب الرصيد",
@@ -1296,7 +1344,7 @@
         my_referrals_title:"👥 Мои рефералы", pending_ref_title:"Ожидаемый доход", collect_ref_btn:"Собрать доход",
         ton_wallet_title:"Кошелек TON", connect_wallet_btn:"Подключить TON Кошелек",
         sync_hold_btn:"Обновить Холд", disconnect_wallet_btn:"Отключить",
-        prof_page_title:"ПРОФИЛЬ", prof_username_lbl:"ИМЯ ПОЛЬЗОВАТЕЛЯ", prof_wallet_lbl:"КОШЕЛЁК", prof_amount_lbl:"СУММА", buy_stonfi_btn:"Купить на STON.fi", set_sound_lbl:"ЗВУК", set_lang_lbl:"ЯЗЫК",
+        prof_page_title:"ПРОФИЛЬ", prof_username_lbl:"ИМЯ ПОЛЬЗОВАТЕЛЯ", prof_wallet_lbl:"КОШЕЛЁК", prof_amount_lbl:"СУММА", buy_stonfi_btn:"Купить на STON.fi", set_sound_lbl:"ЗВУК", set_lang_lbl:"ЯЗЫК", lock_verify:"Сначала подтвердите кошелёк", ref_banner_title:"РЕФЕРАЛЬНАЯ СИСТЕМА", ref_head_earn:"Зарабатывайте 5% от майнинга друзей", ref_head_sub:"Друг активируется на уровне 2", ref_link_lbl:"РЕФЕРАЛЬНАЯ ССЫЛКА", ref_how_title:"КАК ЭТО РАБОТАЕТ", ref_rule_100:"+100 монет за каждого АКТИВНОГО реферала", ref_rule_cond:"Активация: друг достигает уровня 2 — держит 200+ $VIKING в кошельке", ref_rule_5:"Вы получаете 5% от всего заработка активных рефералов — автоматически", ref_friends_title:"МОИ ПРИГЛАШЁННЫЕ ДРУЗЬЯ", ref_verified_pill:"ПОДТВЕРЖДЁН", ref_pending_pill:"ОЖИДАЕТ", ref_dup_pill:"ДУБЛИКАТ",
         hold_wallet_lbl:"В кошельке", mine_wallet_lbl:"Баланс майнинга",
         withdraw_title:"Вывод", min_wd_lbl:"Минимум:", wd_fee_lbl:"Комиссия (5%):", net_lbl:"Чистыми:",
         hold_cond_lbl:"Нужно 25% Холда:", your_hold_lbl:"Ваш Холд:", req_wd_btn:"Запросить вывод",
@@ -2127,18 +2175,16 @@
       box.innerHTML = myReferrals.map(r => {
         const isVer = r.status && r.status.includes("Verified");
         const isDup = r.status && r.status.includes("Duplicate");
-        const badgeColor = isVer ? "#22c55e" : (isDup ? "#ef4444" : "#facc15");
+        const pill = isVer ? `<span class="fr-pill ok">✓ ${dict.ref_verified_pill}</span>` : (isDup ? `<span class="fr-pill bad">${dict.ref_dup_pill}</span>` : `<span class="fr-pill wait">⏳ ${dict.ref_pending_pill}</span>`);
         return `
-          <div style="display:flex;justify-content:space-between;align-items:center;padding:7px 4px;border-bottom:1px solid rgba(255,255,255,0.06);">
-            <img class="ref-ava" src="assets/avatar_${(r.avatar >= 1 && r.avatar <= 8) ? r.avatar : 1}.webp" alt="">
-            <div style="flex:1;">
-              <strong style="color:#fff;">${esc(r.name || "Warrior")}${r.verified ? verifiedBadgeSVG() : ''}</strong>
-              <div style="font-size:10px;color:var(--m);">ID: ${esc(String(r.id).slice(0,5))}***</div>
+          <div class="fr-row">
+            <img class="ref-ava fr-ava" src="assets/avatar_${(r.avatar >= 1 && r.avatar <= 8) ? r.avatar : 1}.webp" alt="">
+            <div class="fr-row-main">
+              <div class="fr-row-name">${esc(r.name || "Warrior")}${r.verified ? verifiedBadgeSVG() : ''}</div>
+              <div class="fr-row-id">ID: ${esc(String(r.id).slice(0,5))}***</div>
             </div>
-            <div style="text-align:right;">
-              <span style="color:${badgeColor};font-weight:800;font-size:11px;">${esc(r.status || "Pending ⏳")}</span>
-              ${r.profit ? `<div style="font-size:10px;color:var(--gb);">+${Number(r.profit).toFixed(2)} ${esc(config.coinSym)}</div>` : ''}
-            </div>
+            ${pill}
+            <div class="fr-row-profit">${r.profit ? `<img src="assets/coin_icon.webp" alt=""> +${Number(r.profit).toFixed(2)}` : ''}</div>
           </div>`;
       }).join('');
     }
@@ -2251,7 +2297,7 @@
       document.getElementById('ref-link-box').value = `https://t.me/${config.botUsername}/app?startapp=ref_${CURRENT_UID}`;
       
       const prcEl = document.getElementById('pending-ref-comm-display');
-      if (prcEl) prcEl.innerText = pendingRefComm.toFixed(4);
+      if (prcEl) prcEl.innerText = pendingRefComm.toFixed(2);
       renderMyReferralsList();
       renderDailyLogin();
 
@@ -2315,6 +2361,7 @@
       const cdRemain = (lastWithdrawTime + 86400000) - Date.now();
       wdCooldownActive = cdRemain > 0;
       if (!linkedWalletAddr) { lockReason = dict.lock_connect; lockKind = 'connect'; }
+      else if (!myWalletVerified) { lockReason = dict.lock_verify; lockKind = 'verify'; }
       else if (cdRemain > 0) {
         const s = Math.ceil(cdRemain / 1000);
         const hh = String(Math.floor(s / 3600)).padStart(2, '0'), mm = String(Math.floor((s % 3600) / 60)).padStart(2, '0'), ss = String(s % 60).padStart(2, '0');
