@@ -172,7 +172,10 @@
     .bottom-nav-3d{bottom:20px}
     /* boot — the approved loading composition */
     .boot-plaque{width:min(300px,88%);filter:drop-shadow(0 12px 24px rgba(0,0,0,.75));-webkit-mask-image:radial-gradient(ellipse 74% 80% at 50% 46%, #000 60%, transparent 98%);mask-image:radial-gradient(ellipse 74% 80% at 50% 46%, #000 60%, transparent 98%)}
-    .boot-panel{width:100%;background:linear-gradient(180deg,#3a2413,#1c1007);border:1px solid rgba(212,175,55,.7);border-bottom:4px solid #04060a;border-radius:14px;padding:14px 18px 12px;text-align:center;box-shadow:0 14px 30px rgba(0,0,0,.65), inset 0 1px 0 rgba(245,215,110,.25)}
+    .boot-panel{position:relative;width:100%;background:repeating-linear-gradient(0deg, rgba(0,0,0,.12) 0 2px, rgba(0,0,0,0) 2px 7px),linear-gradient(180deg,#4a2c14,#2a1708 55%,#1c0f05);border:2px solid #7a4d21;border-radius:8px;padding:16px 22px 13px;text-align:center;box-shadow:0 14px 30px rgba(0,0,0,.65), inset 0 2px 0 rgba(245,215,110,.25), inset 0 -3px 0 rgba(0,0,0,.55), inset 0 0 0 2px #2a1708, inset 0 0 0 4px rgba(212,175,55,.45)}
+    #boot-progress-wrap{background:#140a04!important;border:1px solid #6b4423!important;box-shadow:inset 0 2px 6px rgba(0,0,0,.9), 0 1px 0 rgba(245,215,110,.18);height:12px!important;border-radius:8px!important}
+    #boot-progress{box-shadow:0 0 8px 1px rgba(245,158,11,.75);border-radius:8px}
+    #boot-status-text{color:#e8cf8f!important;font-family:Georgia,'Times New Roman',serif;letter-spacing:2.5px;text-transform:uppercase;font-size:10.5px!important}
     #boot-pct{font-family:Georgia,'Times New Roman',serif;font-size:42px;font-weight:900;color:var(--gold2);text-shadow:0 2px 14px rgba(245,215,110,.45);line-height:1;margin-bottom:10px}
     /* Mine — level ribbon over the hero + arch mined panel */
     #mine-level-ribbon{position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:3;background:linear-gradient(180deg,#3a2413,#1c1007);border:1px solid rgba(212,175,55,.8);color:var(--gold2);font-family:Georgia,'Times New Roman',serif;font-size:11px;font-weight:700;letter-spacing:1.5px;padding:5px 14px;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,.65);white-space:nowrap}
@@ -244,7 +247,7 @@
         <div id="boot-progress-wrap" style="width:100%;height:10px;background:#1e293b;border-radius:10px;overflow:hidden;border:1px solid #f59e0b;">
           <div id="boot-progress" style="width:0%;height:100%;background:linear-gradient(90deg,#ea580c,#f59e0b,#fde047);transition:width 0.15s;"></div>
         </div>
-        <div id="boot-status-text" style="color:#cbd5e1;font-size:11px;margin-top:8px;">Loading...</div>
+        <div id="boot-status-text" style="color:#cbd5e1;font-size:11px;margin-top:8px;">LOADING THE GREAT HALL</div>
         <button id="boot-retry-btn" class="btn-3d-gold" style="display:none;margin-top:14px;">🔄 Retry</button>
       </div>
     </div>
