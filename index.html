@@ -43,6 +43,8 @@
     .live-counter-3d{text-align:center;font-size:24px;font-weight:900;color:var(--gb);font-variant-numeric:tabular-nums;direction:ltr;text-shadow:0 2px 0 #5c2808}
     .btn-3d-gold{width:100%;padding:11px;border-radius:14px;border:none;background:linear-gradient(180deg,#fde047,#f59e0b,#d97706);color:#111827;font-size:13px;font-weight:900;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;box-shadow:0 4px 0 #78350f;border-top:1px solid #fef08a}
     .btn-3d-gold:active{transform:translateY(3px);box-shadow:0 1px 0 #78350f}
+    .btn-3d-gold.btn-wd-locked{background:linear-gradient(180deg,#9ca3af,#6b7280,#4b5563);color:#e5e7eb;box-shadow:0 4px 0 #1f2937;border-top:1px solid #d1d5db;cursor:not-allowed;opacity:.78}
+    .btn-3d-gold.btn-wd-locked:active{transform:none;box-shadow:0 4px 0 #1f2937}
     .btn-done-green{background:linear-gradient(180deg,#4ade80,#22c55e,#16a34a)!important;color:#fff!important;box-shadow:0 4px 0 #14532d!important;border-top:1px solid #bbf7d0!important}
     .btn-done-green:active{box-shadow:0 1px 0 #14532d!important}
     .btn-busy{opacity:.78;pointer-events:none}
@@ -370,7 +372,7 @@
           • <span data-i18n="wd_fee_lbl">Fee (5%):</span> <strong style="color:#f87171;">-<span id="wd-fee-calc">250</span></strong> (<span data-i18n="net_lbl">Net:</span> <strong style="color:#22c55e;" id="wd-net-calc">4,750</strong>)<br>
           • <span data-i18n="hold_cond_lbl">25% Hold Required:</span> <strong style="color:var(--gb);" id="wd-req-hold-num">1,250</strong> (<span data-i18n="your_hold_lbl">Your Hold:</span> <strong id="wd-cur-hold-num">0</strong>)
         </div>
-        <button class="btn-3d-gold" id="btn-request-wd" style="margin-bottom:8px;">↗ <span data-i18n="req_wd_btn">Request Withdrawal</span></button>
+        <button class="btn-3d-gold" id="btn-request-wd" style="margin-bottom:8px;"><span id="wd-btn-arrow">↗</span> <span id="wd-btn-label" data-i18n="req_wd_btn">Request Withdrawal</span></button>
         <button class="btn-3d-bronze btn-stonfi-buy">🪙 <span data-i18n="buy_hold_btn">Buy on STON.fi to Unlock 25% Hold</span></button>
         <button class="btn-3d-bronze btn-tonkeeper-buy" style="margin-top:8px;">💎 <span data-i18n="buy_tonkeeper_btn">Buy on Tonkeeper</span></button>
       </div>
@@ -916,6 +918,7 @@
         hold_wallet_lbl:"Wallet Hold (On-Chain)", mine_wallet_lbl:"Mined Balance",
         withdraw_title:"Withdraw", min_wd_lbl:"Minimum:", wd_fee_lbl:"Fee (5%):", net_lbl:"Net:",
         hold_cond_lbl:"25% Hold Required:", your_hold_lbl:"Your Hold:", req_wd_btn:"Request Withdrawal",
+        lock_connect:"Connect Wallet First", lock_min:"Minimum {n} Required", lock_balance:"Insufficient Balance", lock_hold:"Need {n} in Wallet Hold",
         buy_hold_btn:"Buy on STON.fi to Unlock 25% Hold", buy_tonkeeper_btn:"Buy on Tonkeeper", wd_hist_title:"Withdrawal History",
         verify_title:"Wallet Verification", verify_connected_row:"Wallet connected",
         verify_not_connected:"Connect your wallet above first, then verify it here.",
@@ -958,6 +961,7 @@
         hold_wallet_lbl:"عملات المحفظة (Hold)", mine_wallet_lbl:"رصيد التعدين",
         withdraw_title:"سحب", min_wd_lbl:"الحد الأدنى:", wd_fee_lbl:"رسوم (5%):", net_lbl:"الصافي:",
         hold_cond_lbl:"شرط 25% بالمحفظة:", your_hold_lbl:"رصيد محفظتك:", req_wd_btn:"طلب سحب الرصيد",
+        lock_connect:"اربط المحفظة الأول", lock_min:"الحد الأدنى {n}", lock_balance:"الرصيد مش كافي", lock_hold:"محتاج {n} في محفظتك",
         buy_hold_btn:"اشترِ من STON.fi لتحقيق شرط الـ 25%", buy_tonkeeper_btn:"اشترِ من Tonkeeper", wd_hist_title:"سجل السحوبات",
         verify_title:"توثيق المحفظة", verify_connected_row:"المحفظة مربوطة",
         verify_not_connected:"اربط محفظتك فوق الأول، وبعدين وثّقها من هنا.",
@@ -1000,6 +1004,7 @@
         hold_wallet_lbl:"В кошельке", mine_wallet_lbl:"Баланс майнинга",
         withdraw_title:"Вывод", min_wd_lbl:"Минимум:", wd_fee_lbl:"Комиссия (5%):", net_lbl:"Чистыми:",
         hold_cond_lbl:"Нужно 25% Холда:", your_hold_lbl:"Ваш Холд:", req_wd_btn:"Запросить вывод",
+        lock_connect:"Сначала подключите кошелёк", lock_min:"Минимум: {n}", lock_balance:"Недостаточный баланс", lock_hold:"Нужно {n} на холде",
         buy_hold_btn:"Купить на STON.fi (25% Холд)", buy_tonkeeper_btn:"Купить в Tonkeeper", wd_hist_title:"История выводов",
         verify_title:"Верификация кошелька", verify_connected_row:"Кошелёк подключён",
         verify_not_connected:"Сначала подключите кошелёк выше, затем подтвердите его здесь.",
@@ -1897,6 +1902,7 @@
     }
 
     function updateWdCalculation() {
+      const rawAmt = parseFloat(document.getElementById('wd-input-amt').value) || 0;
       const amt = Math.max(config.minWithdraw, parseFloat(document.getElementById('wd-input-amt').value) || config.minWithdraw);
       const fee = Math.ceil(amt * (config.withdrawFeePercent / 100));
       const reqHold = Math.ceil(amt * (config.holdPercentReq / 100));
@@ -1908,6 +1914,34 @@
       const sb = document.getElementById('wd-unlock-status');
       sb.style.color = (linkedWalletAddr && walletHold >= reqHold) ? "#86efac" : "#fca5a5";
       sb.innerText = (linkedWalletAddr && walletHold >= reqHold) ? "✅ Withdrawal Unlocked!" : `🔒 Locked: Connect Wallet & Hold 25% (${reqHold.toLocaleString()} ${config.coinSym}).`;
+      // Locked-button state (owner order 2026-11-14): when the user cannot
+      // withdraw, the Request button itself greys out, disables, and carries
+      // the FIRST blocking reason. Priority mirrors the server's validation
+      // order as it reads on screen: wallet → minimum (RAW input) → balance
+      // → hold (requirement from the clamped display amount, as painted
+      // above). The label is repainted from the dict on EVERY run — locked
+      // and unlocked — so a language switch (applyTranslations stomps the
+      // span, then applyUI reaches this function last) always ends correct.
+      const wdBtn = document.getElementById('btn-request-wd');
+      const wdLbl = document.getElementById('wd-btn-label');
+      const wdArrow = document.getElementById('wd-btn-arrow');
+      const dict = I18N[currentLang] || I18N.en;
+      let lockReason = '';
+      if (!linkedWalletAddr) lockReason = dict.lock_connect;
+      else if (rawAmt < config.minWithdraw) lockReason = dict.lock_min.replace('{n}', config.minWithdraw.toLocaleString());
+      else if (rawAmt > minedInApp) lockReason = dict.lock_balance;
+      else if (walletHold < reqHold) lockReason = dict.lock_hold.replace('{n}', reqHold.toLocaleString());
+      if (lockReason) {
+        wdBtn.disabled = true;
+        wdBtn.classList.add('btn-wd-locked');
+        wdArrow.style.display = 'none';
+        wdLbl.textContent = '🔒 ' + lockReason;
+      } else {
+        wdBtn.disabled = false;
+        wdBtn.classList.remove('btn-wd-locked');
+        wdArrow.style.display = '';
+        wdLbl.textContent = dict.req_wd_btn;
+      }
     }
 
     function updateLiveMining() {
