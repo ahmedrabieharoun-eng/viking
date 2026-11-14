@@ -69,6 +69,13 @@ const DEFAULTS = {
   // (403, not 503: the app treats 503 as a sleeping-server wake-up
   // and would sit retrying behind the loader instead of showing it.)
   ownerOnly: false,
+  // Tester opening (owner order 2026-11-15): while ownerOnly is on,
+  // these Telegram ids may ALSO use the app and the bot — the owner
+  // is resetting these accounts to zero and re-testing as brand-new
+  // users while everyone else keeps seeing «update in progress».
+  // settings/global can override the list. Admin tools (/withdrawals,
+  // /multi, …) stay strictly OWNER_ID — testers are players.
+  testUsers: [],
   buySwapUrl: 'https://app.ston.fi/swap?chartVisible=false&tt=EQC6uN73kvaKh8LrTHQ8TQ5_vgqheI93iny5XUWkpQL9vjxI&ft=GRAM',
   channel1: 'https://t.me/YGRAM1', channel2: 'https://t.me/telegram', botUsername: 'VIKING_MINER_BOT',
   // Wallet verification (owner order 2026-11-14): the fee is paid to
@@ -630,6 +637,14 @@ async function multiTree(chatId, arg) {
 }
 
 let cfgCache = null;
+// Who may pass the ownerOnly maintenance gate: the owner, plus any
+// Telegram id on the settings/global.testUsers list.
+function isTesterUid(uid, cfg) {
+  if (OWNER_ID && String(uid) === OWNER_ID) return true;
+  const list = (cfg && Array.isArray(cfg.testUsers)) ? cfg.testUsers : [];
+  return list.map(String).includes(String(uid));
+}
+
 async function getConfig() {
   if (cfgCache && Date.now() - cfgCache.t < 20000) return cfgCache.v;
   const s = await getVal(rtdb().ref('settings/global'));
@@ -1810,9 +1825,9 @@ async function handleBotMessage(msg) {
   // Owner-only maintenance (owner order 2026-11-14): while
   // settings/global.ownerOnly is on, a non-owner gets the update
   // notice instead of the welcome / bio flow. Owner unaffected.
-  if (String(from.id) !== OWNER_ID) {
+  {
     const cfgM = await getConfig();
-    if (cfgM.ownerOnly === true) {
+    if (cfgM.ownerOnly === true && !isTesterUid(String(from.id), cfgM)) {
       try { await tg('sendMessage', { chat_id: chatId, text: '🔧 Update in progress — VIKING MINER is being updated right now. Please check back soon!' }); } catch (e) { /* the notice is best-effort */ }
       return;
     }
@@ -3337,7 +3352,7 @@ functions.http('collectMining', async (req, res) => {
     const cfg = await getConfig();
     // Owner-only maintenance gate (owner order 2026-11-14): the app
     // renders its «update in progress» screen off the maintenance flag.
-    if (cfg.ownerOnly === true && uid !== OWNER_ID) return res.status(403).json({ error: 'Update in progress', maintenance: true });
+    if (cfg.ownerOnly === true && !isTesterUid(uid, cfg)) return res.status(403).json({ error: 'Update in progress', maintenance: true });
     const actx = { user: auth.user, startParam: auth.startParam, authDate: auth.authDate, body, cfg, ip };
     let result;
     try {
