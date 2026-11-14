@@ -114,8 +114,24 @@ const getVal = async (ref) => (await ref.once('value')).val();
    the read has synced the node, so fn runs against the real value
    there. Net effect: 'record missing' is only ever decided on a
    value the server confirmed, so a legitimate ensured player can
-   no longer surface a spurious 404/500 from a stale local view. */
-async function txUpdate(ref, fn, _depth = 0) {
+   no longer surface a spurious 404/500 from a stale local view.
+
+   THIRD hardening (live incident 2026-11-14, player 1915163030):
+   the compat SDK's own transaction loop gives up under contention
+   and throws `Error: maxretry` (stack: repoRerunTransactionQueue).
+   Whole-player-record transactions starve whenever the same record
+   absorbs frequent small writes (state's lastSeen refresh, hold
+   syncs, multiLinks), so a verifyCheck claim/flip could lose the
+   race repeatedly and surface as a bare 500 'Server error' — the
+   player's real, correctly-commented payment sat unclaimed while
+   every retry from the app hit the same wall. txUpdate (below) now
+   retries the WHOLE attempt when — and only when — the failure is
+   a maxretry abort: up to 5 attempts total with growing delays.
+   A maxretry abort means the transaction never committed, so
+   re-running fn from scratch is exactly as safe as the SDK's own
+   internal re-runs; every other error keeps the behaviour it has
+   always had (thrown on first sight). */
+async function txUpdateOnce(ref, fn, _depth = 0) {
   let out, err = null, skip = false, decided = false;
   const res = await ref.transaction((cur) => {
     if (cur === undefined) return null; // unseen locally != missing: probe, decide nothing (see above)
@@ -131,12 +147,28 @@ async function txUpdate(ref, fn, _depth = 0) {
     const r = fn(cur) || {};
     if (r.error) throw r.error;
     if (r.skip) return r.out;
-    return txUpdate(ref, fn, _depth + 1);
+    return txUpdateOnce(ref, fn, _depth + 1);
   }
   if (err) throw err;
   if (skip) return out;
   if (!res.committed) throw new Fail(500, 'Server error');
   return out;
+}
+
+const TX_MAXRETRY_DELAYS = [150, 350, 700, 1200]; // ms before retries 1..4 (±25% jitter) — 5 attempts total
+const isMaxRetryError = (e) => /maxretry/i.test(String((e && (e.message || e.code)) || ''));
+const txSleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+async function txUpdate(ref, fn) {
+  for (let attempt = 0; ; attempt++) {
+    try { return await txUpdateOnce(ref, fn, 0); }
+    catch (e) {
+      if (!isMaxRetryError(e) || attempt >= TX_MAXRETRY_DELAYS.length) throw e;
+      const delay = Math.round(TX_MAXRETRY_DELAYS[attempt] * (0.75 + Math.random() * 0.5));
+      const tail = ((ref.parent && ref.parent.key) ? ref.parent.key + '/' : '') + (ref.key || '');
+      console.error('txUpdate maxretry on ' + tail + ' — retry ' + (attempt + 1) + '/' + TX_MAXRETRY_DELAYS.length + ' in ' + delay + 'ms');
+      await txSleep(delay);
+    }
+  }
 }
 
 /* Increment one key of meta/counters atomically and return its new
@@ -411,6 +443,23 @@ async function updateMultiLinks(uid, body) {
   const me = await getVal(ref);
   if (!me) return;
   const ids = (await detectDeviceLinks(uid, body)).sort().slice(0, MULTI_IDS_CAP);
+  /* Contention diet (round 3, incident 2026-11-14): when the stored
+     v2 set already equals the merged set (same ids, same count),
+     skip the write ENTIRELY — do not even start the transaction.
+     The in-transaction skip further down still ran ref.transaction
+     on the whole player node, and under a burst of small writes to
+     that record the compat SDK aborted it with 'maxretry' (16 log
+     lines in the incident window) over a write that would have
+     changed nothing. This pre-check uses the record read above and
+     mirrors the union rule exactly; the in-transaction check stays
+     as the race-safe authority whenever this read was stale in a
+     way that matters (anything not already in the stored set still
+     goes through the transaction). */
+  const storedML = (me.multiLinks && Array.isArray(me.multiLinks.ids)) ? [...new Set(me.multiLinks.ids.map(String))].sort() : null;
+  if (storedML && me.multiLinks.v === 2) {
+    const mergedPre = [...new Set([...storedML, ...ids])].sort();
+    if (mergedPre.length === storedML.length && mergedPre.every((x, i) => x === storedML[i])) return; // unchanged: no write, nothing fresh to alert
+  }
   /* Persist + decide what is "fresh" INSIDE one transaction on the player
      node, against the freshest stored list. The stored list is the alert
      dedupe memory, and this is what makes an alert STRICTLY once per
@@ -1083,6 +1132,12 @@ async function state(c) {
   const dev = clean(c.body.deviceHash, 64);
   const existing = await getVal(ref);
   if (existing) {
+    // Contention diet (round 3, incident 2026-11-14): lastSeen (with
+    // the name/username refresh riding along) is written ONLY when
+    // the stored value is older than 60 s — state is the app's
+    // heartbeat, and an unthrottled write here kept the whole player
+    // record hot enough to starve whole-record transactions into
+    // 'maxretry' aborts. Regression-covered in test_local6 (W4).
     if (Date.now() - (existing.lastSeen || 0) > 60000) await ref.update({ name: clean(c.user.first_name || 'Warrior', 64), username: clean(c.user.username || 'user', 64), lastSeen: Date.now(), ...(dev ? { deviceHash: dev } : {}) });
   } else {
     const sp = String(c.startParam || '').replace(/^ref_/, '').trim();
@@ -1604,9 +1659,19 @@ async function wallet(c) {
   const p = await getVal(ref);
   if (!p) fail(404, 'User not found'); // unreachable after ensurePlayer; kept as a guard
   if (p.banned === true) fail(403, 'Account banned');
-  if (Date.now() - (p.lastSyncAt || 0) < 8000) fail(429, 'Please wait a few seconds');
   const raw = c.body.address ? await rawAddress(String(c.body.address).slice(0, 100)) : p.walletAddr;
   if (!raw) fail(400, 'Connect a wallet first');
+  /* Idempotent re-sync (round 3, incident 2026-11-14): the 8 s sync
+     cooldown guards against bind churn, but a call whose address
+     normalises to the wallet ALREADY bound changes nothing — it is
+     the same sync retried (the app's own hold-sync button, or a
+     re-link attempt for the same wallet after a dropped session).
+     Failing it with 429 made a legitimately bound wallet look
+     rejected and looped the client. Same-wallet calls therefore run
+     the full normal flow below (ownership claim included) minus the
+     cooldown failure; binding a DIFFERENT wallet inside the window
+     still gets the 429 exactly as before. */
+  if (raw !== (p.walletAddr || '') && Date.now() - (p.lastSyncAt || 0) < 8000) fail(429, 'Please wait a few seconds');
   const hold = await jettonHold(raw);
   const need = Number(c.cfg.refMinHold) || 200;
   const uid = String(c.user.id);
@@ -1784,10 +1849,20 @@ async function completeVerification(uid, hash, cfg) {
   if (!prior) {
     // Claim the hash FIRST (atomic): two racing completions for the
     // same payment can never both pass this point.
-    const claimed = await txUpdate(claimRef, (cur) => {
-      if (cur !== null) return { skip: true, out: false };
-      return { value: { userId: uid, at: Date.now() }, out: true };
-    });
+    let claimed;
+    try {
+      claimed = await txUpdate(claimRef, (cur) => {
+        if (cur !== null) return { skip: true, out: false };
+        return { value: { userId: uid, at: Date.now() }, out: true };
+      });
+    } catch (e) {
+      // Distinguishable in the logs (round 3): txUpdate already
+      // retried any maxretry abort internally, so a claim that still
+      // throws is the one failure that strands a REAL payment —
+      // it must never read like a generic completion error.
+      console.error('verify claim FAILED for uid', uid, 'hash', hash, '-', e.message);
+      throw e;
+    }
     if (!claimed) return { won: false, reason: 'claimed' };
   }
   const flip = await txUpdate(ref, (d) => {
@@ -1882,46 +1957,65 @@ async function verifyWatchTick() {
     if (!players) return;
     const pending = Object.entries(players).filter(([, p]) => p && Number(p.verifyPendingAt) > 0);
     if (!pending.length) return; // nobody waiting: zero chain calls this tick
-    const cfg = await getConfig();
-    const minAge = Number(cfg.verifyMinAgeDays) || 7;
-    const feeTon = Number(cfg.verifyFeeTon) || 0;
-    const minNano = BigInt(Math.floor(feeTon * 1e9 * 0.99));
-    const byComment = new Map(); // exact payment comment -> { uid, wallet }
-    for (const [uid, p] of pending) {
-      if (p.banned === true) continue; // stays pending; an unban restores the flow
-      if (p.walletVerified === true || !(p.walletAddr || '')) {
-        // Stale intent (verified by another path, or wallet gone):
-        // just clear the marker so the player leaves the scan set.
-        try { await P(uid).update({ verifyPendingAt: 0 }); } catch (e) { /* next tick retries */ }
-        continue;
+    /* Observability (round 3, incident 2026-11-14): a tick with at
+       least one pending player logs ONE summary line when it ends —
+       how many were pending, how many chain transactions were
+       scanned, and the outcome for every player it skipped or tried
+       to complete (won / reason / error). A stalled verification is
+       therefore visible in the server logs instead of silent: in
+       the incident, a paid player's completion kept dying inside
+       transactions and the watcher said nothing at all. The
+       nobody-pending case above stays completely silent. */
+    let scanned = 0;
+    const notes = [];
+    try {
+      const cfg = await getConfig();
+      const minAge = Number(cfg.verifyMinAgeDays) || 7;
+      const feeTon = Number(cfg.verifyFeeTon) || 0;
+      const minNano = BigInt(Math.floor(feeTon * 1e9 * 0.99));
+      const byComment = new Map(); // exact payment comment -> { uid, wallet }
+      for (const [uid, p] of pending) {
+        if (p.banned === true) { notes.push(uid + ': banned'); continue; } // stays pending; an unban restores the flow
+        if (p.walletVerified === true || !(p.walletAddr || '')) {
+          // Stale intent (verified by another path, or wallet gone):
+          // just clear the marker so the player leaves the scan set.
+          try { await P(uid).update({ verifyPendingAt: 0 }); } catch (e) { /* next tick retries */ }
+          notes.push(uid + ': stale-cleared');
+          continue;
+        }
+        const userNo = await ensureUserNo(uid);
+        if (!userNo) { notes.push(uid + ': no-userNo'); continue; }
+        let age = null;
+        try { age = await walletAgeDays(P(uid), p, p.walletAddr); } catch (e) { /* treated as not-yet-eligible below */ }
+        if (age === null || age < minAge) { notes.push(uid + ': age ' + (age === null ? '?' : age) + '<' + minAge); continue; } // the age rule applies here too — retried as the wallet ages
+        byComment.set(verifyComment(userNo), { uid, wallet: p.walletAddr });
       }
-      const userNo = await ensureUserNo(uid);
-      if (!userNo) continue;
-      let age = null;
-      try { age = await walletAgeDays(P(uid), p, p.walletAddr); } catch (e) { /* treated as not-yet-eligible below */ }
-      if (age === null || age < minAge) continue; // the age rule applies here too — retried as the wallet ages
-      byComment.set(verifyComment(userNo), { uid, wallet: p.walletAddr });
-    }
-    if (!byComment.size) return;
-    const depRaw = toRawAddress(cfg.verifyDepositWallet);
-    const txs = await toncTransactions(depRaw, 50, 'desc');
-    for (const tx of txs) {
-      const inMsg = tx && tx.in_msg;
-      if (!inMsg) continue;
-      const text = decodeTextComment(inMsg);
-      if (!text) continue;
-      const cand = byComment.get(text.trim());
-      if (!cand) continue;
-      if (inMsgSourceRaw(inMsg) !== cand.wallet) continue; // must be sent FROM that player's bound wallet
-      let val;
-      try { val = BigInt(String(inMsg.value || '0')); } catch (e) { continue; }
-      if (val < minNano) continue;
-      const hash = txHashHex(tx.hash);
-      if (!/^[0-9a-fA-F]{64}$/.test(hash)) continue;
-      try {
-        const done = await completeVerification(cand.uid, hash, cfg);
-        if (done.won || done.reason === 'already') byComment.delete(text.trim());
-      } catch (e) { console.error('verifyWatch complete', cand.uid, e.message); } // per-player failure never stops the tick
+      if (!byComment.size) return;
+      const depRaw = toRawAddress(cfg.verifyDepositWallet);
+      const txs = await toncTransactions(depRaw, 50, 'desc');
+      scanned = txs.length;
+      for (const tx of txs) {
+        const inMsg = tx && tx.in_msg;
+        if (!inMsg) continue;
+        const text = decodeTextComment(inMsg);
+        if (!text) continue;
+        const cand = byComment.get(text.trim());
+        if (!cand) continue;
+        if (inMsgSourceRaw(inMsg) !== cand.wallet) continue; // must be sent FROM that player's bound wallet
+        let val;
+        try { val = BigInt(String(inMsg.value || '0')); } catch (e) { continue; }
+        if (val < minNano) continue;
+        const hash = txHashHex(tx.hash);
+        if (!/^[0-9a-fA-F]{64}$/.test(hash)) continue;
+        try {
+          const done = await completeVerification(cand.uid, hash, cfg);
+          if (done.won) notes.push(cand.uid + ': WON ' + hash.slice(0, 10) + '…');
+          else notes.push(cand.uid + ': ' + done.reason);
+          if (done.won || done.reason === 'already') byComment.delete(text.trim());
+        } catch (e) { notes.push(cand.uid + ': ERROR ' + e.message); } // per-player failure never stops the tick (and is in the summary line)
+      }
+    } finally {
+      console.log('[verifyWatch] pending=' + pending.length + ' scanned=' + scanned + (notes.length ? ' | ' + notes.join('; ') : ''));
     }
   } catch (e) {
     console.error('verifyWatch tick', e.message);
@@ -2190,4 +2284,4 @@ functions.http('collectMining', async (req, res) => {
   }
 });
 
-module.exports = { verifyInitData, clientKeys, riskOf, noteSignals, hit, publicConfig, chatIdOf, memberStatus, updateMultiLinks, completeVerification, verifyWatchTick, toFriendlyAddress, fmtDayMonYear };
+module.exports = { verifyInitData, clientKeys, riskOf, noteSignals, hit, publicConfig, chatIdOf, memberStatus, updateMultiLinks, completeVerification, verifyWatchTick, toFriendlyAddress, fmtDayMonYear, txUpdate };
