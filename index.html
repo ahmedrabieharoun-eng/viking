@@ -251,19 +251,20 @@
     .fr-head-earn{font-family:Georgia,serif;font-size:16.5px;font-weight:700;color:#e8cf8f}
     .fr-head-sub{font-size:11.5px;color:#8fa3bd;margin-top:3px}
     .fr-tablets{display:grid;grid-template-columns:1fr 1fr 1fr;gap:9px;margin-bottom:14px}
-    .fr-tablet{position:relative;background:linear-gradient(180deg,#182741,#0b1322);border:1px solid rgba(212,175,55,.55);border-radius:8px;box-shadow:inset 0 0 0 3px rgba(6,9,16,.85),inset 0 0 18px rgba(0,0,0,.55);padding:15px 4px 11px;text-align:center}
-    .fr-tab-notch{position:absolute;top:-6px;left:50%;width:11px;height:11px;transform:translateX(-50%) rotate(45deg);background:linear-gradient(135deg,#f5d76e,#a97b12);border:1px solid #6e5210;box-shadow:0 2px 6px rgba(0,0,0,.6)}
+    .fr-tablet{position:relative;background:url('assets/ref_tablet.webp') center/100% 100% no-repeat;aspect-ratio:380/500;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:10px 4px;text-align:center}
+    .fr-tab-notch{display:none}
     .fr-tablet small{display:block;font-size:9px;font-weight:900;letter-spacing:1.6px;color:#a9bcd8;text-transform:uppercase;margin-bottom:4px}
     .fr-tab-num{font-family:Georgia,serif;font-size:29px;font-weight:900;color:var(--gold2);line-height:1.05}
     .fr-num-pending{color:#f5d76e}
-    .fr-sec{background:linear-gradient(180deg,#0d1526,#080d18);border:1px solid rgba(212,175,55,.45);border-radius:8px;padding:13px 13px 14px;margin-bottom:13px}
+    .fr-sec{background:url('assets/ref_panel.webp') center/100% 100% no-repeat;padding:20px 19px 21px;margin-bottom:13px}
+    .fr-sec-profits{background-image:url('assets/ref_profits.webp');padding:54px 22px 24px}
     .fr-sec-lbl{font-size:11px;font-weight:900;letter-spacing:2px;color:var(--gold2);text-transform:uppercase;margin-bottom:10px}
     .fr-link-row{display:flex;gap:8px;direction:ltr}
     .fr-link-row input{flex:1.25;min-width:0;background:#04070d;border:1px solid rgba(212,175,55,.4);border-radius:7px;color:#9fc3e8;font-size:11px;padding:10px 10px;direction:ltr}
     .fr-gold-btn{flex:1;background:linear-gradient(180deg,#f5d76e,#c99612);border:2px solid #8a6420;border-radius:8px;color:#231303;font-weight:900;font-size:12px;letter-spacing:.6px;padding:9px 4px;cursor:pointer;box-shadow:0 5px 12px rgba(0,0,0,.55);text-transform:uppercase;white-space:nowrap}
     .fr-gold-btn:active{transform:scale(.96)}
     .fr-profits-num{font-family:Georgia,serif;font-size:38px;font-weight:900;color:var(--gold2);text-align:center;margin:2px 0 12px;text-shadow:0 3px 12px rgba(212,175,55,.25)}
-    .fr-collect{width:100%;background:linear-gradient(180deg,#f5d76e,#c99612);border:2px solid #8a6420;border-radius:8px;color:#231303;font-family:Georgia,serif;font-weight:900;font-size:16px;letter-spacing:2.5px;padding:12px;cursor:pointer;box-shadow:0 8px 18px rgba(0,0,0,.6);text-transform:uppercase}
+    .fr-collect{width:100%;background:url('assets/ref_collect.webp') center/100% 100% no-repeat;border:none;color:#3a2403;font-family:Georgia,serif;font-weight:900;font-size:16px;letter-spacing:2.5px;padding:15px 12px;cursor:pointer;text-transform:uppercase;text-shadow:0 1px 0 rgba(255,240,190,.55)}
     .fr-collect:active{transform:scale(.98)}
     .fr-rule{display:flex;gap:9px;align-items:flex-start;font-size:12px;line-height:1.55;color:#dbe7f5;padding:5px 0}
     .fr-rule-ic{flex:none;font-size:13px}
@@ -596,7 +597,7 @@
           <button class="fr-gold-btn" id="btn-share-ref">🔗 <span data-i18n="share_btn">Share</span></button>
         </div>
       </section>
-      <section class="fr-sec">
+      <section class="fr-sec fr-sec-profits">
         <div class="fr-sec-lbl">💰 <span data-i18n="pending_ref_title">Pending Referral Profits</span></div>
         <div class="fr-profits-num" id="pending-ref-comm-display">0.00</div>
         <button class="fr-collect" id="btn-collect-ref"><span data-i18n="collect_ref_btn">Collect Referral Profits</span></button>
@@ -1249,7 +1250,7 @@
         ref_rule_title:"⚠️ Referral System (5% Mining)",
         ref_rule_desc:"1️⃣ Activation: Referral activates when your friend reaches Level 2 (holds 200+ coins).<br>2️⃣ 5% Mining Bonus: Every time your active friend collects, you get 5%!",
         ref_pending:"Pending", ref_verified:"Active", ref_earned:"5% Earned", copy_btn:"Copy Link", share_btn:"Share",
-        my_referrals_title:"👥 My Invited Friends", pending_ref_title:"Pending Referral Profits", collect_ref_btn:"Collect Referral Profits",
+        my_referrals_title:"👥 My Invited Friends", pending_ref_title:"Pending Referral Profits", collect_ref_btn:"COLLECT",
         ton_wallet_title:"TON Blockchain Wallet", connect_wallet_btn:"Connect TON Wallet",
         sync_hold_btn:"Verify Wallet Hold", disconnect_wallet_btn:"Disconnect",
         prof_page_title:"PROFILE", prof_username_lbl:"USERNAME", prof_wallet_lbl:"WALLET", prof_amount_lbl:"AMOUNT", buy_stonfi_btn:"Buy on STON.fi", set_sound_lbl:"SOUND", set_lang_lbl:"LANGUAGE", lock_verify:"Verify Your Wallet First", ref_banner_title:"REFERRAL SYSTEM", ref_head_earn:"Earn 5% of your friends mining", ref_head_sub:"A friend activates at Level 2", ref_link_lbl:"REFERRAL LINK", ref_how_title:"HOW IT WORKS", ref_rule_100:"+100 coins for every ACTIVE referral", ref_rule_cond:"Activation: your friend reaches Level 2 — holding 200+ $VIKING in their wallet", ref_rule_5:"You earn 5% of everything your active referrals earn — automatically", ref_friends_title:"MY INVITED FRIENDS", ref_verified_pill:"VERIFIED", ref_pending_pill:"PENDING", ref_dup_pill:"DUPLICATE",
