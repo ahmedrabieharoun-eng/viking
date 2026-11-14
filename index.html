@@ -71,8 +71,6 @@
     .nav-item.active{color:#111827;background:linear-gradient(180deg,#fde047,#f59e0b);box-shadow:0 3px 0 #78350f;transform:translateY(-2px)}
     .admin-wrap{direction:ltr;text-align:left}
     .admin-wrap label{display:block;font-size:10.5px;color:#cbd5e1;margin-bottom:2px}
-    .adm-tab{background:#111827;border:1px solid #334155;color:#94a3b8;padding:8px 4px;border-radius:10px;font-size:11px;font-weight:800;text-align:center;cursor:pointer}
-    .adm-tab.active{background:var(--gb);color:#000}
     .user-row-card{background:#090d16;border:1px solid #1e293b;border-radius:14px;padding:10px;margin-bottom:8px}
     .user-row-card.suspect{border-color:#f59e0b}
     .user-row-card.banned{border-color:#ef4444;opacity:.8}
@@ -87,18 +85,92 @@
     .daily-box.claimed{background:#10b981;color:#fff;border-color:#10b981}
     .daily-box .day-num{font-weight:900;font-size:11px;margin-bottom:2px;display:block}
   </style>
+  <style id="epic-redesign">
+    /* ===== VIKING EPIC REDESIGN (owner-approved set 2026-11-14) =====
+       Visual layer only: same ids, classes, handlers and layout flow.
+       One system: deep-navy stone panels, carved dark wood, gold trim,
+       parchment reserved for the Tasks board. */
+    :root{--gold:#d4af37;--gold2:#f5d76e;--stone1:#1c2942;--stone2:#0c1424;--wood1:#3a2413;--wood2:#1c1007;--sat:0px}
+    html,body{background:radial-gradient(120% 60% at 50% -10%,rgba(245,158,11,.14),transparent 60%),radial-gradient(100% 50% at 50% 115%,rgba(245,158,11,.10),transparent 60%),linear-gradient(180deg,#0a1120,#05070d 30%,#04060a);color:#f3ead2}
+    .app-shell{padding:calc(10px + var(--sat)) 12px 86px}
+    .top-bar{background:linear-gradient(180deg,#41260f,#241305);border:1px solid rgba(212,175,55,.55);border-top:1px solid var(--gold2);border-bottom:3px solid #0a0502;border-radius:14px;box-shadow:0 6px 16px rgba(0,0,0,.7),inset 0 1px 0 rgba(245,215,110,.35)}
+    .brand-logo-3d{font-family:Georgia,'Times New Roman',serif;font-style:normal;letter-spacing:1.5px;background:linear-gradient(180deg,#fff7d6,#f5d76e 55%,#b8860b);-webkit-background-clip:text;-webkit-text-fill-color:transparent;filter:drop-shadow(0 2px 0 #3a2403)}
+    .icon-3d{background:linear-gradient(180deg,#2a3550,#141f36);border:1px solid rgba(212,175,55,.4);border-bottom:3px solid #05070c;color:var(--gold2);border-radius:10px}
+    .card-3d{background:linear-gradient(165deg,var(--stone1),var(--stone2));border:1px solid rgba(212,175,55,.45);border-top:2px solid rgba(245,215,110,.65);border-bottom:4px solid #04060a;border-radius:14px;box-shadow:0 8px 18px rgba(0,0,0,.65),inset 0 1px 0 rgba(255,255,255,.05)}
+    .sub-3d{background:linear-gradient(180deg,#0a1120,#101a2e);border:1px solid rgba(212,175,55,.22);border-top:2px solid #030509;border-radius:10px}
+    .btn-3d-gold{background:linear-gradient(180deg,#f7dc6f,#d4af37 45%,#9a7418);border:1px solid #f7dc6f;color:#23160a;box-shadow:0 4px 0 #4a3205,0 8px 16px rgba(0,0,0,.55),inset 0 1px 0 #fff8dc;border-radius:12px;letter-spacing:.3px}
+    .btn-3d-gold:active{box-shadow:0 1px 0 #4a3205}
+    .btn-3d-bronze{background:linear-gradient(180deg,#5a3a1a,#33200c);color:var(--gold2);border:1px solid rgba(212,175,55,.5);box-shadow:0 4px 0 #170b02;border-radius:12px}
+    .btn-3d-dark{background:linear-gradient(180deg,#232f47,#101828);border:1px solid rgba(212,175,55,.3);color:#e8dfc8;box-shadow:0 3px 0 #04060a;border-radius:11px}
+    .btn-3d-dark.tier-active{border-color:var(--gold2);color:#0f0a02;background:linear-gradient(180deg,#f7dc6f,#c39a2e);box-shadow:0 3px 0 #4a3205,0 0 14px rgba(212,175,55,.45)}
+    .btn-3d-danger{background:linear-gradient(180deg,#a02c22,#6d1a12);border:1px solid rgba(255,180,150,.35);box-shadow:0 4px 0 #2a0703;border-radius:12px}
+    .input-3d{background:#070c16;border:1px solid rgba(212,175,55,.4);border-radius:10px;color:#f7ead0}
+    .prog-bg-3d{background:#05080f;border:1px solid rgba(212,175,55,.4);height:12px}
+    .prog-fill-3d{background:linear-gradient(90deg,#b8860b,#f5d76e,#f7dc6f);box-shadow:0 0 10px rgba(245,215,110,.7)}
+    /* bottom nav: carved wood bar + medallion icons (owner pick: icon + label) */
+    .bottom-nav-3d{height:72px;background:linear-gradient(180deg,#41260f,#1d1005);border:1px solid rgba(212,175,55,.55);border-top:2px solid rgba(245,215,110,.6);border-bottom:4px solid #0a0502;border-radius:16px;box-shadow:0 12px 28px rgba(0,0,0,.85)}
+    .nav-item{color:#cdbd93;font-size:9.5px;gap:2px;padding:4px 0}
+    .nav-item .nav-ic{width:40px;height:40px;border-radius:50%;object-fit:cover;box-shadow:0 3px 8px rgba(0,0,0,.6);transition:all .15s}
+    .nav-item.active{color:var(--gold2);background:none;box-shadow:none;transform:none}
+    .nav-item.active .nav-ic{box-shadow:0 0 0 2px var(--gold2),0 0 18px rgba(245,215,110,.85);transform:translateY(-3px) scale(1.06)}
+    /* Mine hero panel (character by tier; tap = collect, same trigger) */
+    .coin-stage-3d{width:100%;height:min(300px,36dvh);margin:4px auto 2px;border-radius:14px;overflow:hidden;border:1px solid rgba(212,175,55,.6);border-bottom:4px solid #04060a;box-shadow:0 10px 22px rgba(0,0,0,.7);perspective:none;cursor:pointer}
+    .coin-stage-3d .coin-aura{display:none}
+    #hero-img{width:100%;height:100%;object-fit:cover;object-position:50% 22%;display:block;animation:heroBreath 7s ease-in-out infinite}
+    @keyframes heroBreath{0%,100%{transform:scale(1)}50%{transform:scale(1.045)}}
+    .coin-stage-3d:active #hero-img{transform:scale(1.02)}
+    .live-counter-3d{color:var(--gold2);text-shadow:0 0 14px rgba(245,215,110,.45),0 2px 0 #3a2403}
+    /* Tasks board: parchment scrolls (owner-approved) */
+    #page-tasks .card-3d{background:linear-gradient(172deg,#efdfae,#e0c78d 55%,#cdb27a);border:1px solid #8a6d35;border-top:2px solid #f7ecc4;border-bottom:4px solid #5d4517;color:#2e2010;box-shadow:0 8px 18px rgba(0,0,0,.6)}
+    #page-tasks .card-3d h4{color:#3a2a10!important}
+    #page-tasks .card-3d p{color:#5a4520!important}
+    #page-tasks .card-3d strong{color:#7a5410!important}
+    #page-tasks #ref-ach-list div{color:#5a4520!important}
+    #page-tasks #ref-ach-list [style*="color:var(--gb)"]{color:#7a5410!important}
+    #page-tasks .daily-box{background:linear-gradient(180deg,#24334f,#131f36);border-color:rgba(212,175,55,.5);color:#d8c491}
+    #page-tasks .daily-box.active{border-color:#8a6d35;background:linear-gradient(180deg,#f7dc6f,#c39a2e);color:#23160a}
+    #page-tasks .daily-box.claimed{background:linear-gradient(180deg,#3f9e57,#256b38);color:#fff;border-color:#1d552c}
+    /* Levels */
+    .miner-card-3d{background:linear-gradient(165deg,var(--stone1),var(--stone2));border:1px solid rgba(212,175,55,.4);border-bottom:4px solid #04060a;border-radius:13px}
+    .miner-card-3d.active-lvl{border-color:var(--gold2);box-shadow:0 0 20px rgba(212,175,55,.5)}
+    .miner-art-3d{background:radial-gradient(circle at 50% 32%,#5a3a10,#0a0f1c 82%);border:1px solid rgba(212,175,55,.45)}
+    #boost-hero{width:100%;height:118px;object-fit:cover;object-position:50% 20%;border-radius:10px;border:1px solid rgba(212,175,55,.55);display:block;margin-bottom:9px}
+    /* Friends */
+    .ref-ava{width:38px;height:38px;border-radius:50%;object-fit:cover;border:2px solid rgba(212,175,55,.75);flex:none;margin-right:8px;background:#131f36}
+    body.rtl-mode .ref-ava{margin-right:0;margin-left:8px}
+    /* Profile */
+    #prof-avatar{width:58px;height:58px;border-radius:50%;object-fit:cover;border:2px solid var(--gold);box-shadow:0 0 12px rgba(212,175,55,.4);flex:none;background:#131f36}
+    /* Boot / loading (longship art + carved slot progress) */
+    #boot-loader{background:#04060a}
+    #boot-loader .boot-title{background:linear-gradient(180deg,#41260f,#241305);border:1px solid rgba(212,175,55,.65);border-radius:12px;padding:10px 14px;font-family:Georgia,'Times New Roman',serif;letter-spacing:1.5px}
+    #boot-progress-wrap{border:1px solid rgba(212,175,55,.55)!important;background:#0a0f18!important;box-shadow:inset 0 3px 8px rgba(0,0,0,.9);height:14px!important}
+    #boot-progress{background:linear-gradient(90deg,#b8860b,#f5d76e,#f7dc6f)!important;box-shadow:0 0 12px rgba(245,215,110,.8)}
+    #boot-loader{padding-top:var(--sat)}
+    #boot-loader svg[width="64"]{display:none}
+    .lvl-pill-tag{z-index:3}
+    /* Avatar picker overlay */
+    #avatar-picker{position:fixed;inset:0;z-index:100001;background:rgba(3,5,9,.96);display:none;flex-direction:column;align-items:center;justify-content:center;padding:22px;text-align:center}
+    #avatar-picker.show{display:flex}
+    #avatar-picker .ap-title{font-family:Georgia,serif;color:var(--gold2);font-size:21px;font-weight:900;letter-spacing:1px;margin-bottom:6px;text-shadow:0 2px 10px rgba(212,175,55,.4)}
+    #avatar-picker .ap-sub{color:#cdbd93;font-size:12.5px;margin-bottom:18px}
+    #avatar-picker .ap-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;max-width:340px;width:100%}
+    #avatar-picker .ap-tile{border-radius:50%;border:3px solid rgba(212,175,55,.35);overflow:hidden;cursor:pointer;padding:0;background:#131f36;transition:all .15s}
+    #avatar-picker .ap-tile img{width:100%;height:100%;object-fit:cover;display:block;aspect-ratio:1}
+    #avatar-picker .ap-tile:active{transform:scale(.94)}
+    #avatar-picker .ap-tile.picked{border-color:var(--gold2);box-shadow:0 0 20px rgba(245,215,110,.9)}
+  </style>
 </head>
 <body oncontextmenu="return false;">
 
   <div id="boot-loader">
-    <img src="viking-boot.jpg" alt="Viking" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0.15;filter:blur(4px);" onerror="this.style.display='none'">
+    <img src="assets/loading_bg.webp" alt="Viking" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0.95;" onerror="this.style.display='none'">
     <div style="position:absolute;inset:0;background:radial-gradient(circle, rgba(5,7,11,0.4) 0%, rgba(5,7,11,0.95) 100%);"></div>
     <div style="position:relative;z-index:2;width:80%;max-width:300px;">
       <div style="margin-bottom:15px;">
         <svg width="64" height="64" viewBox="0 0 24 24" fill="none"><path d="M12 2L4 5v6.09c0 5.05 3.41 9.76 8 10.91 4.59-1.15 8-5.86 8-10.91V5l-8-3z" fill="#f59e0b" stroke="#fde047" stroke-width="1.5"/></svg>
       </div>
-      <div style="color:var(--gb);font-weight:900;font-size:22px;margin-bottom:15px;text-shadow:0 2px 10px #f59e0b;">$VIKING MINER</div>
-      <div style="width:100%;height:10px;background:#1e293b;border-radius:10px;overflow:hidden;border:1px solid #f59e0b;">
+      <div class="boot-title" style="color:var(--gb);font-weight:900;font-size:22px;margin-bottom:15px;text-shadow:0 2px 10px #f59e0b;">$VIKING MINER</div>
+      <div id="boot-progress-wrap" style="width:100%;height:10px;background:#1e293b;border-radius:10px;overflow:hidden;border:1px solid #f59e0b;">
         <div id="boot-progress" style="width:0%;height:100%;background:linear-gradient(90deg,#ea580c,#f59e0b,#fde047);transition:width 0.15s;"></div>
       </div>
       <div id="boot-status-text" style="color:#cbd5e1;font-size:11px;margin-top:8px;">Loading...</div>
@@ -116,6 +188,21 @@
     <div style="font-size:58px;">🔧</div>
     <h2 style="color:var(--gb);margin:8px 0;" data-i18n="maint_title">Update in progress</h2>
     <p style="color:#94a3b8;font-size:13px;max-width:300px;line-height:1.5;" data-i18n="maint_sub">We are updating VIKING MINER right now. Please check back soon!</p>
+  </div>
+
+  <div id="avatar-picker">
+    <div class="ap-title" data-i18n="avatar_title">Choose your warrior</div>
+    <div class="ap-sub" data-i18n="avatar_sub">Pick your avatar — it becomes your identity everywhere in the game.</div>
+    <div class="ap-grid">
+      <button class="ap-tile" data-avatar="1"><img src="assets/avatar_1.webp" alt=""></button>
+      <button class="ap-tile" data-avatar="2"><img src="assets/avatar_2.webp" alt=""></button>
+      <button class="ap-tile" data-avatar="3"><img src="assets/avatar_3.webp" alt=""></button>
+      <button class="ap-tile" data-avatar="4"><img src="assets/avatar_4.webp" alt=""></button>
+      <button class="ap-tile" data-avatar="5"><img src="assets/avatar_5.webp" alt=""></button>
+      <button class="ap-tile" data-avatar="6"><img src="assets/avatar_6.webp" alt=""></button>
+      <button class="ap-tile" data-avatar="7"><img src="assets/avatar_7.webp" alt=""></button>
+      <button class="ap-tile" data-avatar="8"><img src="assets/avatar_8.webp" alt=""></button>
+    </div>
   </div>
 
   <div id="toast">Notification</div>
@@ -166,12 +253,7 @@
 
       <div>
         <div class="coin-stage-3d" id="coin-3d-trigger">
-          <div class="coin-aura"></div>
-          <div class="viking-coin-3d">
-            <div class="coin-inner-3d" style="overflow:hidden;padding:0;">
-              <img src="viking-coin.webp" alt="$VIKING" style="width:100%;height:100%;object-fit:cover;border-radius:50%;display:block;">
-            </div>
-          </div>
+          <img id="hero-img" src="assets/hero_tier1.webp" alt="Viking">
         </div>
         <div class="live-counter-3d">+<span id="live-mined-num">0.000000</span></div>
       </div>
@@ -261,6 +343,7 @@
     <!-- 3. BOOST PAGE -->
     <div id="page-boost" class="page">
       <div class="card-3d">
+        <img id="boost-hero" src="assets/hero_tier1.webp" alt="">
         <div style="display:flex;justify-content:space-between;margin-bottom:6px;">
           <h2 id="boost-lvl-header">Level 1</h2>
           <span class="badge-tag" style="background:#b45309;" id="boost-rank-badge">Shieldbearers</span>
@@ -324,14 +407,12 @@
 
     <!-- 5. PROFILE PAGE -->
     <div id="page-profile" class="page">
-      <div class="card-3d" style="display:flex;justify-content:space-between;align-items:center;">
+      <div class="card-3d" style="display:flex;gap:12px;align-items:center;">
+        <img id="prof-avatar" src="assets/avatar_1.webp" alt="">
         <div>
           <h3 id="prof-name">MANSAWY</h3>
           <div style="font-size:11.5px;color:var(--m);direction:ltr;" id="prof-username">@mansawy1</div>
           <div style="font-size:10.5px;color:#64748b;direction:ltr;" id="prof-id">ID 7216746593</div>
-        </div>
-        <div class="icon-3d">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M5 16L3 5l5.5 5L12 4l3.5 6L21 5l-2 11H5zm14 3c0 .6-.4 1-1 1H6c-.6 0-1-.4-1-1v-1h14v1z"/></svg>
         </div>
       </div>
 
@@ -393,113 +474,26 @@
     </div>
 
     <!-- 6. OWNER ADMIN PANEL -->
-    <div id="page-admin" class="page admin-wrap">
-      <div class="card-3d">
-        <div style="display:flex;justify-content:space-between;margin-bottom:8px;">
-          <h3 style="color:var(--gb);font-size:15px;">🛡️ Owner Admin Panel</h3>
-          <button class="btn-3d-dark" id="btn-close-admin" style="width:auto;padding:4px 10px;">Close ✕</button>
-        </div>
-        <div class="grid-3" style="margin-bottom:10px;">
-          <div class="adm-tab active" id="atab-btn-users">👥 Users</div>
-          <div class="adm-tab" id="atab-btn-wd">💸 Withdrawals</div>
-          <div class="adm-tab" id="atab-btn-set">⚙️ Settings</div>
-        </div>
-
-        <div id="adm-sub-users">
-          <div class="grid-3" style="margin-bottom:8px;text-align:center;font-size:11px;">
-            <div class="sub-3d">Total: <strong id="stat-total-users">0</strong></div>
-            <div class="sub-3d" style="color:#f59e0b;">Suspect: <strong id="stat-suspect-users">0</strong></div>
-            <div class="sub-3d" style="color:#ef4444;">Banned: <strong id="stat-banned-users">0</strong></div>
-          </div>
-          <div class="sub-3d" style="text-align:center;font-size:11px;margin-bottom:8px;color:#38bdf8;">Active (24h): <strong id="stat-active-users">0</strong></div>
-          <input type="text" id="adm-user-search" class="input-3d" placeholder="🔍 Search by name or ID...">
-          <div class="grid-3" style="margin-bottom:8px;">
-            <button class="btn-3d-dark adm-filter-btn" data-filter="all">All</button>
-            <button class="btn-3d-dark adm-filter-btn" data-filter="suspect" style="color:#f59e0b;">⚠️ Suspects</button>
-            <button class="btn-3d-dark adm-filter-btn" data-filter="banned" style="color:#ef4444;">🚫 Banned</button>
-          </div>
-          <div id="adm-users-container"></div>
-        </div>
-
-        <div id="adm-sub-wd" style="display:none;">
-          <p style="font-size:11px;color:var(--m);margin-bottom:8px;">Click (Pay) to open your wallet, then (Confirm) to post proof. Or click (Reject) to refund the user.</p>
-          <div id="adm-wd-requests-list">No withdrawal requests.</div>
-        </div>
-
-        <div id="adm-sub-set" style="display:none;">
-          <div class="grid-2">
-            <div><label>Bot Name:</label><input type="text" id="adm-title" class="input-3d"></div>
-            <div><label>Coin Symbol:</label><input type="text" id="adm-sym" class="input-3d"></div>
-          </div>
-          <div class="grid-2">
-            <div><label style="color:var(--gb);">Level 1 Daily Profit:</label><input type="number" step="0.5" id="adm-lvl1-day" class="input-3d"></div>
-            <div><label style="color:var(--gb);">Level 100 Profit (Auto):</label><input type="text" id="adm-lvl100-day" class="input-3d" readonly style="background:#1e293b;color:#94a3b8;"></div>
-          </div>
-          <div class="grid-3">
-            <div><label style="color:#38bdf8;">Task Reward:</label><input type="number" id="adm-task-rew" class="input-3d"></div>
-          </div>
-          <div class="grid-3">
-            <div><label style="color:#38bdf8;">Bio Task Reward:</label><input type="number" id="adm-bio-rew" class="input-3d"></div>
-            <div><label style="color:#38bdf8;">Ref Milestone: 1 Active:</label><input type="number" id="adm-refach1" class="input-3d"></div>
-            <div><label style="color:#38bdf8;">Ref Milestone: 10 Active:</label><input type="number" id="adm-refach10" class="input-3d"></div>
-          </div>
-          <div class="grid-3">
-            <div><label style="color:#38bdf8;">Ref Milestone: 25 Active:</label><input type="number" id="adm-refach25" class="input-3d"></div>
-            <div><label style="color:#38bdf8;">Ref Milestone: 50 Active:</label><input type="number" id="adm-refach50" class="input-3d"></div>
-            <div><label style="color:#38bdf8;">Ref Milestone: 100 Active:</label><input type="number" id="adm-refach100" class="input-3d"></div>
-          </div>
-          <div class="grid-2">
-            <div><label>Referral Mining %:</label><input type="number" id="adm-ref-pct" class="input-3d"></div>
-            <div><label>Referral Activation Hold (Lvl 2 = 200):</label><input type="number" id="adm-ref-minhold" class="input-3d"></div>
-          </div>
-          <div class="grid-3">
-            <div><label>Min Withdraw:</label><input type="number" id="adm-minwd" class="input-3d"></div>
-            <div><label>Withdraw Hold %:</label><input type="number" id="adm-holdpct" class="input-3d"></div>
-            <div><label>Withdraw Fee %:</label><input type="number" id="adm-wdfee-pct" class="input-3d"></div>
-          </div>
-          <label style="color:#22c55e;">👛 Payout Wallet Address:</label>
-          <input type="text" id="adm-payout-wallet" class="input-3d" placeholder="UQ..." style="direction:ltr;">
-          <div class="grid-2">
-            <div><label>🤖 Bot token: kept on the server only</label></div>
-            <div><label>📢 Payout Channel (@...):</label><input type="text" id="adm-payout-ch" class="input-3d" style="direction:ltr;" placeholder="@YGRAM1"></div>
-          </div>
-          <div class="grid-2">
-            <div><label>🆔 Admin Chat ID (for alerts):</label><input type="text" id="adm-admin-chat" class="input-3d" style="direction:ltr;" placeholder="7216746593"></div>
-            <div><label>📢 Channel 1 (Tasks):</label><input type="text" id="adm-ch1" class="input-3d" style="direction:ltr;"></div>
-          </div>
-          <div class="grid-2">
-            <div><label>📢 Channel 2 (Tasks):</label><input type="text" id="adm-ch2" class="input-3d" style="direction:ltr;"></div>
-            <div><label>👤 Bot Username (no @):</label><input type="text" id="adm-botuser" class="input-3d" style="direction:ltr;"></div>
-          </div>
-          <div class="grid-2">
-            <div><label>Your Mined Balance:</label><input type="number" id="adm-minebal" class="input-3d"></div>
-            <div><label>Your Hold Balance:</label><input type="number" id="adm-holdbal" class="input-3d"></div>
-          </div>
-          <button class="btn-3d-gold" id="btn-save-admin">💾 Save & Apply to All Users</button>
-        </div>
-      </div>
-    </div>
-  </div>
 
   <div class="bottom-nav-3d">
     <div class="nav-item active" data-tab="mine">
-      <svg viewBox="0 0 24 24"><path d="M14.5 2.5L20 8l-1.5 1.5-1.8-1.8-3.2 3.2 4.9 4.9-1.4 1.4-4.9-4.9-6.6 6.6-1.4-1.4 6.6-6.6L5.8 6l1.4-1.4 4.9 4.9 3.2-3.2-1.8-1.8L14.5 2.5z"/></svg>
+      <img class="nav-ic" src="assets/nav_mine.webp" alt="">
       <span data-i18n="nav_mine">Mine</span>
     </div>
     <div class="nav-item" data-tab="tasks">
-      <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-9 14l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+      <img class="nav-ic" src="assets/nav_tasks.webp" alt="">
       <span data-i18n="nav_tasks">Tasks</span>
     </div>
     <div class="nav-item" data-tab="boost">
-      <svg viewBox="0 0 24 24"><path d="M7 2v11h3v9l7-12h-4l4-8z"/></svg>
+      <img class="nav-ic" src="assets/nav_boost.webp" alt="">
       <span data-i18n="nav_boost">Boost</span>
     </div>
     <div class="nav-item" data-tab="friends">
-      <svg viewBox="0 0 24 24"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>
+      <img class="nav-ic" src="assets/nav_friends.webp" alt="">
       <span data-i18n="nav_friends">Friends</span>
     </div>
     <div class="nav-item" data-tab="profile">
-      <svg viewBox="0 0 24 24"><path d="M5 16L3 5l5.5 5L12 4l3.5 6L21 5l-2 11H5zm14 3c0 .6-.4 1-1 1H6c-.6 0-1-.4-1-1v-1h14v1z"/></svg>
+      <img class="nav-ic" src="assets/nav_profile.webp" alt="">
       <span data-i18n="nav_profile">Profile</span>
     </div>
   </div>
@@ -832,6 +826,29 @@
     const safeOpen = u => { try { const x = new URL(String(u)); if (x.protocol === "https:") window.open(x.href, "_blank"); } catch (e) {} };
     const tg = window.Telegram?.WebApp;
     if (tg) { tg.expand(); tg.ready(); }
+    // Fullscreen + Telegram overlay safe area (owner order
+    // 2026-11-14): the app fills the whole screen; Telegram then
+    // shows only its floating ✕ / ⋮ icons over it, and the shell
+    // pads itself by the reported content safe area (--sat) so no
+    // app content ever hides underneath those icons.
+    function applySafeArea() {
+      let top = 0;
+      try {
+        const c = (tg && tg.contentSafeAreaInset) || {}, s = (tg && tg.safeAreaInset) || {};
+        top = Math.max(Number(c.top) || 0, Number(s.top) || 0);
+        if (!top && tg && tg.isFullscreen) top = 48;
+      } catch (e) { /* older clients */ }
+      document.documentElement.style.setProperty('--sat', top + 'px');
+    }
+    try {
+      if (tg && typeof tg.requestFullscreen === 'function') tg.requestFullscreen();
+      if (tg && typeof tg.onEvent === 'function') {
+        tg.onEvent('fullscreenChanged', applySafeArea);
+        tg.onEvent('safeAreaChanged', applySafeArea);
+        tg.onEvent('contentSafeAreaChanged', applySafeArea);
+      }
+    } catch (e) { /* not running inside Telegram */ }
+    applySafeArea();
     // Ask once for permission to message the user: direct-link users never
     // send /start, so this grant is what lets the bot deliver the welcome
     // (and future notices) to them. Silent no-op where unsupported.
@@ -896,11 +913,130 @@
         });
       } catch (e) {}
     }
+    /* ---- Viking soundscape (owner order 2026-11-14) ----
+       Button sounds retuned to the world: a soft wooden knock for
+       clicks, a coin shimmer for collecting, a low horn swell for
+       success, a frame-drum thud for errors — plus a generative
+       ambient track (deep drone + wind + slow pads + sparse plucks)
+       that starts on the first touch and follows the sound toggle.
+       Kept deliberately quiet: calm and epic, never annoying. */
+    function ac() {
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      return audioCtx;
+    }
+    function noiseBuffer(ctx) {
+      if (noiseBuffer._b) return noiseBuffer._b;
+      const b = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
+      const d = b.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+      return (noiseBuffer._b = b);
+    }
+    function woodTap() {
+      if (!soundEnabled) return;
+      try {
+        const ctx = ac(), t = ctx.currentTime;
+        const src = ctx.createBufferSource(); src.buffer = noiseBuffer(ctx);
+        const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 850; bp.Q.value = 1.1;
+        const g = ctx.createGain(); g.gain.setValueAtTime(0.20, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.07);
+        src.connect(bp); bp.connect(g); g.connect(ctx.destination); src.start(t); src.stop(t + 0.09);
+        const o = ctx.createOscillator(), og = ctx.createGain();
+        o.type = 'sine'; o.frequency.setValueAtTime(150, t); o.frequency.exponentialRampToValueAtTime(70, t + 0.08);
+        og.gain.setValueAtTime(0.12, t); og.gain.exponentialRampToValueAtTime(0.001, t + 0.09);
+        o.connect(og); og.connect(ctx.destination); o.start(t); o.stop(t + 0.1);
+      } catch (e) {}
+    }
+    function coinShimmer() {
+      if (!soundEnabled) return;
+      try {
+        const ctx = ac(), t = ctx.currentTime;
+        [2093, 2637, 3520].forEach((f, i) => {
+          const o = ctx.createOscillator(), g = ctx.createGain();
+          o.type = 'sine'; o.frequency.value = f;
+          const s = t + i * 0.055;
+          g.gain.setValueAtTime(0.0001, s); g.gain.exponentialRampToValueAtTime(0.07, s + 0.012); g.gain.exponentialRampToValueAtTime(0.001, s + 0.34);
+          o.connect(g); g.connect(ctx.destination); o.start(s); o.stop(s + 0.36);
+        });
+      } catch (e) {}
+    }
+    function hornSwell() {
+      if (!soundEnabled) return;
+      try {
+        const ctx = ac(), t = ctx.currentTime;
+        const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.Q.value = 2;
+        lp.frequency.setValueAtTime(280, t); lp.frequency.linearRampToValueAtTime(880, t + 0.34); lp.frequency.linearRampToValueAtTime(300, t + 0.62);
+        const g = ctx.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.045, t + 0.16); g.gain.exponentialRampToValueAtTime(0.001, t + 0.66);
+        lp.connect(g); g.connect(ctx.destination);
+        [110, 164.8, 220].forEach((f) => { const o = ctx.createOscillator(); o.type = 'sawtooth'; o.frequency.value = f * 1.003; o.connect(lp); o.start(t); o.stop(t + 0.7); });
+      } catch (e) {}
+    }
+    function drumThud(vol) {
+      if (!soundEnabled) return;
+      try {
+        const ctx = ac(), t = ctx.currentTime;
+        const o = ctx.createOscillator(), g = ctx.createGain();
+        o.type = 'sine'; o.frequency.setValueAtTime(120, t); o.frequency.exponentialRampToValueAtTime(46, t + 0.16);
+        g.gain.setValueAtTime(vol || 0.20, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.22);
+        o.connect(g); g.connect(ctx.destination); o.start(t); o.stop(t + 0.24);
+      } catch (e) {}
+    }
+    const Ambience = {
+      on: false, nodes: [], timer: null, step: 0,
+      start() {
+        if (this.on || !soundEnabled) return;
+        let ctx; try { ctx = ac(); } catch (e) { return; }
+        this.on = true;
+        const master = ctx.createGain(); master.gain.value = 0.14; master.connect(ctx.destination);
+        this.nodes.push(master);
+        const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 210; lp.connect(master);
+        [55, 82.41].forEach((f) => { const o = ctx.createOscillator(); o.type = 'sine'; o.frequency.value = f; o.connect(lp); o.start(); this.nodes.push(o); });
+        const wsrc = ctx.createBufferSource(); wsrc.buffer = noiseBuffer(ctx); wsrc.loop = true;
+        const wbp = ctx.createBiquadFilter(); wbp.type = 'bandpass'; wbp.Q.value = 0.6; wbp.frequency.value = 480;
+        const wg = ctx.createGain(); wg.gain.value = 0.05;
+        const lfo = ctx.createOscillator(); lfo.frequency.value = 0.07; const lfoG = ctx.createGain(); lfoG.gain.value = 180;
+        lfo.connect(lfoG); lfoG.connect(wbp.frequency);
+        const lfo2 = ctx.createOscillator(); lfo2.frequency.value = 0.045; const lfo2G = ctx.createGain(); lfo2G.gain.value = 0.022;
+        lfo2.connect(lfo2G); lfo2G.connect(wg.gain);
+        wsrc.connect(wbp); wbp.connect(wg); wg.connect(master); wsrc.start(); lfo.start(); lfo2.start();
+        this.nodes.push(wsrc, lfo, lfo2);
+        const scale = [220, 261.63, 293.66, 329.63, 392, 440];
+        const roots = [110, 87.31, 130.81, 98];
+        this.timer = setInterval(() => {
+          if (!this.on) return;
+          const s = this.step++, t = ctx.currentTime;
+          if (s % 16 === 0) {
+            const root = roots[((s / 16) | 0) % 4];
+            [1, 1.5, 2].forEach((m) => {
+              const o = ctx.createOscillator(); o.type = 'triangle'; o.frequency.value = root * m;
+              const g = ctx.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(0.05, t + 2.2); g.gain.linearRampToValueAtTime(0.0001, t + 7.8);
+              o.connect(g); g.connect(master); o.start(t); o.stop(t + 8);
+            });
+            drumThud(0.05);
+          }
+          if (s % 4 === 2 && Math.random() < 0.62) {
+            const f = scale[(Math.random() * scale.length) | 0];
+            const o = ctx.createOscillator(); o.type = 'sine'; o.frequency.value = f;
+            const o2 = ctx.createOscillator(); o2.type = 'sine'; o2.frequency.value = f * 2;
+            const g = ctx.createGain(); g.gain.setValueAtTime(0.055, t); g.gain.exponentialRampToValueAtTime(0.001, t + 1.4);
+            const g2 = ctx.createGain(); g2.gain.setValueAtTime(0.018, t); g2.gain.exponentialRampToValueAtTime(0.001, t + 0.7);
+            o.connect(g); o2.connect(g2); g.connect(master); g2.connect(master);
+            o.start(t); o.stop(t + 1.5); o2.start(t); o2.stop(t + 0.8);
+          }
+        }, 800);
+      },
+      stop() {
+        this.on = false;
+        if (this.timer) { clearInterval(this.timer); this.timer = null; }
+        this.nodes.forEach((n) => { try { if (n.stop) n.stop(); } catch (e) {} try { n.disconnect(); } catch (e) {} });
+        this.nodes = [];
+      },
+      sync() { if (soundEnabled) this.start(); else this.stop(); }
+    };
     const SoundFX = {
-      collect: () => playTone([987, 1318, 1567], 'triangle', 0.22),
-      buySuccess: () => playTone([523, 659, 783, 1046], 'sine', 0.28),
-      click: () => playTone([620], 'sine', 0.04),
-      error: () => playTone([160, 115], 'sawtooth', 0.22)
+      collect: () => { coinShimmer(); },
+      buySuccess: () => { hornSwell(); setTimeout(coinShimmer, 120); },
+      click: () => { woodTap(); },
+      error: () => { drumThud(0.22); }
     };
 
     const I18N = {
@@ -909,6 +1045,7 @@
         streak_txt:"🔥 24h Shift Rule", streak_sub:"Collect every 24h to keep mining",
         collect_btn:"COLLECT 24H MINING", buy_btn:"Buy", levels_btn:"Levels (1–100)",
         maint_title:"Update in progress", maint_sub:"We are updating VIKING MINER right now. Please check back soon!",
+        avatar_title:"Choose your warrior", avatar_sub:"Pick your avatar — it becomes your identity everywhere in the game.",
         ch1_title:"📢 Official Telegram Channel", ch2_title:"💬 Payouts & Community Channel",
         open_ch:"1. Open Channel", open_grp:"1. Open Group", verify_btn:"2. Verify ✅",
         bio_task_desc:"Add <strong id=\"bio-bot-username\" style=\"color:#fff;\">@BOT</strong> to your Telegram bio, then tap the button below and press Start in the bot — your reward is added automatically. Come back here and it will show as done.",
@@ -953,6 +1090,7 @@
         streak_txt:"🔥 نظام الـ 24 ساعة", streak_sub:"اجمع كل 24 ساعة ليستمر التعدين",
         collect_btn:"اجمع عملات التعدين الآن", buy_btn:"شراء", levels_btn:"المستويات (1–100)",
         maint_title:"جارٍ التحديث", maint_sub:"بنحدّث VIKING MINER دلوقتي. ارجع تاني قريب!",
+        avatar_title:"اختر المحارب بتاعك", avatar_sub:"اختار الأفاتار — دي هتبقى هويتك في اللعبة كلها.",
         ch1_title:"📢 قناة التليجرام الرسمية", ch2_title:"💬 قناة إثباتات السحب والمجتمع",
         open_ch:"1. افتح القناة", open_grp:"1. افتح القناة", verify_btn:"2. تحقق ✅",
         bio_task_desc:"أضف <strong id=\"bio-bot-username\" style=\"color:#fff;\">@BOT</strong> إلى البايو بتاعك في تيليجرام، وبعدين دوس الزرار اللي تحت ودوس Start في البوت — المكافأة هتتضاف تلقائيًا. ارجع هنا هتلاقيها اتعملت.",
@@ -997,6 +1135,7 @@
         streak_txt:"🔥 Цикл 24 часа", streak_sub:"Собирайте каждые 24ч",
         collect_btn:"СОБРАТЬ МОНЕТЫ", buy_btn:"Купить", levels_btn:"Уровни (1–100)",
         maint_title:"Идёт обновление", maint_sub:"Мы обновляем VIKING MINER прямо сейчас. Загляните чуть позже!",
+        avatar_title:"Выберите воина", avatar_sub:"Выберите аватар — он станет вашим образом во всей игре.",
         ch1_title:"📢 Официальный канал", ch2_title:"💬 Канал выплат",
         open_ch:"1. Открыть", open_grp:"1. Открыть", verify_btn:"2. Проверить ✅",
         bio_task_desc:"Добавьте <strong id=\"bio-bot-username\" style=\"color:#fff;\">@BOT</strong> в био вашего Telegram, затем нажмите кнопку ниже и нажмите Start в боте — награда добавится автоматически. Вернитесь сюда, и задание будет отмечено выполненным.",
@@ -1047,13 +1186,11 @@
     }
 
     function getLevelArtSVG(lvl) {
-      if (lvl <= 30) {
-        return `<svg width="46" height="46" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="26" fill="#78350f" stroke="#fde047" stroke-width="4"/><circle cx="32" cy="32" r="19" fill="#451a03" stroke="#f59e0b" stroke-width="2" stroke-dasharray="4 3"/><path d="M32 6v52M6 32h52" stroke="#fde047" stroke-width="3"/><circle cx="32" cy="32" r="7" fill="#fde047" stroke="#92400e" stroke-width="2"/></svg>`;
-      } else if (lvl <= 70) {
-        return `<svg width="46" height="46" viewBox="0 0 64 64" fill="none"><path d="M14 52L50 16M50 52L14 16" stroke="#d97706" stroke-width="5" stroke-linecap="round"/><path d="M42 10c8 2 12 8 10 16-6-2-10-6-10-16zM22 10c-8 2-12 8-10 16 6-2 10-6 10-16z" fill="#fde047" stroke="#f59e0b" stroke-width="2"/><circle cx="32" cy="34" r="6" fill="#fde047"/></svg>`;
-      } else {
-        return `<svg width="46" height="46" viewBox="0 0 64 64" fill="none"><path d="M12 28C6 20 8 10 16 8c-2 8 2 14 8 16M52 28c6-8 4-18-4-20 2 8-2 14-8 16" stroke="#fde047" stroke-width="4" stroke-linecap="round"/><path d="M18 32c0-10 6-16 14-16s14 6 14 16v14H18V32z" fill="#f59e0b" stroke="#fde047" stroke-width="3"/><path d="M32 16v28M18 36h28" stroke="#451a03" stroke-width="4"/></svg>`;
-      }
+      // Redesign: level cards carry the painted tier portrait (same
+      // three heroes as the Mine panel / Boost banner) instead of the
+      // old emblem SVGs. Name kept — renderLevelsGrid calls it as-is.
+      const tier = lvl <= 30 ? 1 : (lvl <= 70 ? 2 : 3);
+      return `<img src="assets/hero_tier${tier}.webp" alt="" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:50% 16%;border-radius:11px;">`;
     }
 
     const defaultConfig = {
@@ -1089,6 +1226,7 @@
     let refCommissionEarned = 0;
     let invitedById = null, refBonusPaid = false;
     let wdHistory = [], myReferrals = [], usersDB = [], allWithdrawalsDB = [], currentUserFilter = 'all';
+    let myAvatar = 0; // redesign: chosen painted avatar (0 = not chosen yet)
     let dailyStreak = 0;
     let lastDailyCheckIn = 0;
     let isCollecting = false;
@@ -1361,6 +1499,7 @@
       invitedById = d.invitedBy || null;
       refBonusPaid = !!d.refBonusPaid;
       myReferrals = d.referrals || [];
+      myAvatar = Number(d.avatar) || 0;
       task1Done = !!d.task1Done;
       task2Done = !!d.task2Done;
       bioTaskDone = !!d.bioTaskDone;
@@ -1392,6 +1531,26 @@
           await new Promise((res) => setTimeout(res, BOOT_RETRY_WAITS[i]));
         }
       }
+    }
+    // Redesign avatar picker (owner pick 3): shown once, right after
+    // the first state load, while the player has no avatar yet.
+    let avatarPickBusy = false;
+    function maybeShowAvatarPicker() {
+      if (myAvatar >= 1 && myAvatar <= 8) return;
+      const pk = document.getElementById('avatar-picker'); if (pk) pk.classList.add('show');
+    }
+    async function pickAvatar(n, tile) {
+      if (avatarPickBusy) return; avatarPickBusy = true;
+      document.querySelectorAll('#avatar-picker .ap-tile').forEach(t => t.classList.remove('picked'));
+      if (tile) tile.classList.add('picked');
+      try {
+        const r = await api('setAvatar', { n });
+        myAvatar = r.avatar;
+        const pav = document.getElementById('prof-avatar'); if (pav) pav.src = `assets/avatar_${r.avatar}.webp`;
+        SoundFX.buySuccess();
+        setTimeout(() => { const pk = document.getElementById('avatar-picker'); if (pk) pk.classList.remove('show'); }, 500);
+      } catch (err) { SoundFX.error(); showToast("❌ " + err.message, "#ef4444"); if (tile) tile.classList.remove('picked'); }
+      finally { avatarPickBusy = false; }
     }
     function showMaintenance() {
       const bl = document.getElementById('boot-loader'); if (bl) bl.style.display = 'none';
@@ -1778,7 +1937,8 @@
         const badgeColor = isVer ? "#22c55e" : (isDup ? "#ef4444" : "#facc15");
         return `
           <div style="display:flex;justify-content:space-between;align-items:center;padding:7px 4px;border-bottom:1px solid rgba(255,255,255,0.06);">
-            <div>
+            <img class="ref-ava" src="assets/avatar_${(r.avatar >= 1 && r.avatar <= 8) ? r.avatar : 1}.webp" alt="">
+            <div style="flex:1;">
               <strong style="color:#fff;">${esc(r.name || "Warrior")}${r.verified ? verifiedBadgeSVG() : ''}</strong>
               <div style="font-size:10px;color:var(--m);">ID: ${esc(String(r.id).slice(0,5))}***</div>
             </div>
@@ -1905,6 +2065,11 @@
       document.getElementById('prof-name').innerHTML = esc(tgUser.first_name || "MANSAWY") + (myWalletVerified ? verifiedBadgeSVG() : '');
       document.getElementById('prof-username').innerText = tgUser.username ? "@" + tgUser.username : "@user";
       document.getElementById('prof-id').innerText = "ID " + CURRENT_UID;
+      // Redesign (owner pick 3+4): the chosen painted avatar IS the
+      // identity image; a player who never picked gets the picker.
+      const pavEl = document.getElementById('prof-avatar');
+      if (pavEl) pavEl.src = `assets/avatar_${(myAvatar >= 1 && myAvatar <= 8) ? myAvatar : 1}.webp`;
+      maybeShowAvatarPicker();
 
       const isConn = linkedWalletAddr && linkedWalletAddr.length > 8;
       document.getElementById('prof-wallet-addr-display').innerText = isConn ? shortAddr(linkedWalletAddr) : "Not connected";
@@ -1971,6 +2136,7 @@
       const { cur } = getCurrentLevelObj();
       const dict = I18N[currentLang] || I18N.en;
       const perSec = cur.perDay / 86400;
+      syncTierArt(cur.level);
       
       if (Date.now() < lastCollectTime - 60000) lastCollectTime = Date.now();
 
@@ -1994,6 +2160,17 @@
         statusDot.innerText = "● Active (24h Cycle)";
         statusDot.style.color = "#22c55e";
       }
+    }
+
+    // Redesign: the hero portrait (Mine panel + Boost banner) follows
+    // the player's tier — 1 Shieldbearer / 2 Berserker / 3 Valhalla King.
+    let lastTierArt = 0;
+    function syncTierArt(level) {
+      const tier = level <= 30 ? 1 : (level <= 70 ? 2 : 3);
+      if (tier === lastTierArt) return; lastTierArt = tier;
+      const src = `assets/hero_tier${tier}.webp`;
+      const h = document.getElementById('hero-img'); if (h) h.src = src;
+      const b = document.getElementById('boost-hero'); if (b) b.src = src;
     }
 
     async function collectMining(e) {
@@ -2056,113 +2233,6 @@
       box.innerHTML = wdHistory.map(w => `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.06);direction:ltr;"><span><strong>Withdrawal #${esc(w.wdNum || 1)}</strong> · ${esc(w.status)} (Net: ${esc(w.net)})</span><strong style="color:#ef4444;">-${esc(w.amt)} 🪙</strong></div>`).join('');
     }
 
-    function isSuspect(u) { return usersDB.filter(x => x.deviceHash && x.deviceHash === u.deviceHash).length > 1; }
-    
-    function renderAdminUsersList() {
-      const q = (document.getElementById('adm-user-search')?.value || "").toLowerCase();
-      document.getElementById('stat-total-users').innerText = usersDB.length;
-      document.getElementById('stat-suspect-users').innerText = usersDB.filter(isSuspect).length;
-      document.getElementById('stat-banned-users').innerText = usersDB.filter(u => u.banned).length;
-      document.getElementById('stat-active-users').innerText = usersDB.filter(u => u.lastSeen && (Date.now() - u.lastSeen < 24 * 60 * 60 * 1000)).length;
-
-      const list = usersDB.filter(u => ((u.name||"").toLowerCase().includes(q) || String(u.id).includes(q)) && (currentUserFilter==='all' || (currentUserFilter==='suspect'&&isSuspect(u)) || (currentUserFilter==='banned'&&u.banned)));
-      const box = document.getElementById('adm-users-container');
-      box.innerHTML = list.map(u => `<div class="user-row-card ${isSuspect(u)?'suspect':''} ${u.banned?'banned':''}"><div style="display:flex;justify-content:space-between;margin-bottom:6px;"><div><strong>${esc(u.name)}${u.walletVerified ? verifiedBadgeSVG() : ''}</strong> (${esc(u.id)})<div style="font-size:10px;color:#94a3b8;">Last active: ${timeAgo(u.lastSeen)} · Hold: ${Math.floor(u.hold||0)} · Refs: ${(u.referrals||[]).length}</div></div><span class="badge-tag" style="background:${u.banned?'#ef4444':'#10b981'};">${u.banned?'Banned 🚫':'Active ✅'}</span></div><div class="grid-2"><button class="btn-3d-dark adm-ed" data-id="${esc(u.id)}">➕/➖ Balance (${Math.floor(u.mined||0)})</button><button class="btn-3d-dark adm-bn" data-id="${esc(u.id)}" style="color:${u.banned?'#22c55e':'#ef4444'};">${u.banned?'✅ Unban':'🚫 Ban'}</button></div></div>`).join('');
-      
-      box.querySelectorAll('.adm-ed').forEach(b => b.addEventListener('click', async () => {
-        const v = prompt("Enter amount (+ to add, - to subtract):");
-        if (v === null || isNaN(parseFloat(v))) return;
-        try { await api("adminAdjust", { id: b.getAttribute('data-id'), amount: parseFloat(v) }); showToast("✅ Balance updated!"); await loadAdminData(); }
-        catch (err) { showToast("❌ " + err.message, "#ef4444"); }
-      }));
-      box.querySelectorAll('.adm-bn').forEach(b => b.addEventListener('click', async () => {
-        const uid = b.getAttribute('data-id'), u = usersDB.find(x => String(x.id) === String(uid));
-        if (!u) return;
-        try { await api("adminBan", { id: uid, banned: !u.banned }); await loadAdminData(); }
-        catch (err) { showToast("❌ " + err.message, "#ef4444"); }
-      }));
-    }
-
-    let adminCfg = null;
-    async function loadAdminData() {
-      const j = await api("adminState");
-      usersDB = j.players || []; allWithdrawalsDB = j.withdrawals || []; adminCfg = j.config || null;
-      renderAdminUsersList(); renderAdminWithdrawals();
-    }
-
-    async function processPayout(w, isReject) {
-      try {
-        const txHash = isReject ? "" : (prompt("Enter TX Hash (Optional):") || "");
-        await api("adminWd", { docId: w.docId, decision: isReject ? "reject" : "pay", txHash });
-        if (isReject) { SoundFX.error(); showToast("❌ Withdrawal rejected & refunded."); }
-        else { SoundFX.buySuccess(); showToast("✅ Payout confirmed!"); }
-        await loadAdminData();
-      } catch (error) { showToast("Error: " + error.message, "#ef4444"); }
-    }
-
-    function riskHtml(w) {
-      const r = w.risk;
-      if (!r) return "";
-      const col = r.level === 'high' ? '#ef4444' : r.level === 'medium' ? '#f59e0b' : '#22c55e';
-      const lab = r.level === 'high' ? '🚨 احتمال تعدد حسابات: عالي' : r.level === 'medium' ? '⚠️ احتمال تعدد حسابات: متوسط' : '✅ مفيش مؤشرات تعدد';
-      const lines = (r.reasons || []).map(x => `<div>• ${esc(x)}</div>`).join('');
-      const rows = (r.linked || []).map(l => `<div>👤 ${esc(l.name)}${l.verified ? verifiedBadgeSVG() : ''} (${esc(l.id)}) · ${esc((l.via || []).join('، '))}${l.banned ? ' 🚫' : ''} · ${Math.floor(Number(l.mined) || 0)}</div>`).join('');
-      return `<div style="font-size:10.5px;border:1px solid ${col};border-radius:8px;padding:6px;margin-bottom:8px;color:#e2e8f0;direction:rtl;text-align:right;"><strong style="color:${col}">${lab}</strong>${lines}${rows}</div>`;
-    }
-
-    function renderAdminWithdrawals() {
-      const box = document.getElementById('adm-wd-requests-list');
-      if (!allWithdrawalsDB.length) { box.innerHTML = "No withdrawal requests."; return; }
-      allWithdrawalsDB.sort((a, b) => (b.wdNum || 0) - (a.wdNum || 0));
-      box.innerHTML = allWithdrawalsDB.map(w => `
-        <div class="user-row-card">
-          <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
-            <strong>🔢 #${esc(w.wdNum)} — ${esc(w.userName)}${w.userVerified ? verifiedBadgeSVG() : ''}</strong>
-            <span style="color:${w.status.includes('Paid') ? '#22c55e' : (w.status.includes('Rejected') ? '#ef4444' : 'var(--gb)')};font-weight:800;">${esc(w.status)}</span>
-          </div>
-          <div style="font-size:10px;color:var(--m);word-break:break-all;direction:ltr;margin-bottom:6px;">${esc(friendlyAddr(w.walletAddr))}</div>
-          <div style="font-size:11.5px;margin-bottom:8px;">Amount: ${esc(w.amt)} · <strong>Net: ${esc(w.net)} ${esc(config.coinSym)}</strong></div>
-          ${riskHtml(w)}
-          ${w.status.includes('Pending') ? `
-          <div class="grid-3">
-            <button class="btn-3d-gold adm-wd-pay" data-id="${esc(w.docId)}" style="padding:7px;font-size:10px;">💸 Pay</button>
-            <button class="btn-3d-dark adm-wd-ok" data-id="${esc(w.docId)}" style="padding:7px;font-size:10px;color:#22c55e;">✅ Confirm</button>
-            <button class="btn-3d-danger adm-wd-no" data-id="${esc(w.docId)}" style="padding:7px;font-size:10px;">❌ Reject</button>
-            <button class="btn-3d-dark adm-wd-ban" data-id="${esc(w.docId)}" style="padding:7px;font-size:10px;color:#ef4444;grid-column:1/-1;">🚫 Ban user</button>
-          </div>` : ''}
-        </div>`).join('');
-
-      box.querySelectorAll('.adm-wd-ban').forEach(b => b.addEventListener('click', async () => {
-        const item = allWithdrawalsDB.find(x => x.docId === b.getAttribute('data-id'));
-        if (!item || !confirm('Ban ' + item.userName + '?')) return;
-        try { await api('adminBan', { id: item.userId, banned: true }); showToast('🚫 User banned'); await loadAdminData(); } catch (err) { showToast('❌ ' + err.message, '#ef4444'); }
-      }));
-      box.querySelectorAll('.adm-wd-pay').forEach(b => b.addEventListener('click', () => {
-        const item = allWithdrawalsDB.find(x => x.docId === b.getAttribute('data-id'));
-        if (item) window.open(`ton://transfer/${encodeURIComponent(item.walletAddr)}?jetton=${OFFICIAL_JETTON}&amount=${Math.floor(item.net * 1e9)}`, '_blank');
-      }));
-      box.querySelectorAll('.adm-wd-ok').forEach(b => b.addEventListener('click', () => {
-        const item = allWithdrawalsDB.find(x => x.docId === b.getAttribute('data-id'));
-        if (item) processPayout(item, false);
-      }));
-      box.querySelectorAll('.adm-wd-no').forEach(b => b.addEventListener('click', () => {
-        const item = allWithdrawalsDB.find(x => x.docId === b.getAttribute('data-id'));
-        if (item) processPayout(item, true);
-      }));
-    }
-
-    const ADMIN_FIELDS = { 'adm-title':'brandTitle','adm-sym':'coinSym','adm-lvl1-day':'lvl1PerDay','adm-task-rew':'taskReward','adm-bio-rew':'bioReward','adm-refach1':'refAchReward1','adm-refach10':'refAchReward10','adm-refach25':'refAchReward25','adm-refach50':'refAchReward50','adm-refach100':'refAchReward100','adm-ref-pct':'refClaimPercent','adm-ref-minhold':'refMinHold','adm-minwd':'minWithdraw','adm-holdpct':'holdPercentReq','adm-wdfee-pct':'withdrawFeePercent','adm-payout-wallet':'payoutWallet','adm-payout-ch':'payoutChannel','adm-admin-chat':'adminChatId','adm-ch1':'channel1','adm-ch2':'channel2','adm-botuser':'botUsername' };
-    async function openOwnerDashboard() {
-      if (CURRENT_UID !== OWNER_UID) return showToast("❌ Access Denied! (Owner Only)", "#ef4444");
-      try { await loadAdminData(); } catch (err) { return showToast("❌ " + err.message, "#ef4444"); }
-      const c = adminCfg || config;
-      for (const [id, key] of Object.entries(ADMIN_FIELDS)) document.getElementById(id).value = c[key] ?? "";
-      document.getElementById('adm-lvl100-day').value = LEVELS_DATA[99].perDay;
-      document.getElementById('adm-minebal').value = Math.floor(minedInApp);
-      document.getElementById('adm-holdbal').value = Math.floor(walletHold);
-      ['adm-minebal', 'adm-holdbal'].forEach(id => document.getElementById(id).disabled = true);
-      switchTab('admin');
-    }
 
     function switchTab(id) {
       SoundFX.click();
@@ -2180,14 +2250,13 @@
     }
 
     // Event Listeners
-    document.getElementById('sound-toggle-btn').addEventListener('click', () => { soundEnabled = !soundEnabled; document.getElementById('sound-toggle-btn').style.opacity = soundEnabled ? "1" : "0.45"; });
+    document.getElementById('sound-toggle-btn').addEventListener('click', () => { soundEnabled = !soundEnabled; document.getElementById('sound-toggle-btn').style.opacity = soundEnabled ? "1" : "0.45"; Ambience.sync(); });
+    document.addEventListener('pointerdown', () => Ambience.sync(), { once: true });
     document.getElementById('lang-menu-btn').addEventListener('click', e => { e.stopPropagation(); document.getElementById('lang-dropdown').classList.toggle('show'); });
     document.querySelectorAll('.lang-opt').forEach(o => o.addEventListener('click', e => { e.stopPropagation(); currentLang = o.getAttribute('data-lang'); localStorage.setItem('vk_lang', currentLang); document.getElementById('lang-dropdown').classList.remove('show'); applyUI(); }));
     document.addEventListener('click', () => document.getElementById('lang-dropdown').classList.remove('show'));
     document.getElementById('top-wallet-shortcut').addEventListener('click', () => switchTab('profile'));
 
-    let taps = 0, tapT = null;
-    document.getElementById('ui-brand-title').addEventListener('click', () => { taps++; clearTimeout(tapT); if (taps >= 5) { taps = 0; openOwnerDashboard(); } else tapT = setTimeout(() => taps = 0, 1500); });
 
     document.getElementById('coin-3d-trigger').addEventListener('click', collectMining);
     document.getElementById('btn-collect-main').addEventListener('click', collectMining);
@@ -2240,6 +2309,20 @@
       } catch (err) { window.open(link, '_blank'); }
     });
 
+    // Redesign bindings (visual layer only — original handlers reused):
+    // avatar tiles call the new setAvatar action; channel scroll cards
+    // open the channel THEMSELVES (owner pick 2ب) by firing the exact
+    // original Open button, which also sets the chV flag Verify needs,
+    // and only the Verify button stays visible.
+    document.querySelectorAll('#avatar-picker .ap-tile').forEach(t => t.addEventListener('click', () => pickAvatar(Number(t.getAttribute('data-avatar')), t)));
+    [1, 2].forEach(n => {
+      const openBtn = document.getElementById('btn-open-ch' + n);
+      const title = document.getElementById('ch-' + n + '-title');
+      const card = title ? title.closest('.card-3d') : null;
+      if (openBtn) { openBtn.style.display = 'none'; if (openBtn.parentElement) openBtn.parentElement.style.gridTemplateColumns = '1fr'; }
+      if (card && openBtn) { card.style.cursor = 'pointer'; card.addEventListener('click', (e) => { if (e.target.closest('button')) return; openBtn.click(); }); }
+    });
+
     document.getElementById('tier-btn-1').addEventListener('click', () => { currentLevelPage = 1; setActiveTierBtn(1); renderLevelsGrid(); });
     document.getElementById('tier-btn-2').addEventListener('click', () => { currentLevelPage = 4; setActiveTierBtn(2); renderLevelsGrid(); });
     document.getElementById('tier-btn-3').addEventListener('click', () => { currentLevelPage = 8; setActiveTierBtn(3); renderLevelsGrid(); });
@@ -2249,25 +2332,6 @@
     document.getElementById('btn-copy-ref').addEventListener('click', () => { navigator.clipboard.writeText(document.getElementById('ref-link-box').value); showToast("📋 Link Copied!"); });
     document.getElementById('btn-share-ref').addEventListener('click', () => window.open(`https://t.me/share/url?url=${encodeURIComponent(document.getElementById('ref-link-box').value)}`, '_blank'));
     document.querySelectorAll('.nav-item').forEach(i => i.addEventListener('click', () => switchTab(i.getAttribute('data-tab'))));
-    document.getElementById('btn-close-admin').addEventListener('click', () => switchTab('mine'));
-
-    ['users', 'wd', 'set'].forEach(t => document.getElementById('atab-btn-' + t).addEventListener('click', () => {
-      ['users', 'wd', 'set'].forEach(x => { document.getElementById('adm-sub-' + x).style.display = x === t ? 'block' : 'none'; document.getElementById('atab-btn-' + x).classList.toggle('active', x === t); });
-    }));
-    document.getElementById('adm-user-search').addEventListener('input', renderAdminUsersList);
-    document.querySelectorAll('.adm-filter-btn').forEach(b => b.addEventListener('click', () => { currentUserFilter = b.getAttribute('data-filter'); renderAdminUsersList(); }));
-
-    document.getElementById('btn-save-admin').addEventListener('click', async () => {
-      if (CURRENT_UID !== OWNER_UID) return showToast("Access Denied!", "#ef4444");
-      const settings = {};
-      for (const [id, key] of Object.entries(ADMIN_FIELDS)) { const v = document.getElementById(id).value.trim(); if (v !== "") settings[key] = v; }
-      try {
-        await api("adminSettings", { settings });
-        await refreshState();
-        document.getElementById('adm-lvl100-day').value = LEVELS_DATA[99].perDay;
-        SoundFX.buySuccess(); showToast("☁️ Settings saved and applied!");
-      } catch (err) { showToast("❌ " + err.message, "#ef4444"); }
-    });
 
     initCloudSync(); setInterval(() => { updateLiveMining(); if (wdCooldownActive) updateWdCalculation(); }, 1000); updateLiveMining();
     setTimeout(() => { finishBoot(); }, 2500);
