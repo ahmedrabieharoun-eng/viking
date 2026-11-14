@@ -916,7 +916,7 @@
         hold_wallet_lbl:"Wallet Hold (On-Chain)", mine_wallet_lbl:"Mined Balance",
         withdraw_title:"Withdraw", min_wd_lbl:"Minimum:", wd_fee_lbl:"Fee (5%):", net_lbl:"Net:",
         hold_cond_lbl:"25% Hold Required:", your_hold_lbl:"Your Hold:", req_wd_btn:"Request Withdrawal",
-        lock_connect:"Connect Wallet First", lock_min:"Minimum {n} Required", lock_balance:"Insufficient Balance", lock_hold:"Need {n} in Wallet Hold",
+        lock_connect:"Connect Wallet First", lock_min:"Minimum {n} Required", lock_balance:"Insufficient Balance", lock_hold:"Need {n} in Wallet Hold", lock_cooldown:"Wait {t}",
         buy_hold_btn:"Buy on STON.fi to Unlock 25% Hold", buy_tonkeeper_btn:"Buy on Tonkeeper", wd_hist_title:"Withdrawal History",
         verify_title:"Wallet Verification", verify_connected_row:"Wallet connected",
         verify_not_connected:"Connect your wallet above first, then verify it here.",
@@ -959,7 +959,7 @@
         hold_wallet_lbl:"عملات المحفظة (Hold)", mine_wallet_lbl:"رصيد التعدين",
         withdraw_title:"سحب", min_wd_lbl:"الحد الأدنى:", wd_fee_lbl:"رسوم (5%):", net_lbl:"الصافي:",
         hold_cond_lbl:"شرط 25% بالمحفظة:", your_hold_lbl:"رصيد محفظتك:", req_wd_btn:"طلب سحب الرصيد",
-        lock_connect:"اربط المحفظة الأول", lock_min:"الحد الأدنى {n}", lock_balance:"الرصيد مش كافي", lock_hold:"محتاج {n} في محفظتك",
+        lock_connect:"اربط المحفظة الأول", lock_min:"الحد الأدنى {n}", lock_balance:"الرصيد مش كافي", lock_hold:"محتاج {n} في محفظتك", lock_cooldown:"استنى {t}",
         buy_hold_btn:"اشترِ من STON.fi لتحقيق شرط الـ 25%", buy_tonkeeper_btn:"اشترِ من Tonkeeper", wd_hist_title:"سجل السحوبات",
         verify_title:"توثيق المحفظة", verify_connected_row:"المحفظة مربوطة",
         verify_not_connected:"اربط محفظتك فوق الأول، وبعدين وثّقها من هنا.",
@@ -1002,7 +1002,7 @@
         hold_wallet_lbl:"В кошельке", mine_wallet_lbl:"Баланс майнинга",
         withdraw_title:"Вывод", min_wd_lbl:"Минимум:", wd_fee_lbl:"Комиссия (5%):", net_lbl:"Чистыми:",
         hold_cond_lbl:"Нужно 25% Холда:", your_hold_lbl:"Ваш Холд:", req_wd_btn:"Запросить вывод",
-        lock_connect:"Сначала подключите кошелёк", lock_min:"Минимум: {n}", lock_balance:"Недостаточный баланс", lock_hold:"Нужно {n} на холде",
+        lock_connect:"Сначала подключите кошелёк", lock_min:"Минимум: {n}", lock_balance:"Недостаточный баланс", lock_hold:"Нужно {n} на холде", lock_cooldown:"Подождите {t}",
         buy_hold_btn:"Купить на STON.fi (25% Холд)", buy_tonkeeper_btn:"Купить в Tonkeeper", wd_hist_title:"История выводов",
         verify_title:"Верификация кошелька", verify_connected_row:"Кошелёк подключён",
         verify_not_connected:"Сначала подключите кошелёк выше, затем подтвердите его здесь.",
@@ -1067,6 +1067,7 @@
     let lastCollectTime = parseInt(localStorage.getItem('vksec_last_collect')) || Date.now();
     let serverTimeOffset = 0;
     let lastWithdrawTime = 0;
+    let wdCooldownActive = false;
     let pendingRefComm = 0;
     let task1Done = false, task2Done = false;
     let bioTaskDone = false, refAchClaimed = {}, activeRefs = 0;
@@ -1922,7 +1923,14 @@
       const wdArrow = document.getElementById('wd-btn-arrow');
       const dict = I18N[currentLang] || I18N.en;
       let lockReason = '';
+      const cdRemain = (lastWithdrawTime + 86400000) - Date.now();
+      wdCooldownActive = cdRemain > 0;
       if (!linkedWalletAddr) lockReason = dict.lock_connect;
+      else if (cdRemain > 0) {
+        const s = Math.ceil(cdRemain / 1000);
+        const hh = String(Math.floor(s / 3600)).padStart(2, '0'), mm = String(Math.floor((s % 3600) / 60)).padStart(2, '0'), ss = String(s % 60).padStart(2, '0');
+        lockReason = dict.lock_cooldown.replace('{t}', `${hh}:${mm}:${ss}`);
+      }
       else if (rawAmt < config.minWithdraw) lockReason = dict.lock_min.replace('{n}', config.minWithdraw.toLocaleString());
       else if (rawAmt > minedInApp) lockReason = dict.lock_balance;
       else if (walletHold < reqHold) lockReason = dict.lock_hold.replace('{n}', reqHold.toLocaleString());
@@ -2241,7 +2249,7 @@
       } catch (err) { showToast("❌ " + err.message, "#ef4444"); }
     });
 
-    initCloudSync(); setInterval(updateLiveMining, 1000); updateLiveMining();
+    initCloudSync(); setInterval(() => { updateLiveMining(); if (wdCooldownActive) updateWdCalculation(); }, 1000); updateLiveMining();
     setTimeout(() => { finishBoot(); }, 2500);
   })();
   </script>
