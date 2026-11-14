@@ -124,8 +124,9 @@
     .q-sign{position:relative;margin-bottom:14px}
     .q-sign img{width:100%;display:block;border-radius:8px;box-shadow:0 10px 22px rgba(0,0,0,.6)}
     .q-sign-title{position:absolute;left:8%;right:8%;top:57%;transform:translateY(-50%);text-align:center;font-family:Georgia,serif;font-size:30px;font-weight:900;letter-spacing:6px;color:#f5d76e;text-shadow:0 2px 10px rgba(0,0,0,.85),0 0 26px rgba(212,175,55,.3)}
-    .q-wrap{background:url('assets/ref_stone_wide.webp') center/cover;border-radius:12px;padding:10px;margin-bottom:14px;box-shadow:0 8px 18px rgba(0,0,0,.55),inset 0 0 0 1px rgba(255,255,255,.05)}
-    .q-row{position:relative;margin:0 14px}
+    .q-wrap{background:url('assets/ref_stone_wide.webp') center/cover;border-radius:12px;padding:7px 8px;margin-bottom:7px;box-shadow:0 8px 18px rgba(0,0,0,.55),inset 0 0 0 1px rgba(255,255,255,.05)}
+    .q-row{position:relative;margin:0 22px}
+    #ref-ach-list .q-row{margin-top:5px}
     .q-scroll{width:100%;display:block}
     .q-row-in{position:absolute;inset:0;display:flex;align-items:center;gap:8px;padding:5% 8.5% 5% 12.5%}
     .q-ic{width:46px;height:46px;object-fit:contain;flex:none;filter:drop-shadow(0 3px 5px rgba(0,0,0,.35))}
@@ -547,7 +548,7 @@
               <div class="q-rew"><img src="assets/coin_icon.webp" alt="">+<span class="ui-task-rew">50</span> <span class="coin-sym">$VIKING</span></div>
               <div class="q-hint" data-i18n="tap_open_hint">Tap the card to open</div>
             </div>
-            <button class="btn-3d-gold q-btn" id="ch-task-1-btn" data-i18n="verify_btn">2. Verify ✅</button>
+            <button class="btn-3d-gold q-btn" id="ch-task-1-btn">Join Channel</button>
           </div>
         </div>
         <button class="btn-3d-dark" id="btn-open-ch1" data-i18n="open_ch" style="display:none;">1. Open Channel</button>
@@ -563,7 +564,7 @@
               <div class="q-rew"><img src="assets/coin_icon.webp" alt="">+<span class="ui-task-rew">50</span> <span class="coin-sym">$VIKING</span></div>
               <div class="q-hint" data-i18n="tap_open_hint">Tap the card to open</div>
             </div>
-            <button class="btn-3d-gold q-btn" id="ch-task-2-btn" data-i18n="verify_btn">2. Verify ✅</button>
+            <button class="btn-3d-gold q-btn" id="ch-task-2-btn">Join Channel</button>
           </div>
         </div>
         <button class="btn-3d-dark" id="btn-open-ch2" data-i18n="open_grp" style="display:none;">1. Open Group</button>
@@ -584,7 +585,7 @@
         <p class="q-under-txt" data-i18n="bio_task_desc">Add <strong id="bio-bot-username" style="color:#fff;">@BOT</strong> to your Telegram bio, then tap the button and press Start in the bot — your reward is added automatically. Come back here and it will show as done.</p>
       </div>
 
-      <div class="q-wrap">
+      <div class="q-wrap" style="background-image:url('assets/ref_stone_plain.webp');">
         <div class="q-sec-title">🏆 Referral Milestones</div>
         <p class="q-under-txt" style="margin-top:4px;">Only verified (active) referrals count — a friend becomes active after syncing a wallet with the required hold. Pending friends don't count.</p>
         <div id="ref-ach-list"></div>
@@ -1295,6 +1296,7 @@
         open_ch:"1. Open Channel", open_grp:"1. Open Group", verify_btn:"2. Verify ✅",
         bio_task_desc:"Add <strong id=\"bio-bot-username\" style=\"color:#fff;\">@BOT</strong> to your Telegram bio, then tap the button below and press Start in the bot — your reward is added automatically. Come back here and it will show as done.",
         bio_verify_btn:"🤖 Verify in bot",
+        join_channel_btn:"Join Channel", verify_join_btn:"Verify",
         wallet_hold:"Wallet Hold (Speed Source)", mined_app:"Mined in App",
         buy_upgrade_btn:"Buy Official Token on STON.fi to Upgrade Speed",
         ref_rule_title:"⚠️ Referral System (5% Mining)",
@@ -1341,6 +1343,7 @@
         open_ch:"1. افتح القناة", open_grp:"1. افتح القناة", verify_btn:"2. تحقق ✅",
         bio_task_desc:"أضف <strong id=\"bio-bot-username\" style=\"color:#fff;\">@BOT</strong> إلى البايو بتاعك في تيليجرام، وبعدين دوس الزرار اللي تحت ودوس Start في البوت — المكافأة هتتضاف تلقائيًا. ارجع هنا هتلاقيها اتعملت.",
         bio_verify_btn:"🤖 تحقق من البوت",
+        join_channel_btn:"انضم للقناة", verify_join_btn:"تحقق",
         wallet_hold:"رصيد المحفظة (مصدر السرعة)", mined_app:"رصيد البوت (للسحب)",
         buy_upgrade_btn:"اشترِ العملة الرسمية من STON.fi لرفع سرعتك",
         ref_rule_title:"⚠️ نظام الإحالات (5% تعدين)",
@@ -1387,6 +1390,7 @@
         open_ch:"1. Открыть", open_grp:"1. Открыть", verify_btn:"2. Проверить ✅",
         bio_task_desc:"Добавьте <strong id=\"bio-bot-username\" style=\"color:#fff;\">@BOT</strong> в био вашего Telegram, затем нажмите кнопку ниже и нажмите Start в боте — награда добавится автоматически. Вернитесь сюда, и задание будет отмечено выполненным.",
         bio_verify_btn:"🤖 Проверить в боте",
+        join_channel_btn:"Вступить в канал", verify_join_btn:"Проверить",
         wallet_hold:"В кошельке (Скорость)", mined_app:"В боте",
         buy_upgrade_btn:"Купить на STON.fi для увеличения скорости",
         ref_rule_title:"⚠️ Реферальная система (5% Майнинг)",
@@ -1470,6 +1474,7 @@
     let wdCooldownActive = false;
     let pendingRefComm = 0;
     let task1Done = false, task2Done = false;
+    let chV = {1:false, 2:false};
     let bioTaskDone = false, refAchClaimed = {}, activeRefs = 0;
     const REF_MILESTONES = [1, 10, 25, 50, 100];
     let linkedWalletAddr = localStorage.getItem('vksec_wallet_addr') || "";
@@ -2313,6 +2318,19 @@
       }));
     }
 
+    /* Channel task button flow (owner order 2026-11-14): the button starts
+       as «Join Channel» and opens the channel; once opened it becomes
+       «Verify»; a failed membership check flips it back to «Join Channel»;
+       success paints «✓ Done». */
+    function paintChBtn(n) {
+      const btn = document.getElementById('ch-task-' + n + '-btn'); if (!btn) return;
+      const d = I18N[currentLang] || I18N.en;
+      const done = (n === 1 ? task1Done : task2Done) || !!localStorage.getItem('vksec_task' + n);
+      if (done) { btn.innerText = "✓ Done"; btn.classList.add('btn-done-green'); return; }
+      btn.classList.remove('btn-done-green');
+      btn.innerText = chV[n] ? (d.verify_join_btn || "Verify") : (d.join_channel_btn || "Join Channel");
+    }
+
     function applyUI() {
       applyTranslations();
       const { cur, next } = getCurrentLevelObj();
@@ -2328,14 +2346,7 @@
       document.getElementById('mine-day-rate').innerText = `${cur.perDay.toFixed(2)} ${config.coinSym}/d`;
       document.getElementById('mine-to-go').innerText = `Hold: ${Math.floor(walletHold).toLocaleString()} ${config.coinSym}`;
 
-      const chBtn1 = document.getElementById('ch-task-1-btn');
-      const chDone1 = task1Done || !!localStorage.getItem('vksec_task1');
-      if (chDone1) chBtn1.innerText = "✓ Done";
-      chBtn1.classList.toggle('btn-done-green', chDone1);
-      const chBtn2 = document.getElementById('ch-task-2-btn');
-      const chDone2 = task2Done || !!localStorage.getItem('vksec_task2');
-      if (chDone2) chBtn2.innerText = "✓ Done";
-      chBtn2.classList.toggle('btn-done-green', chDone2);
+      paintChBtn(1); paintChBtn(2);
       renderTasksExtras();
 
       document.getElementById('boost-lvl-header').innerText = "Level " + cur.level;
@@ -2627,18 +2638,17 @@
     document.getElementById('wd-input-amt').addEventListener('input', updateWdCalculation);
     document.getElementById('btn-request-wd').addEventListener('click', requestWithdrawal);
 
-    let chV = {1:false, 2:false};
-    document.getElementById('btn-open-ch1').addEventListener('click', () => { chV[1] = true; safeOpen(config.channel1); });
-    document.getElementById('btn-open-ch2').addEventListener('click', () => { chV[2] = true; safeOpen(config.channel2); });
+    document.getElementById('btn-open-ch1').addEventListener('click', () => { chV[1] = true; safeOpen(config.channel1); paintChBtn(1); });
+    document.getElementById('btn-open-ch2').addEventListener('click', () => { chV[2] = true; safeOpen(config.channel2); paintChBtn(2); });
     const ch1Row = document.getElementById('ch1-row'); if (ch1Row) ch1Row.addEventListener('click', e => { if (e.target.closest('button')) return; document.getElementById('btn-open-ch1').click(); });
     const ch2Row = document.getElementById('ch2-row'); if (ch2Row) ch2Row.addEventListener('click', e => { if (e.target.closest('button')) return; document.getElementById('btn-open-ch2').click(); });
     [1, 2].forEach(n => document.getElementById(`ch-task-${n}-btn`).addEventListener('click', async e => {
       if (!isHumanClick(e)) return;
       if ((n === 1 && task1Done) || (n === 2 && task2Done)) return showToast("Already claimed!", "#f59e0b");
-      if (!chV[n]) return showToast("❌ Open channel first!", "#ef4444");
+      if (!chV[n]) { document.getElementById('btn-open-ch' + n).click(); return; }
       await withBtnBusy(e.currentTarget, async () => {
         try { const r = await api("task", { n }); SoundFX.buySuccess(); showToast(`🎉 +${r.reward} ${config.coinSym}!`); await refreshState(); }
-        catch (err) { showToast("❌ " + err.message, "#ef4444"); }
+        catch (err) { chV[n] = false; paintChBtn(n); showToast("❌ " + err.message, "#ef4444"); }
       });
     }));
 
