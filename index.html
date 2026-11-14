@@ -310,17 +310,18 @@
     #page-tasks .card-3d{background:linear-gradient(90deg, rgba(93,69,23,.65), rgba(93,69,23,0) 20px, rgba(93,69,23,0) calc(100% - 20px), rgba(93,69,23,.65)),linear-gradient(172deg,#efdfae,#e0c78d 55%,#cdb27a);box-shadow:inset 0 0 0 1px rgba(93,69,23,.35), inset 12px 0 18px -10px rgba(93,69,23,.55), inset -12px 0 18px -10px rgba(93,69,23,.55), 0 8px 18px rgba(0,0,0,.6)}
     .quests-plaque{display:block;width:min(290px,86%);margin:0 auto 12px;filter:drop-shadow(0 8px 16px rgba(0,0,0,.7))}
     /* Boost — hero card in the owner's reference shape: portrait left, LEVEL, coin/day, HOLD·NEXT progress bar, buy button inside */
-    .boost-hero-card .bh-row{display:flex;gap:12px;align-items:center}
-    #boost-hero{position:static;width:92px;height:92px;flex:none;border-radius:50%;object-fit:cover;object-position:50% 18%;border:3px solid var(--gold);box-shadow:0 0 0 3px #2b1a0c,0 8px 18px rgba(0,0,0,.6)}
+    #page-boost > .card-3d.boost-hero-card{background:linear-gradient(180deg,#0d1526,#080d18);border:1px solid rgba(212,175,55,.45);border-radius:8px;box-shadow:0 8px 18px rgba(0,0,0,.55)}
+    .boost-hero-card .bh-row{display:flex;gap:12px;align-items:flex-start}
+    #boost-hero{position:static;width:150px;height:150px;flex:none;border-radius:50%;object-fit:cover;object-position:50% 18%;border:3px solid var(--gold);box-shadow:0 0 0 3px #2b1a0c,0 8px 18px rgba(0,0,0,.6)}
     .bh-main{flex:1;min-width:0}
-    .bh-main h2{font-family:Georgia,serif;font-size:27px;letter-spacing:1.5px;color:#f5d76e;text-transform:uppercase;line-height:1.05}
-    #boost-rank-badge{background:none;border:none;padding:0;color:#d8b25c;font-size:11.5px;font-weight:800;letter-spacing:2.5px;text-transform:uppercase;margin-top:2px}
+    .bh-main h2{font-family:Georgia,serif;font-size:29px;letter-spacing:1.5px;color:#f5d76e;text-transform:uppercase;line-height:1.05;margin-bottom:8px}
+    .bh-plaque{margin-bottom:9px}
     .bh-pnl{display:flex;align-items:center;gap:6px;margin-top:7px;color:#ffd94d;font-weight:900;font-size:15px}
     .bh-pnl img{width:19px;height:19px}
     .bh-hold{font-size:10.5px;color:#c7d3e4;letter-spacing:1.2px;margin-top:7px;font-weight:700}
     .bh-bar{height:9px;background:rgba(0,0,0,.55);border:1px solid rgba(212,175,55,.35);border-radius:6px;margin-top:4px;overflow:hidden}
     #boost-hold-fill{height:100%;width:0%;background:linear-gradient(90deg,#b45309,#f5c542,#ffe9a8);transition:width .5s}
-    .bh-buy{margin-top:12px}
+    .bh-buy{margin-top:10px;width:100%;font-size:12.5px;line-height:1.35;padding:10px 6px}
     /* Level cards — centered LVL plaque + state ribbons */
     .lvl-pill-tag{left:50%!important;right:auto!important;transform:translateX(-50%)}
     .lvl-ribbon{position:absolute;top:9px;right:-27px;transform:rotate(38deg);width:96px;text-align:center;font-size:8.5px;font-weight:900;letter-spacing:.6px;padding:3px 0;z-index:4;box-shadow:0 3px 8px rgba(0,0,0,.5)}
@@ -553,23 +554,20 @@
 
     <!-- 3. BOOST PAGE -->
     <div id="page-boost" class="page">
-      <div class="fr-banner">
-        <img src="assets/ref_banner.webp" alt="">
-        <div class="fr-banner-title" data-i18n="boost_banner_title">LEVELS BOOST</div>
-      </div>
+      <div class="pf-titlebar" data-i18n="boost_banner_title">LEVELS BOOST</div>
       <div class="card-3d boost-hero-card">
         <div class="bh-row">
           <img id="boost-hero" src="assets/hero_tier1.webp" alt="">
           <div class="bh-main">
             <h2 id="boost-lvl-header">Level 1</h2>
-            <div id="boost-rank-badge">Shieldbearers</div>
+            <div class="pf-lvl bh-plaque"><img src="assets/icon_shield.webp" alt=""><div><div class="pf-lvl-num">LV. <span id="boost-plaque-lvl">1</span></div><div class="pf-lvl-group" id="boost-rank-badge">Shieldbearers</div></div></div>
             <div class="bh-pnl"><img src="assets/coin_icon.webp" alt=""><span id="boost-pnl-txt">+250 / DAY</span></div>
             <div class="bh-hold" id="boost-hold-line">HOLD 0 · NEXT 200</div>
             <div class="bh-bar"><div id="boost-hold-fill"></div></div>
+            <button class="btn-3d-gold btn-stonfi-buy bh-buy">🪙 <span data-i18n="buy_upgrade_btn">Buy Official Token on STON.fi to Upgrade Speed</span></button>
           </div>
         </div>
         <div style="display:none"><span id="boost-wallet-bal"></span><span id="boost-app-bal"></span><span id="boost-needed-txt"></span></div>
-        <button class="btn-3d-gold btn-stonfi-buy bh-buy">🪙 <span data-i18n="buy_upgrade_btn">Buy Official Token on STON.fi to Upgrade Speed</span></button>
       </div>
 
       <div class="grid-3" style="margin-bottom:8px;">
@@ -2298,6 +2296,7 @@
       renderTasksExtras();
 
       document.getElementById('boost-lvl-header').innerText = "Level " + cur.level;
+      const bpl = document.getElementById('boost-plaque-lvl'); if (bpl) bpl.innerText = cur.level;
       document.getElementById('boost-rank-badge').innerText = cur.groupName + "s";
       document.getElementById('boost-pnl-txt').innerText = `+${Number(cur.perDay).toLocaleString()} / DAY`;
       document.getElementById('boost-wallet-bal').innerText = Math.floor(walletHold).toLocaleString();
@@ -2465,7 +2464,11 @@
         }
       }
       const bt = level <= 30 ? 1 : (level <= 70 ? 2 : 3);
-      const b = document.getElementById('boost-hero'); if (b && !b.src.includes(`hero_tier${bt}.webp`)) b.src = `assets/hero_tier${bt}.webp`;
+      const b = document.getElementById('boost-hero');
+      if (b) {
+        const bw = (myAvatar >= 1 && myAvatar <= 8) ? `assets/evo_a${myAvatar}_t${Math.min(10, Math.max(1, Math.ceil(level / 10)))}.webp` : `assets/hero_tier${bt}.webp`;
+        if (!b.src.includes(bw)) b.src = bw;
+      }
     }
 
     async function collectMining(e) {
