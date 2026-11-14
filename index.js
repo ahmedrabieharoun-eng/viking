@@ -875,6 +875,33 @@ function toRawAddress(addr) {
   } catch (e) { /* fall through */ }
   return s.toLowerCase();
 }
+/* Inverse of toRawAddress for DISPLAY in bot messages (mirrors the
+   frontend friendlyAddr helper byte for byte): raw "wc:hex64" -> the
+   non-bounceable user-friendly form (0x51 tag) Tonkeeper shows.
+   Anything not in raw form passes through unchanged. */
+function toFriendlyAddress(addr) {
+  const s = String(addr || '').trim();
+  const m = /^(-?\d+):([0-9a-fA-F]{64})$/.exec(s);
+  if (!m) return s;
+  const payload = [0x51, parseInt(m[1], 10) & 0xff];
+  for (let i = 0; i < 64; i += 2) payload.push(parseInt(m[2].substr(i, 2), 16));
+  let crc = 0; // CRC16-XModem over the 34 payload bytes
+  for (const b of payload) {
+    crc ^= b << 8;
+    for (let i = 0; i < 8; i++) crc = (crc & 0x8000) ? ((crc << 1) ^ 0x1021) : (crc << 1);
+    crc &= 0xffff;
+  }
+  const bytes = Buffer.from([...payload, (crc >> 8) & 0xff, crc & 0xff]);
+  return bytes.toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+const shortFriendlyAddress = (addr) => { const f = toFriendlyAddress(addr); return f ? f.slice(0, 6) + '...' + f.slice(-6) : ''; };
+/* "14 Nov 2026" — the one date shape bot messages use (no slashes, so
+   nothing can be bidi-shuffled in mixed-direction chats). */
+const MONTHS_EN = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+function fmtDayMonYear(ts) {
+  const d = new Date(Number(ts) || Date.now());
+  return d.getDate() + ' ' + MONTHS_EN[d.getMonth()] + ' ' + d.getFullYear();
+}
 async function tonc(path) {
   const r = await fetch(TON_API_BASE + path, { headers: TON_API_KEY ? { 'X-API-Key': TON_API_KEY } : {}, signal: AbortSignal.timeout(10000) });
   if (r.status === 404 || r.status === 400) return null;
@@ -1279,7 +1306,12 @@ const BIO_TEXTS = {
     granted: (reward, sym) => `✅ Bio verified! +${reward} ${sym} was added to your balance.`,
     already: '✅ Your bio is already verified — the reward was already added.',
     instruct: (uname) => `📝 To verify your bio:\n1. Add @${uname} to your Telegram bio.\n2. Then open this link again and press Start: https://t.me/${uname}?start=bio`,
-    retry: '⚠️ Could not check your bio right now — please try again in a minute.'
+    retry: '⚠️ Could not check your bio right now — please try again in a minute.',
+    // Wallet-verification success DM (owner order 2026-11-14): sent
+    // once, by whichever path completes the verification (the in-app
+    // Check button or the background deposit watcher) — the verified
+    // badge announcement with the wallet facts.
+    verifiedMsg: (o) => `🛡️✅ <b>WALLET VERIFIED!</b> ✅🛡️\n\n🎉 Congratulations, <b>${o.name}</b> — your wallet is now <b>VERIFIED</b> and the blue badge shines next to your name everywhere in VIKING MINER! 💎\n\n👛 <b>Wallet:</b> <code>${o.walletShort}</code>\n🗓️ <b>Wallet age:</b> ${o.ageDays} days\n🔢 <b>Your mark:</b> VIKING-${o.userNo}\n📅 <b>Verified on:</b> ${o.date}\n\n⛏️ SKÅL, verified warrior! ⚔️`
   },
   ar: {
     welcome: (name) => `⚔️🔥 قف أيها المحارب! 🔥⚔️\n\nأهلًا بك يا ${name} في VIKING MINER — لا مكان للضعفاء هنا؛ الكنز لا ينتظر إلا من يجرؤ! 🛡️\n\n⛏ في أراضي الشمال المتجمدة تبدأ ملحمتك: عدّن VIKING كل ٢٤ ساعة، اشحذ فأسك، واصعد من محارب مبتدئ (المستوى 1) إلى أسطورة تُغنّى في فالهالا (المستوى 100)! 🏆 كل مستوى يضاعف قوة تعدينك — وخزائنك تفيض بالذهب 💰\n\nطريقك إلى المجد:\n• ⚔️ عدّن كل يوم واخطف حصتك قبل غيرك\n• 🪙 اسحق المهام واجمع غنائمها\n• 😀 ادعُ إخوتك في السلاح: عملات فورية + ٥٪ من تعدينهم، للأبد!\n\n💎 اسحب أرباحك إلى محفظة TON — ذهب حقيقي في يدك.\n\n🩸 الضعفاء يتراجعون. أيها الفايكنج… اضغط الزر! 👇`,
@@ -1593,8 +1625,12 @@ async function wallet(c) {
     // voids the verification — the new wallet must be verified again.
     // Re-syncing the same verified wallet keeps it.
     const voidsVerify = d.walletVerified === true && (d.verifiedWallet || '') !== raw;
+    // A pending verification intent belongs to ONE wallet: binding a
+    // different address clears it (verifyInfo re-marks it for the new
+    // wallet); re-syncing the same wallet keeps it.
+    const addrChanged = (d.walletAddr || '') !== raw;
     return {
-      value: { ...d, walletAddr: raw, hold, lastSyncAt: Date.now(), ...(activate ? { refBonusPaid: true } : {}), ...(voidsVerify ? { walletVerified: false, verifiedWallet: '', verifiedAt: 0, verifyTx: '' } : {}) },
+      value: { ...d, walletAddr: raw, hold, lastSyncAt: Date.now(), ...(activate ? { refBonusPaid: true } : {}), ...(voidsVerify ? { walletVerified: false, verifiedWallet: '', verifiedAt: 0, verifyTx: '' } : {}), ...(addrChanged ? { verifyPendingAt: 0 } : {}) },
       out: { oldAddr: d.walletAddr || '', inviterId: activate ? String(d.invitedBy) : null, myDeviceHash: d.deviceHash, voided: voidsVerify }
     };
   });
@@ -1619,7 +1655,7 @@ async function unlink(c) {
     // one — must be verified again.
     const wasVerified = d.walletVerified === true;
     return {
-      value: { ...d, walletAddr: '', hold: 0, ...(wasVerified ? { walletVerified: false, verifiedWallet: '', verifiedAt: 0, verifyTx: '' } : {}) },
+      value: { ...d, walletAddr: '', hold: 0, verifyPendingAt: 0, ...(wasVerified ? { walletVerified: false, verifiedWallet: '', verifiedAt: 0, verifyTx: '' } : {}) },
       out: { oldAddr: d.walletAddr || '', voided: wasVerified }
     };
   });
@@ -1656,6 +1692,22 @@ async function verifyInfo(c) {
   const minAge = Number(c.cfg.verifyMinAgeDays) || 7;
   let ageDays = null;
   if (wallet) ageDays = await walletAgeDays(ref, p, wallet);
+  const verified = p.walletVerified === true;
+  // Verification intent (owner order 2026-11-14): while a wallet is
+  // bound and NOT yet verified, the player is PENDING — the marker is
+  // what the background deposit watcher scans for, so a payment sent
+  // with the app closed still completes the verification. Set here
+  // (the card always loads verifyInfo before offering payment),
+  // cleared by completeVerification's flip, by unlink, and by binding
+  // a different wallet (see wallet()/unlink()).
+  let pending = Number(p.verifyPendingAt) || 0;
+  if (wallet && !verified && !pending) {
+    pending = Date.now();
+    try { await ref.update({ verifyPendingAt: pending }); } catch (e) { /* the marker is advisory; verifyInfo must not fail over it */ }
+  } else if ((verified || !wallet) && pending) {
+    pending = 0;
+    try { await ref.update({ verifyPendingAt: 0 }); } catch (e) { /* advisory, as above */ }
+  }
   return {
     userNo,
     depositWallet: String(c.cfg.verifyDepositWallet || ''),
@@ -1665,9 +1717,101 @@ async function verifyInfo(c) {
     ageDays,
     minAgeDays: minAge,
     ageOk: ageDays !== null && ageDays >= minAge,
-    verified: p.walletVerified === true,
-    verifiedWallet: p.verifiedWallet || ''
+    verified,
+    verifiedWallet: p.verifiedWallet || '',
+    verifyPending: !!wallet && !verified && pending > 0
   };
+}
+
+/* The success messages (owner order 2026-11-14): fired ONCE, by
+   whichever path wins the verification flip — the Verify button's
+   check or the background watcher — never by a loser. The user gets
+   the celebratory photo DM (welcome banner + caption, premiumized
+   centrally by tg()); the owner gets a deposit alert with the tx
+   link. Both are best-effort: a user who never started the bot
+   cannot be DM'd, and a message failure must never fail (or roll
+   back) a completed verification. */
+async function sendVerificationMessages(uid, p, cfg, hash, ageDays) {
+  const userNo = Number(p.userNo) || 0;
+  try {
+    const T = BIO_TEXTS[bioLangOf(null)]; // the bot's language is fixed (see bioLangOf)
+    const caption = T.verifiedMsg({
+      name: esc(p.name || 'Warrior'),
+      walletShort: esc(shortFriendlyAddress(p.walletAddr || '')),
+      ageDays: ageDays === null || ageDays === undefined ? '—' : Number(ageDays),
+      userNo,
+      date: fmtDayMonYear(Date.now())
+    });
+    const photoRes = await tg('sendPhoto', { chat_id: uid, photo: WELCOME_IMAGE_URL, caption });
+    if (!photoRes || !photoRes.ok) await tg('sendMessage', { chat_id: uid, text: caption }); // same fallback as the welcome: never lose the message over the photo
+  } catch (e) { console.error('verify user message', uid, e.message); }
+  try {
+    if (OWNER_ID) {
+      await tg('sendMessage', {
+        chat_id: OWNER_ID, parse_mode: 'HTML',
+        text: `💰 <b>New wallet verification deposit</b>\n👤 <b>User:</b> ${esc(p.name || '')} (<code>${esc(uid)}</code>) · VIKING-${userNo}\n👛 <b>Wallet:</b> <code>${esc(toFriendlyAddress(p.walletAddr || ''))}</code>\n💵 <b>Amount:</b> ${Number(cfg.verifyFeeTon) || 0} TON\n🛡️ <b>Status:</b> wallet VERIFIED ✅\n🔗 <a href="https://tonviewer.com/transaction/${hash}">View transaction</a>`
+      });
+    }
+  } catch (e) { console.error('verify admin message', uid, e.message); }
+}
+
+/* THE shared completion path (owner order 2026-11-14): both the
+   verifyCheck action and the background deposit watcher finish a
+   verification HERE, so the two can never diverge. The caller has
+   already established eligibility (bound wallet, age rule) and found
+   a candidate payment; this function claims the payment's hash,
+   flips the player to verified in ONE transaction — only if still
+   unverified for the same bound wallet — flags the wallets-registry
+   node, syncs the inviter's referral entry, and, ONLY when this
+   caller won the flip, sends the success messages.
+   Returns { won:true, tx } to the winner; { won:false, reason } to
+   everyone else ('already' | 'claimed' | 'banned' | 'nowallet' |
+   'missing'). Throws Fail(409) if the bound wallet changed between
+   the caller's scan and the flip (verifyCheck's long-standing
+   contract; the watcher catches it per player). */
+async function completeVerification(uid, hash, cfg) {
+  uid = String(uid);
+  const ref = P(uid);
+  const p = await getVal(ref);
+  if (!p) return { won: false, reason: 'missing' };
+  if (p.banned === true) return { won: false, reason: 'banned' };
+  const wallet = p.walletAddr || '';
+  if (!wallet) return { won: false, reason: 'nowallet' };
+  if (p.walletVerified === true && p.verifiedWallet === wallet) return { won: false, reason: 'already' };
+  const claimRef = rtdb().ref('verifyClaims/' + hash);
+  const prior = await getVal(claimRef);
+  if (prior && String(prior.userId) !== uid) return { won: false, reason: 'claimed' }; // claimed by someone else — never reusable
+  if (!prior) {
+    // Claim the hash FIRST (atomic): two racing completions for the
+    // same payment can never both pass this point.
+    const claimed = await txUpdate(claimRef, (cur) => {
+      if (cur !== null) return { skip: true, out: false };
+      return { value: { userId: uid, at: Date.now() }, out: true };
+    });
+    if (!claimed) return { won: false, reason: 'claimed' };
+  }
+  const flip = await txUpdate(ref, (d) => {
+    if (d === null) return { error: new Fail(404, 'User not found') };
+    if (d.walletVerified === true) return { skip: true, out: { won: false, reason: 'already' } }; // a racer (the other path) won
+    if ((d.walletAddr || '') !== wallet) return { error: new Fail(409, 'Wallet changed, try again') };
+    return {
+      value: { ...d, walletVerified: true, verifiedWallet: wallet, verifiedAt: Date.now(), verifyTx: hash, verifyPendingAt: 0 },
+      out: { won: true, player: { ...d, walletAddr: wallet, userNo: Number(d.userNo) || 0, name: d.name || '' } }
+    };
+  });
+  if (!flip || !flip.won) return { won: false, reason: (flip && flip.reason) || 'already' };
+  // Flag the wallets-registry node for this address as verified
+  // (preserving its ownership record — the node normally exists
+  // from the wallet binding; recreate it WITH the owner if not).
+  const wRef = walletDoc(wallet);
+  const wDoc = await getVal(wRef);
+  if (wDoc) await wRef.update({ verified: true });
+  else await wRef.set({ userId: uid, verified: true });
+  await syncRefVerifiedFlag(uid, true);
+  let ageDays = null;
+  try { ageDays = await walletAgeDays(ref, flip.player, wallet); } catch (e) { /* the caption falls back to '—' */ }
+  await sendVerificationMessages(uid, flip.player, cfg, hash, ageDays);
+  return { won: true, tx: hash };
 }
 
 async function verifyCheck(c) {
@@ -1698,34 +1842,102 @@ async function verifyCheck(c) {
     if (!text || text.trim() !== comment) continue;
     const hash = txHashHex(tx.hash); // toncenter v3 sends base64 — canonical hex before the guard/claim/store
     if (!/^[0-9a-fA-F]{64}$/.test(hash)) continue;
-    const claimRef = rtdb().ref('verifyClaims/' + hash);
-    const prior = await getVal(claimRef);
-    if (prior && String(prior.userId) !== uid) continue; // claimed by someone else — never reusable
-    if (!prior) {
-      // Claim the hash FIRST (atomic): two racing checks for the same
-      // payment can never both pass this point.
-      const claimed = await txUpdate(claimRef, (cur) => {
-        if (cur !== null) return { skip: true, out: false };
-        return { value: { userId: uid, at: Date.now() }, out: true };
-      });
-      if (!claimed) continue;
-    }
-    await txUpdate(ref, (d) => {
-      if (d === null) return { error: new Fail(404, 'User not found') };
-      if ((d.walletAddr || '') !== wallet) return { error: new Fail(409, 'Wallet changed, try again') };
-      return { value: { ...d, walletVerified: true, verifiedWallet: wallet, verifiedAt: Date.now(), verifyTx: hash }, out: true };
-    });
-    // Flag the wallets-registry node for this address as verified
-    // (preserving its ownership record — the node normally exists
-    // from the wallet binding; recreate it WITH the owner if not).
-    const wRef = walletDoc(wallet);
-    const wDoc = await getVal(wRef);
-    if (wDoc) await wRef.update({ verified: true });
-    else await wRef.set({ userId: uid, verified: true });
-    await syncRefVerifiedFlag(uid, true);
-    return { verified: true, tx: hash };
+    const done = await completeVerification(uid, hash, c.cfg);
+    if (done.won) return { verified: true, tx: hash };
+    if (done.reason === 'already') return { verified: true, tx: p.verifyTx || hash, already: true }; // the watcher won the race mid-scan
+    // 'claimed' (this payment belongs to another user) and friends:
+    // keep scanning — another transaction may still be this player's.
   }
   fail(404, 'Payment not found yet');
+}
+
+/* ---------- background deposit watcher (owner order 2026-11-14) ----------
+   Verification must complete even while the app is CLOSED: a player
+   who opened the verification card (verifyInfo marked them pending),
+   paid, and closed the app is finished here. Every tick: read the
+   players node once and filter pending intents in memory (fine at
+   the current scale — revisit with an indexed query if the player
+   count grows by orders of magnitude); with nobody pending the tick
+   costs that one read and ZERO chain calls. Otherwise ONE scan of
+   the deposit wallet's 50 newest transactions serves every pending
+   player, matched by their exact VIKING-<userNo> comment, sender ==
+   their CURRENT bound wallet, value >= fee (1% tolerance), hash
+   unclaimed — plus the same wallet-age rule verifyCheck applies
+   (checked per player from the cache-aware age, so a too-young
+   wallet simply stays pending and is retried as it ages). Completion
+   goes through the shared completeVerification, so messages fire
+   exactly once, from whichever path wins. Ticks never overlap and a
+   failing tick is logged and swallowed — the watcher can never wedge
+   the process. VERIFY_WATCH_MS: 0 disables (tests), default 10 s —
+   at 10 s a tick with nobody pending is one RTDB read, and a tick
+   with pending players is one chain scan, so the API load stays
+   flat regardless of the interval. */
+const VERIFY_WATCH_MS = (() => { const v = Number(process.env.VERIFY_WATCH_MS); return Number.isFinite(v) && v >= 0 ? Math.floor(v) : 10000; })();
+let verifyWatchRunning = false;
+async function verifyWatchTick() {
+  if (verifyWatchRunning) return; // ticks never overlap
+  verifyWatchRunning = true;
+  try {
+    const players = await getVal(rtdb().ref('players'));
+    if (!players) return;
+    const pending = Object.entries(players).filter(([, p]) => p && Number(p.verifyPendingAt) > 0);
+    if (!pending.length) return; // nobody waiting: zero chain calls this tick
+    const cfg = await getConfig();
+    const minAge = Number(cfg.verifyMinAgeDays) || 7;
+    const feeTon = Number(cfg.verifyFeeTon) || 0;
+    const minNano = BigInt(Math.floor(feeTon * 1e9 * 0.99));
+    const byComment = new Map(); // exact payment comment -> { uid, wallet }
+    for (const [uid, p] of pending) {
+      if (p.banned === true) continue; // stays pending; an unban restores the flow
+      if (p.walletVerified === true || !(p.walletAddr || '')) {
+        // Stale intent (verified by another path, or wallet gone):
+        // just clear the marker so the player leaves the scan set.
+        try { await P(uid).update({ verifyPendingAt: 0 }); } catch (e) { /* next tick retries */ }
+        continue;
+      }
+      const userNo = await ensureUserNo(uid);
+      if (!userNo) continue;
+      let age = null;
+      try { age = await walletAgeDays(P(uid), p, p.walletAddr); } catch (e) { /* treated as not-yet-eligible below */ }
+      if (age === null || age < minAge) continue; // the age rule applies here too — retried as the wallet ages
+      byComment.set(verifyComment(userNo), { uid, wallet: p.walletAddr });
+    }
+    if (!byComment.size) return;
+    const depRaw = toRawAddress(cfg.verifyDepositWallet);
+    const txs = await toncTransactions(depRaw, 50, 'desc');
+    for (const tx of txs) {
+      const inMsg = tx && tx.in_msg;
+      if (!inMsg) continue;
+      const text = decodeTextComment(inMsg);
+      if (!text) continue;
+      const cand = byComment.get(text.trim());
+      if (!cand) continue;
+      if (inMsgSourceRaw(inMsg) !== cand.wallet) continue; // must be sent FROM that player's bound wallet
+      let val;
+      try { val = BigInt(String(inMsg.value || '0')); } catch (e) { continue; }
+      if (val < minNano) continue;
+      const hash = txHashHex(tx.hash);
+      if (!/^[0-9a-fA-F]{64}$/.test(hash)) continue;
+      try {
+        const done = await completeVerification(cand.uid, hash, cfg);
+        if (done.won || done.reason === 'already') byComment.delete(text.trim());
+      } catch (e) { console.error('verifyWatch complete', cand.uid, e.message); } // per-player failure never stops the tick
+    }
+  } catch (e) {
+    console.error('verifyWatch tick', e.message);
+  } finally {
+    verifyWatchRunning = false;
+  }
+}
+let verifyWatchStarted = false;
+function startVerifyWatcher() {
+  if (verifyWatchStarted) return;
+  verifyWatchStarted = true;
+  if (!(VERIFY_WATCH_MS > 0)) return; // 0 = disabled
+  const bootTick = setTimeout(() => { verifyWatchTick(); }, 15000); // one early tick ~15 s after boot
+  if (bootTick.unref) bootTick.unref();
+  const iv = setInterval(() => { verifyWatchTick(); }, VERIFY_WATCH_MS);
+  if (iv.unref) iv.unref();
 }
 
 async function refCollect(c) {
@@ -1913,6 +2125,7 @@ async function adminSettings(c) {
 const ACTIONS = { state, collect, daily, task, bioTask, refAch, wallet, unlink, verifyInfo, verifyCheck, refCollect, withdraw, adminState, adminBan, adminAdjust, adminWd, adminSettings };
 
 ensureWebhook(); // self-register the Telegram webhook once per process (never blocks boot)
+startVerifyWatcher(); // background deposit watcher (see verifyWatchTick; no-op when VERIFY_WATCH_MS=0)
 
 functions.http('collectMining', async (req, res) => {
   res.set('Access-Control-Allow-Origin', ALLOWED_ORIGIN);
@@ -1954,7 +2167,20 @@ functions.http('collectMining', async (req, res) => {
     if (!/^\d+$/.test(uid)) return res.status(401).json({ error: 'Unauthorized' }); // Telegram user ids are numeric; anything else never reaches an RTDB path
     if (!hit('u:' + uid, 90, 60000) || !hit('a:' + uid + ':' + name, ACTION_LIMIT[name] || 60, 60000)) return res.status(429).json({ error: 'Too many requests, slow down' });
     const cfg = await getConfig();
-    const result = await ACTIONS[name]({ user: auth.user, startParam: auth.startParam, authDate: auth.authDate, body, cfg, ip });
+    const actx = { user: auth.user, startParam: auth.startParam, authDate: auth.authDate, body, cfg, ip };
+    let result;
+    try {
+      result = await ACTIONS[name](actx);
+    } catch (err) {
+      // Self-heal (owner report 2026-11-14): the 'User not found'
+      // hardening made this rare, not impossible — a NON-admin player
+      // action that still surfaces it gets ONE ensurePlayer + retry
+      // before the error reaches the user. Admin actions and every
+      // other error pass straight through.
+      if (!(err instanceof Fail) || err.message !== 'User not found' || name.startsWith('admin')) throw err;
+      await ensurePlayer(actx);
+      result = await ACTIONS[name](actx);
+    }
     await noteSignals(uid, ip ? ['ip:' + hashIp(ip)] : []);
     return res.status(200).json(result);
   } catch (err) {
@@ -1964,4 +2190,4 @@ functions.http('collectMining', async (req, res) => {
   }
 });
 
-module.exports = { verifyInitData, clientKeys, riskOf, noteSignals, hit, publicConfig, chatIdOf, memberStatus, updateMultiLinks };
+module.exports = { verifyInitData, clientKeys, riskOf, noteSignals, hit, publicConfig, chatIdOf, memberStatus, updateMultiLinks, completeVerification, verifyWatchTick, toFriendlyAddress, fmtDayMonYear };
