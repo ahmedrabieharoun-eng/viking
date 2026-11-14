@@ -177,7 +177,16 @@
   <style id="profile-replica">
     /* Profile replica (owner order 2026-11-14): the profile page rebuilt
        1:1 from his reference picture. Scoped to #page-profile only. */
-    .pf-titlebar{font-family:Georgia,serif;font-size:19px;font-weight:900;letter-spacing:5px;color:var(--gold2);text-align:center;border:1px solid rgba(212,175,55,.55);background:rgba(9,13,22,.65);padding:9px 0 8px;margin-bottom:16px}
+    .pf-titlebar{font-family:Georgia,serif;font-size:19px;font-weight:900;letter-spacing:5px;color:var(--gold2);text-align:center;border:1px solid rgba(212,175,55,.55);background:rgba(9,13,22,.65);padding:9px 0 8px;margin-bottom:12px}
+    .pf-settings{display:grid;grid-template-columns:1fr 1fr 1fr;gap:9px;margin-bottom:16px;direction:ltr}
+    .pf-set-cell{position:relative;background:linear-gradient(180deg,#141f36,#0a101d);border:1px solid rgba(212,175,55,.55);border-radius:9px;padding:10px 4px 8px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;cursor:pointer;color:var(--gold2);box-shadow:0 5px 12px rgba(0,0,0,.5);transition:transform .1s}
+    .pf-set-cell:active{transform:scale(.95)}
+    .pf-set-cell > svg{width:21px;height:21px}
+    .pf-set-cell > span{font-size:9.5px;font-weight:900;letter-spacing:1.6px;color:#cdbd93}
+    .pf-set-top{display:flex;align-items:center;gap:5px;font-weight:900;font-size:13.5px;color:var(--gold2);line-height:1}
+    .pf-set-top svg{width:19px;height:19px}
+    .pf-set-caret{font-size:10px;color:#cdbd93}
+    #page-profile .lang-menu-popup{top:calc(100% + 6px);right:0;left:auto}
     .pf-sec{position:relative;background:linear-gradient(180deg,#0d1526,#080d18);border:1px solid rgba(212,175,55,.45);border-radius:8px;padding:16px 14px 14px;margin:0 0 14px}
     .pf-sec + .pf-sec{margin-top:24px}
     .pf-ribbon{position:absolute;top:-12px;left:50%;transform:translateX(-50%);background:linear-gradient(180deg,#3a2413,#1c1007);border:1px solid rgba(212,175,55,.85);color:var(--gold2);font-family:Georgia,serif;font-size:12px;font-weight:900;letter-spacing:2.5px;padding:4px 30px;white-space:nowrap;clip-path:polygon(10px 0,calc(100% - 10px) 0,100% 50%,calc(100% - 10px) 100%,10px 100%,0 50%);text-transform:uppercase}
@@ -371,26 +380,10 @@
   <div id="toast">Notification</div>
 
   <div class="app-shell" id="main-app-shell">
-    <div class="top-bar">
-      <div class="icon-3d" id="sound-toggle-btn">
-        <svg id="svg-vol-on" width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
-      </div>
-      <div class="brand-logo-3d" id="ui-brand-title">$VIKING MINER</div>
-      <div style="display:flex;gap:6px;position:relative;">
-        <div class="icon-3d" id="lang-menu-btn">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg>
-          <span id="cur-lang-label">EN</span> ▾
-        </div>
-        <div class="icon-3d" id="top-wallet-shortcut">
-          <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><path d="M21 18v1c0 1.1-.9 2-2 2H5c-1.11 0-2-.9-2-2V5c0-1.1.89-2 2-2h14c1.1 0 2 .9 2 2v1h-9c-1.11 0-2 .9-2 2v8c0 1.1.89 2 2 2h9zm-9-2h10V8H12v8zm4-2.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/></svg>
-        </div>
-        <div class="lang-menu-popup" id="lang-dropdown">
-          <div class="lang-opt" data-lang="en"><span>🇬🇧 English</span><span id="chk-en">✓</span></div>
-          <div class="lang-opt" data-lang="ar"><span>🇪🇬 العربية</span><span id="chk-ar"></span></div>
-          <div class="lang-opt" data-lang="ru"><span>🇷🇺 Русский</span><span id="chk-ru"></span></div>
-        </div>
-      </div>
-    </div>
+    <!-- Top bar REMOVED (owner order 2026-11-14): its three controls —
+         sound, language, wallet — now live in the Profile page's
+         settings row (ids preserved: sound-toggle-btn, lang-menu-btn,
+         lang-dropdown, top-wallet-shortcut). -->
 
     <!-- 1. MINE PAGE -->
     <div id="page-mine" class="page active">
@@ -577,6 +570,32 @@
            level plaque, ribbon sections for wallet / verification /
            withdraw / history. Every pre-existing element id is kept. -->
       <div class="pf-titlebar" data-i18n="prof_page_title">PROFILE</div>
+
+      <!-- Settings row (owner order 2026-11-14): the deleted top bar's
+           three controls — sound / language / wallet — as three equal
+           designed cells. All original ids and handlers are preserved. -->
+      <div class="pf-settings">
+        <div class="pf-set-cell" id="sound-toggle-btn">
+          <svg id="svg-vol-on" viewBox="0 0 24 24" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
+          <span data-i18n="set_sound_lbl">SOUND</span>
+        </div>
+        <div class="pf-set-cell" id="lang-menu-btn">
+          <div class="pf-set-top">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg>
+            <span id="cur-lang-label">EN</span><span class="pf-set-caret">▾</span>
+          </div>
+          <span data-i18n="set_lang_lbl">LANGUAGE</span>
+          <div class="lang-menu-popup" id="lang-dropdown">
+            <div class="lang-opt" data-lang="en"><span>🇬🇧 English</span><span id="chk-en">✓</span></div>
+            <div class="lang-opt" data-lang="ar"><span>🇪🇬 العربية</span><span id="chk-ar"></span></div>
+            <div class="lang-opt" data-lang="ru"><span>🇷🇺 Русский</span><span id="chk-ru"></span></div>
+          </div>
+        </div>
+        <div class="pf-set-cell" id="top-wallet-shortcut">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M21 18v1c0 1.1-.9 2-2 2H5c-1.11 0-2-.9-2-2V5c0-1.1.89-2 2-2h14c1.1 0 2 .9 2 2v1h-9c-1.11 0-2 .9-2 2v8c0 1.1.89 2 2 2h9zm-9-2h10V8H12v8zm4-2.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/></svg>
+          <span data-i18n="prof_wallet_lbl">WALLET</span>
+        </div>
+      </div>
 
       <section class="pf-sec pf-id">
         <img id="prof-avatar" src="assets/avatar_1.webp" alt="">
@@ -1189,7 +1208,7 @@
         my_referrals_title:"👥 My Invited Friends", pending_ref_title:"Pending Referral Profits", collect_ref_btn:"Collect Referral Profits",
         ton_wallet_title:"TON Blockchain Wallet", connect_wallet_btn:"Connect TON Wallet",
         sync_hold_btn:"Verify Wallet Hold", disconnect_wallet_btn:"Disconnect",
-        prof_page_title:"PROFILE", prof_username_lbl:"USERNAME", prof_wallet_lbl:"WALLET", prof_amount_lbl:"AMOUNT", buy_stonfi_btn:"Buy on STON.fi",
+        prof_page_title:"PROFILE", prof_username_lbl:"USERNAME", prof_wallet_lbl:"WALLET", prof_amount_lbl:"AMOUNT", buy_stonfi_btn:"Buy on STON.fi", set_sound_lbl:"SOUND", set_lang_lbl:"LANGUAGE",
         hold_wallet_lbl:"Wallet Hold", mine_wallet_lbl:"Mined Balance",
         withdraw_title:"Withdraw", min_wd_lbl:"Minimum:", wd_fee_lbl:"Fee (5%):", net_lbl:"Net:",
         hold_cond_lbl:"25% Hold Required:", your_hold_lbl:"Your Hold:", req_wd_btn:"Request Withdrawal",
@@ -1235,7 +1254,7 @@
         my_referrals_title:"👥 أصدقائي المدعوون", pending_ref_title:"أرباح الإحالات المعلقة", collect_ref_btn:"جمع أرباح الإحالات",
         ton_wallet_title:"محفظة شبكة TON", connect_wallet_btn:"ربط محفظة TON الآن",
         sync_hold_btn:"تحديث رصيد المحفظة", disconnect_wallet_btn:"إلغاء الربط",
-        prof_page_title:"الملف الشخصي", prof_username_lbl:"اسم المستخدم", prof_wallet_lbl:"المحفظة", prof_amount_lbl:"المبلغ", buy_stonfi_btn:"اشترِ من STON.fi",
+        prof_page_title:"الملف الشخصي", prof_username_lbl:"اسم المستخدم", prof_wallet_lbl:"المحفظة", prof_amount_lbl:"المبلغ", buy_stonfi_btn:"اشترِ من STON.fi", set_sound_lbl:"الصوت", set_lang_lbl:"اللغة",
         hold_wallet_lbl:"عملات المحفظة (Hold)", mine_wallet_lbl:"رصيد التعدين",
         withdraw_title:"سحب", min_wd_lbl:"الحد الأدنى:", wd_fee_lbl:"رسوم (5%):", net_lbl:"الصافي:",
         hold_cond_lbl:"شرط 25% بالمحفظة:", your_hold_lbl:"رصيد محفظتك:", req_wd_btn:"طلب سحب الرصيد",
@@ -1281,7 +1300,7 @@
         my_referrals_title:"👥 Мои рефералы", pending_ref_title:"Ожидаемый доход", collect_ref_btn:"Собрать доход",
         ton_wallet_title:"Кошелек TON", connect_wallet_btn:"Подключить TON Кошелек",
         sync_hold_btn:"Обновить Холд", disconnect_wallet_btn:"Отключить",
-        prof_page_title:"ПРОФИЛЬ", prof_username_lbl:"ИМЯ ПОЛЬЗОВАТЕЛЯ", prof_wallet_lbl:"КОШЕЛЁК", prof_amount_lbl:"СУММА", buy_stonfi_btn:"Купить на STON.fi",
+        prof_page_title:"ПРОФИЛЬ", prof_username_lbl:"ИМЯ ПОЛЬЗОВАТЕЛЯ", prof_wallet_lbl:"КОШЕЛЁК", prof_amount_lbl:"СУММА", buy_stonfi_btn:"Купить на STON.fi", set_sound_lbl:"ЗВУК", set_lang_lbl:"ЯЗЫК",
         hold_wallet_lbl:"В кошельке", mine_wallet_lbl:"Баланс майнинга",
         withdraw_title:"Вывод", min_wd_lbl:"Минимум:", wd_fee_lbl:"Комиссия (5%):", net_lbl:"Чистыми:",
         hold_cond_lbl:"Нужно 25% Холда:", your_hold_lbl:"Ваш Холд:", req_wd_btn:"Запросить вывод",
@@ -2184,7 +2203,7 @@
       applyTranslations();
       const { cur, next } = getCurrentLevelObj();
 
-      document.getElementById('ui-brand-title').innerText = config.brandTitle;
+      const btEl = document.getElementById('ui-brand-title'); if (btEl) btEl.innerText = config.brandTitle;
       document.querySelectorAll('.coin-sym').forEach(el => el.innerText = config.coinSym);
       document.querySelectorAll('.ui-task-rew').forEach(el => el.innerText = config.taskReward);
 
@@ -2462,7 +2481,9 @@
     document.getElementById('lang-menu-btn').addEventListener('click', e => { e.stopPropagation(); document.getElementById('lang-dropdown').classList.toggle('show'); });
     document.querySelectorAll('.lang-opt').forEach(o => o.addEventListener('click', e => { e.stopPropagation(); currentLang = o.getAttribute('data-lang'); localStorage.setItem('vk_lang', currentLang); document.getElementById('lang-dropdown').classList.remove('show'); applyUI(); }));
     document.addEventListener('click', () => document.getElementById('lang-dropdown').classList.remove('show'));
-    document.getElementById('top-wallet-shortcut').addEventListener('click', () => switchTab('profile'));
+    // The wallet cell now lives IN the Profile page (top bar removed):
+    // it opens the TonConnect wallet modal, same as Connect Wallet.
+    document.getElementById('top-wallet-shortcut').addEventListener('click', connectTonWallet);
 
 
     document.getElementById('coin-3d-trigger').addEventListener('click', collectMining);
