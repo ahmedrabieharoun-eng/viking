@@ -335,8 +335,7 @@
           <span class="badge-tag" id="wallet-badge-status" style="background:#ef4444;">Disconnected</span>
         </div>
         <button class="btn-3d-gold" id="btn-connect-wallet">👛 <span data-i18n="connect_wallet_btn">Connect TON Wallet</span></button>
-        <div id="connected-wallet-actions" style="display:none;margin-top:8px;" class="grid-2">
-          <button class="btn-3d-bronze" id="btn-sync-hold">🔄 <span data-i18n="sync_hold_btn">Verify Wallet Hold</span></button>
+        <div id="connected-wallet-actions" style="display:none;margin-top:8px;">
           <button class="btn-3d-danger" id="btn-disconnect-wallet">🔌 <span data-i18n="disconnect_wallet_btn">Disconnect</span></button>
         </div>
         <div id="ton-connect-container" style="display:none;"></div>
@@ -1352,6 +1351,10 @@
       renderWithdrawHistory();
       applyUI();
       finishBoot();
+      // First successful load with a wallet linked: pull the live
+      // on-chain hold once (later loads are covered by the Profile
+      // trigger + the sync's own state reload).
+      if (!bootHoldSyncDone) { bootHoldSyncDone = true; maybeAutoSyncHold(); }
     }
 
     // Boot state with backoff: a sleeping free-tier server can take
@@ -1494,6 +1497,26 @@
         await refreshState();
         if (showNotification) { SoundFX.buySuccess(); showToast(`✅ Hold Synced: ${Math.floor(r.hold).toLocaleString()} ${config.coinSym}!`); }
       } catch (err) { if (showNotification) showToast("❌ " + err.message, "#ef4444"); }
+    }
+
+    /* Silent hold auto-sync (owner order 2026-11-14): the manual
+       «Verify Wallet Hold» button is GONE — the displayed on-chain
+       hold must always be live, so the app refreshes it by itself:
+       once after the first successful state load with a wallet
+       linked, and again whenever the Profile view is opened. Before
+       this, the hold only moved when the button was pressed, so a
+       user who transferred or sold jettons kept seeing the stale
+       stored number. Throttled to at most one sync per 20 s, fully
+       silent (no toasts), never blocking rendering, failures ignored
+       (the server's own 8 s wallet cooldown can 429 a too-fresh
+       re-sync — the next trigger simply retries). */
+    let lastAutoSyncAt = 0, bootHoldSyncDone = false;
+    function maybeAutoSyncHold() {
+      if (!linkedWalletAddr) return;
+      const now = Date.now();
+      if (now - lastAutoSyncAt < 20000) return;
+      lastAutoSyncAt = now; // stamped BEFORE the call: the sync itself reloads state, which must not re-enter
+      try { Promise.resolve(syncOnChainJettonHold(false)).catch(() => {}); } catch (e) { /* silent by design */ }
     }
 
     /* ---------- Address display helpers (DISPLAY ONLY) ----------
@@ -2090,6 +2113,9 @@
       document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
       document.getElementById('page-' + id)?.classList.add('active');
       document.querySelectorAll('.nav-item').forEach(n => n.classList.toggle('active', n.getAttribute('data-tab') === id));
+      // Opening Profile refreshes the on-chain hold silently (the
+      // manual sync button was removed — see maybeAutoSyncHold).
+      if (id === 'profile') maybeAutoSyncHold();
     }
 
     function setActiveTierBtn(activeNum) {
@@ -2115,7 +2141,6 @@
     document.querySelectorAll('.btn-stonfi-buy').forEach(b => b.addEventListener('click', openStonfiSwap));
     document.querySelectorAll('.btn-tonkeeper-buy').forEach(b => b.addEventListener('click', openTonkeeperSwap));
     document.getElementById('btn-connect-wallet').addEventListener('click', connectTonWallet);
-    document.getElementById('btn-sync-hold').addEventListener('click', (e) => withBtnBusy(e.currentTarget, () => syncOnChainJettonHold(true)));
     // Official-contract copy: copies the address exactly as rendered
     // (the card shows it in monospace so I / l / 1 stay distinct).
     document.getElementById('btn-copy-contract').addEventListener('click', () => {
