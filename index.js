@@ -1173,10 +1173,13 @@ async function handleOwnerTools(msg, text) {
 
 /* One /start message (private chats only; anything else is ignored).
    Param 'bio' = the dedicated verification flow: always answers with
-   the outcome (granted / already / instructions / retry). A plain
-   /start greets FIRST (welcome + Web App button) and then reports ONLY
-   a grant or an already-verified result — a non-matching bio stays
-   silent there (no nagging). */
+   the outcome (granted / already / instructions / retry) and is the
+   ONLY bot path that checks or credits the bio task. A plain /start
+   sends just the welcome photo + welcome text/keyboard and never
+   touches the bio task at all — no check, no credit, no grant or
+   'already verified' note (owner order 2026-11-14: bio messages only
+   when the bio task is explicitly requested). A matching unclaimed
+   bio is credited only via /start bio or the API bioTask action. */
 async function handleBotMessage(msg) {
   if (!msg || !msg.from || !msg.chat || msg.chat.type !== 'private') return;
   const text = typeof msg.text === 'string' ? msg.text.trim() : '';
@@ -1194,16 +1197,6 @@ async function handleBotMessage(msg) {
   const cfg = await getConfig();
   await ensurePlayer({ user: from, body: {} }); // same creation path as the API actions
   const T = BIO_TEXTS[bioLangOf(from)];
-  const chk = await checkBio(from.id, cfg);
-  let outcome = chk.status, reward = 0;
-  if (chk.status === 'match') {
-    try {
-      const r = await creditBioReward(from.id, cfg);
-      outcome = 'granted'; reward = r.reward;
-    } catch (e) {
-      outcome = (e instanceof Fail && e.message === 'Already claimed') ? 'already' : 'unavailable';
-    }
-  }
   if (param !== 'bio') {
     // Owner-approved welcome layout: Open App alone on row 1; payouts
     // (cfg.channel2) and news (cfg.channel1) side by side on row 2, each
@@ -1227,9 +1220,19 @@ async function handleBotMessage(msg) {
       chat_id: chatId, text: T.welcome(displayName),
       reply_markup: { inline_keyboard: rows }
     });
-    if (outcome === 'granted') await tg('sendMessage', { chat_id: chatId, text: T.granted(reward, cfg.coinSym) });
-    else if (outcome === 'already') await tg('sendMessage', { chat_id: chatId, text: T.already });
     return;
+  }
+  // '/start bio' only from here on: the one bot path that checks the
+  // bio and credits the reward.
+  const chk = await checkBio(from.id, cfg);
+  let outcome = chk.status, reward = 0;
+  if (chk.status === 'match') {
+    try {
+      const r = await creditBioReward(from.id, cfg);
+      outcome = 'granted'; reward = r.reward;
+    } catch (e) {
+      outcome = (e instanceof Fail && e.message === 'Already claimed') ? 'already' : 'unavailable';
+    }
   }
   if (outcome === 'granted') await tg('sendMessage', { chat_id: chatId, text: T.granted(reward, cfg.coinSym) });
   else if (outcome === 'already') await tg('sendMessage', { chat_id: chatId, text: T.already });
