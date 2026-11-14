@@ -149,7 +149,7 @@
     #boot-loader svg[width="64"]{display:none}
     .lvl-pill-tag{z-index:3}
     /* Avatar picker overlay */
-    #avatar-picker{position:fixed;inset:0;z-index:100001;background:radial-gradient(120% 60% at 50% 0%, rgba(212,175,55,.10), rgba(0,0,0,0) 60%),linear-gradient(180deg,#0a0f1a,#04060a);display:none;flex-direction:column;align-items:center;justify-content:center;padding:22px;text-align:center;overflow-y:auto}
+    #avatar-picker{position:fixed;inset:0;z-index:100001;background:linear-gradient(180deg, rgba(3,5,9,.52), rgba(3,5,9,.80)),url('assets/picker_bg.webp') center/cover no-repeat #04060a;display:none;flex-direction:column;align-items:center;justify-content:center;padding:22px;text-align:center;overflow-y:auto}
     #avatar-picker.show{display:flex}
     #avatar-picker .ap-title{font-family:Georgia,serif;color:var(--gold2);font-size:24px;font-weight:900;letter-spacing:1px;margin-bottom:6px;text-shadow:0 2px 10px rgba(212,175,55,.4)}
     #avatar-picker .ap-sub{color:#cdbd93;font-size:12.5px;margin-bottom:16px;max-width:320px}
@@ -1339,6 +1339,8 @@
     const DAILY_REWARDS = [10, 20, 30, 50, 70, 100, 200];
     let currentLevelPage = 1;
 
+    const BOOT_STARTED_AT = Date.now();
+    const BOOT_MIN_MS = 3000; // owner order 2026-11-14: the loading page stays at least 3 seconds
     let bootProg = 0;
     const bootTimer = setInterval(() => {
       bootProg += Math.random() * 20;
@@ -1351,6 +1353,8 @@
 
     function finishBoot() {
       if (initialLoadDone) return;
+      const bootElapsed = Date.now() - BOOT_STARTED_AT;
+      if (bootElapsed < BOOT_MIN_MS) { setTimeout(finishBoot, BOOT_MIN_MS - bootElapsed); return; }
       initialLoadDone = true;
       clearInterval(bootTimer);
       const el = document.getElementById('boot-progress');
