@@ -2025,7 +2025,7 @@
     function renderWithdrawHistory() {
       const box = document.getElementById('wd-history-box');
       if (!wdHistory.length) { box.innerHTML = "No withdrawals yet."; return; }
-      box.innerHTML = wdHistory.map(w => `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.06);direction:ltr;"><span><strong>#${esc(w.wdNum || 1)}</strong> · ${esc(w.status)} (Net: ${esc(w.net)})</span><strong style="color:#ef4444;">-${esc(w.amt)} 🪙</strong></div>`).join('');
+      box.innerHTML = wdHistory.map(w => `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.06);direction:ltr;"><span><strong>Withdrawal #${esc(w.wdNum || 1)}</strong> · ${esc(w.status)} (Net: ${esc(w.net)})</span><strong style="color:#ef4444;">-${esc(w.amt)} 🪙</strong></div>`).join('');
     }
 
     function isSuspect(u) { return usersDB.filter(x => x.deviceHash && x.deviceHash === u.deviceHash).length > 1; }
