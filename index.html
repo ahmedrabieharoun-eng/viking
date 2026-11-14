@@ -124,7 +124,7 @@
     .q-sign{position:relative;margin-bottom:14px}
     .q-sign img{width:100%;display:block;border-radius:8px;box-shadow:0 10px 22px rgba(0,0,0,.6)}
     .q-sign-title{position:absolute;left:8%;right:8%;top:57%;transform:translateY(-50%);text-align:center;font-family:Georgia,serif;font-size:30px;font-weight:900;letter-spacing:6px;color:#f5d76e;text-shadow:0 2px 10px rgba(0,0,0,.85),0 0 26px rgba(212,175,55,.3)}
-    .q-wrap{background:url('assets/ref_stone_wide.webp') center/cover;border-radius:12px;padding:7px 8px;margin-bottom:7px;box-shadow:0 8px 18px rgba(0,0,0,.55),inset 0 0 0 1px rgba(255,255,255,.05)}
+    .q-wrap{background:url('assets/ref_stone_plain.webp') center/cover;border:1px solid rgba(212,175,55,.55);border-radius:12px;padding:7px 8px;margin-bottom:7px;box-shadow:0 8px 18px rgba(0,0,0,.55),inset 0 0 0 1px rgba(255,255,255,.05)}
     .q-row{position:relative;margin:0 22px}
     #ref-ach-list .q-row{margin-top:5px}
     .q-scroll{width:100%;display:block}
@@ -144,6 +144,27 @@
     .q-under-txt{font-size:11.5px;color:#a9c6e8;margin:9px 4px 2px;line-height:1.5}
     .q-sec-title{font-family:Georgia,serif;font-size:15px;font-weight:900;letter-spacing:1.5px;color:var(--gold2);margin:2px 2px 0}
     #bio-task-card .q-rew .coin-sym{display:none}
+    /* Mine page — reference layout (owner order 2026-11-15): level ribbon,
+       big evolution portrait, MINED / DAY RATE / SHIFT COUNTDOWN stone
+       cards, BUY + round gold COLLECT (coin icon) + LEVELS row. */
+    #page-mine{gap:8px}
+    .mn-ribbon{align-self:center;background:rgba(9,13,22,.82);border:1px solid rgba(212,175,55,.65);color:var(--gold2);font-weight:900;letter-spacing:2.5px;font-size:14.5px;padding:8px 22px;border-radius:999px;white-space:nowrap}
+    .mn-stage{flex:1;min-height:0;border-radius:14px;overflow:hidden;border:1px solid rgba(212,175,55,.55);box-shadow:0 10px 22px rgba(0,0,0,.6);cursor:pointer}
+    .mn-stage img{width:100%;height:100%;object-fit:cover;object-position:center 22%;display:block}
+    .mn-stage:active img{transform:scale(1.02)}
+    .mn-card{background:url('assets/ref_stone_plain.webp') center/cover;border:1px solid rgba(212,175,55,.55);border-radius:12px;padding:9px 14px 11px;text-align:center;box-shadow:0 8px 18px rgba(0,0,0,.55),inset 0 0 0 1px rgba(255,255,255,.05)}
+    .mn-lbl{font-size:11.5px;letter-spacing:2.5px;color:var(--gold2);font-weight:900;margin-bottom:2px}
+    .mn-val{font-size:27px;font-weight:900;color:#fff;line-height:1.15}
+    .mn-val-sm{font-size:19px;font-weight:900;color:#fff;line-height:1.2}
+    .mn-coin{width:21px;height:21px;vertical-align:-4px}
+    .mn-row{display:flex;gap:8px}
+    .mn-row .mn-card{flex:1}
+    .mn-actions{display:flex;align-items:center;gap:10px;padding-top:14px}
+    .mn-side{flex:1;text-transform:uppercase;letter-spacing:1.5px;font-size:13px;padding:12px 6px}
+    .mn-collect{width:96px;height:96px;flex:none;border-radius:50%;background:radial-gradient(circle at 35% 28%,#ffedb0,#f5c542 46%,#d99a16 76%,#a86e0a);border:3px solid #8a5a08;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;box-shadow:0 10px 24px rgba(0,0,0,.6),inset 0 2px 6px rgba(255,255,255,.55);margin-top:-26px;cursor:pointer;padding:0}
+    .mn-collect img{width:42px;height:42px}
+    .mn-collect span{font-size:12px;font-weight:900;color:#241a05;letter-spacing:1px}
+    .mn-collect:active{transform:scale(.95)}
     #page-tasks .daily-grid{margin:10px 2px 2px}
     #page-tasks .daily-box{background:linear-gradient(180deg,#24334f,#131f36);border-color:rgba(212,175,55,.5);color:#d8c491}
     #page-tasks .daily-box.active{border-color:#8a6d35;background:linear-gradient(180deg,#f7dc6f,#c39a2e);color:#23160a}
@@ -205,7 +226,7 @@
     .pf-set-top svg{width:19px;height:19px}
     .pf-set-caret{font-size:10px;color:#cdbd93}
     #page-profile .lang-menu-popup{top:calc(100% + 6px);right:0;left:auto}
-    .pf-sec{position:relative;background:url('assets/ref_stone_wide.webp') center/cover;border-radius:12px;padding:16px 14px 14px;margin:0 0 14px;box-shadow:0 8px 18px rgba(0,0,0,.55),inset 0 0 0 1px rgba(255,255,255,.05)}
+    .pf-sec{position:relative;background:url('assets/ref_stone_plain.webp') center/cover;border:1px solid rgba(212,175,55,.55);border-radius:12px;padding:16px 14px 14px;margin:0 0 14px;box-shadow:0 8px 18px rgba(0,0,0,.55),inset 0 0 0 1px rgba(255,255,255,.05)}
     .pf-sec + .pf-sec{margin-top:24px}
     .pf-ribbon{position:absolute;top:-12px;left:50%;transform:translateX(-50%);background:linear-gradient(180deg,#3a2413,#1c1007);border:1px solid rgba(212,175,55,.85);color:var(--gold2);font-family:Georgia,serif;font-size:12px;font-weight:900;letter-spacing:2.5px;padding:4px 30px;white-space:nowrap;clip-path:polygon(10px 0,calc(100% - 10px) 0,100% 50%,calc(100% - 10px) 100%,10px 100%,0 50%);text-transform:uppercase}
     .pf-id{display:flex;gap:14px;align-items:stretch}
@@ -226,13 +247,13 @@
     .pf-disconnect{background:linear-gradient(180deg,#5d3c1a,#38220d);border:1px solid #9a6d2f;color:#f0d9a0;font-family:Georgia,serif;font-weight:900;font-size:10.5px;letter-spacing:1.2px;padding:8px 13px;border-radius:6px;cursor:pointer;box-shadow:0 4px 10px rgba(0,0,0,.5)}
     .pf-disconnect:active{transform:scale(.95)}
     .pf-stats{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:20px}
-    .pf-stat{position:relative;border:1px solid rgba(212,175,55,.35);background:url('assets/ref_stone_wide.webp') center/cover;border-radius:10px;padding:24px 8px 13px;text-align:center;box-shadow:inset 0 0 0 1px rgba(255,255,255,.05)}
+    .pf-stat{position:relative;border:1px solid rgba(212,175,55,.55);background:url('assets/ref_stone_plain.webp') center/cover;border-radius:10px;padding:24px 8px 13px;text-align:center;box-shadow:inset 0 0 0 1px rgba(255,255,255,.05)}
     .pf-stat-ic{position:absolute;top:-15px;left:10px;width:32px;height:32px;background:linear-gradient(180deg,#1a2438,#0c1322);border:1px solid rgba(212,175,55,.6);border-radius:5px;display:flex;align-items:center;justify-content:center}
     .pf-stat-ic svg{width:19px;height:19px}
     .pf-stat-lbl{font-size:10.5px;letter-spacing:2px;color:#cdbd93;font-weight:800;text-transform:uppercase;margin-bottom:5px}
     .pf-stat-num{font-family:Georgia,serif;font-size:26px;font-weight:900;color:var(--gold2);display:flex;align-items:center;justify-content:center;gap:7px}
     .pf-stat-num img{width:21px;height:21px}
-    #page-profile #verify-card{background:url('assets/ref_stone_wide.webp') center/cover;border:none;border-radius:12px;box-shadow:0 8px 18px rgba(0,0,0,.55),inset 0 0 0 1px rgba(255,255,255,.05)}
+    #page-profile #verify-card{background:url('assets/ref_stone_plain.webp') center/cover;border:1px solid rgba(212,175,55,.55);border-radius:12px;box-shadow:0 8px 18px rgba(0,0,0,.55),inset 0 0 0 1px rgba(255,255,255,.05)}
     .pf-amt{position:relative;margin-top:18px}
     .pf-amt-lbl{position:absolute;top:-10px;left:50%;transform:translateX(-50%);background:linear-gradient(180deg,#3a2413,#1c1007);border:1px solid rgba(212,175,55,.85);color:var(--gold2);font-family:Georgia,serif;font-size:10px;font-weight:900;letter-spacing:2.5px;padding:3px 20px;clip-path:polygon(8px 0,calc(100% - 8px) 0,100% 50%,calc(100% - 8px) 100%,8px 100%,0 50%);z-index:2}
     .pf-amt input{width:100%;background:#04070d;border:1px solid rgba(212,175,55,.45);border-radius:8px;color:#fff;font-size:17.5px;font-weight:700;padding:14px 46px 13px 15px;direction:ltr;box-sizing:border-box}
@@ -269,12 +290,12 @@
     .fr-head-earn{font-family:Georgia,serif;font-size:16.5px;font-weight:700;color:#e8cf8f}
     .fr-head-sub{font-size:11.5px;color:#8fa3bd;margin-top:3px}
     .fr-tablets{display:grid;grid-template-columns:1fr 1fr 1fr;gap:9px;margin-bottom:14px}
-    .fr-tablet{position:relative;background:url('assets/ref_stone_tall.webp') center/100% 100% no-repeat;border-radius:12px;box-shadow:0 8px 18px rgba(0,0,0,.55),inset 0 0 0 1px rgba(255,255,255,.05);aspect-ratio:380/500;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:10px 4px;text-align:center}
+    .fr-tablet{position:relative;background:url('assets/ref_stone_plain.webp') center/cover;border:1px solid rgba(212,175,55,.55);border-radius:12px;box-shadow:0 8px 18px rgba(0,0,0,.55),inset 0 0 0 1px rgba(255,255,255,.05);aspect-ratio:380/500;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:10px 4px;text-align:center}
     .fr-tab-notch{display:none}
     .fr-tablet small{display:block;font-size:9px;font-weight:900;letter-spacing:1.6px;color:#a9bcd8;text-transform:uppercase;margin-bottom:4px}
     .fr-tab-num{font-family:Georgia,serif;font-size:29px;font-weight:900;color:var(--gold2);line-height:1.05}
     .fr-num-pending{color:#f5d76e}
-    .fr-sec{background:url('assets/ref_stone_wide.webp') center/100% 100% no-repeat;border-radius:12px;box-shadow:0 8px 18px rgba(0,0,0,.55),inset 0 0 0 1px rgba(255,255,255,.05);padding:19px 18px 20px;margin-bottom:13px}
+    .fr-sec{background:url('assets/ref_stone_plain.webp') center/100% 100% no-repeat;border:1px solid rgba(212,175,55,.55);border-radius:12px;box-shadow:0 8px 18px rgba(0,0,0,.55),inset 0 0 0 1px rgba(255,255,255,.05);padding:19px 18px 20px;margin-bottom:13px}
     .fr-sec-profits{padding:20px 19px 21px}
     .fr-sec-lbl{font-size:11px;font-weight:900;letter-spacing:2px;color:var(--gold2);text-transform:uppercase;margin-bottom:10px}
     .fr-link-row{display:flex;gap:8px;direction:ltr}
@@ -289,10 +310,10 @@
     .fr-friends-head{font-size:11.5px;font-weight:900;letter-spacing:2px;color:var(--gold2);margin:4px 0 9px;text-transform:uppercase}
     #my-referrals-list{max-height:330px;overflow-y:auto}
     /* Boost cards unified with the Friends stone style (owner order 2026-11-14) */
-    #page-boost > .card-3d{background:url('assets/ref_stone_wide.webp') center/100% 100% no-repeat;border:none;border-radius:12px;box-shadow:0 8px 18px rgba(0,0,0,.55),inset 0 0 0 1px rgba(255,255,255,.05)}
+    #page-boost > .card-3d{background:url('assets/ref_stone_plain.webp') center/100% 100% no-repeat;border:1px solid rgba(212,175,55,.55);border-radius:12px;box-shadow:0 8px 18px rgba(0,0,0,.55),inset 0 0 0 1px rgba(255,255,255,.05)}
     #page-boost .sub-3d{background:rgba(5,9,17,.55);border:1px solid rgba(212,175,55,.25);border-radius:10px}
-    #page-boost .miner-card-3d{background:url('assets/ref_stone_wide.webp') center/100% 100% no-repeat;border:none;border-radius:12px;box-shadow:0 8px 16px rgba(0,0,0,.55),inset 0 0 0 1px rgba(255,255,255,.05)}
-    .fr-row{display:flex;align-items:center;gap:10px;background:url('assets/ref_stone_wide.webp') center/100% 100% no-repeat;border-radius:12px;box-shadow:0 6px 14px rgba(0,0,0,.5),inset 0 0 0 1px rgba(255,255,255,.05);padding:8px 11px;margin-bottom:8px}
+    #page-boost .miner-card-3d{background:url('assets/ref_stone_plain.webp') center/100% 100% no-repeat;border:1px solid rgba(212,175,55,.55);border-radius:12px;box-shadow:0 8px 16px rgba(0,0,0,.55),inset 0 0 0 1px rgba(255,255,255,.05)}
+    .fr-row{display:flex;align-items:center;gap:10px;background:url('assets/ref_stone_plain.webp') center/100% 100% no-repeat;border:1px solid rgba(212,175,55,.55);border-radius:12px;box-shadow:0 6px 14px rgba(0,0,0,.5),inset 0 0 0 1px rgba(255,255,255,.05);padding:8px 11px;margin-bottom:8px}
     .fr-ava{width:46px!important;height:46px!important;border-radius:50%!important;border:2px solid rgba(212,175,55,.85)!important;object-fit:cover;flex:none;box-shadow:0 0 0 3px rgba(20,14,4,.9),0 4px 10px rgba(0,0,0,.6)}
     .fr-row-main{flex:1;min-width:0}
     .fr-row-name{color:#fff;font-weight:800;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -459,65 +480,41 @@
 
     <!-- 1. MINE PAGE -->
     <div id="page-mine" class="page active">
-      <div class="card-3d" style="margin-bottom:0;">
-        <div class="grid-2">
-          <div class="sub-3d">
-            <div style="font-size:9.5px;color:var(--m);" data-i18n="mining_rate">MINING RATE</div>
-            <div style="font-size:15px;font-weight:900;" id="mine-ths">0.200 TH/s</div>
-            <div style="font-size:10px;color:#22c55e;" id="mine-status-dot">● Active</div>
-          </div>
-          <div class="sub-3d">
-            <div style="font-size:9.5px;color:var(--m);" data-i18n="current_rank">WALLET LEVEL</div>
-            <div style="font-size:15px;font-weight:900;color:var(--gb);" id="mine-lvl-txt">Level 1</div>
-            <div style="font-size:10px;color:var(--m);" id="mine-rank-title">Shieldbearer 1</div>
-          </div>
+      <div id="mine-level-ribbon" class="mn-ribbon">LEVEL 1 - SHIELDBEARER</div>
+
+      <div class="mn-stage" id="coin-3d-trigger">
+        <img id="hero-img" src="assets/hero_tier1.webp" alt="Viking">
+      </div>
+
+      <div class="mn-card">
+        <div class="mn-lbl" data-i18n="mined_lbl">MINED</div>
+        <div class="mn-val"><span id="live-mined-num">0</span> <img class="mn-coin" src="assets/coin_icon.webp" alt=""></div>
+      </div>
+
+      <div class="mn-row">
+        <div class="mn-card">
+          <div class="mn-lbl" data-i18n="day_rate_lbl">DAY RATE</div>
+          <div class="mn-val-sm">+<span id="mine-day-rate">500</span></div>
+        </div>
+        <div class="mn-card">
+          <div class="mn-lbl" data-i18n="shift_cd_lbl">SHIFT COUNTDOWN</div>
+          <div class="mn-val-sm" style="direction:ltr;">⏳ <span id="shift-timer">24:00:00</span></div>
         </div>
       </div>
 
-      <div style="text-align:center;">
-        <div style="font-size:20px;font-weight:900;"><span id="mine-claimed-total">0</span> <span class="coin-sym">$VIKING</span></div>
-        <div style="display:inline-block;background:#b45309;padding:2px 10px;border-radius:12px;font-size:10px;font-weight:800;" data-i18n="claimed_in_app">Claimed in the app</div>
+      <div class="mn-actions">
+        <button class="btn-3d-dark btn-stonfi-buy mn-side"><span data-i18n="buy_btn">Buy</span></button>
+        <button class="mn-collect" id="btn-collect-main"><img src="assets/coin_icon.webp" alt=""><span data-i18n="collect_lbl">COLLECT</span></button>
+        <button class="btn-3d-dark mn-side" id="btn-goto-boost"><span data-i18n="levels_btn">Levels (1–100)</span></button>
       </div>
 
-      <div>
-        <div class="coin-stage-3d" id="coin-3d-trigger">
-          <img id="hero-img" src="assets/hero_tier1.webp" alt="Viking">
-          <div id="mine-level-ribbon">LEVEL 1 - SHIELDBEARER</div>
-        </div>
-        <div class="live-counter-3d">+<span id="live-mined-num">0.000000</span></div>
-      </div>
-
-      <div>
-        <div class="prog-row">
-          <span id="mine-cycle-label">⏳ 24h Mining Tank: 0%</span>
-          <strong id="mine-to-go" style="color:var(--gb);">Hold: 0 $VIKING</strong>
-        </div>
-        <div class="prog-bg-3d"><div class="prog-fill-3d" id="mine-prog-bar"></div></div>
-      </div>
-
-      <div>
-        <div style="margin-bottom:6px;">
-          <div class="sub-3d">
-            <div style="font-size:10.5px;font-weight:800;color:var(--gb);" data-i18n="streak_txt">🔥 24h Shift Rule</div>
-            <div style="font-size:9px;color:var(--m);" data-i18n="streak_sub">Collect every 24h to keep mining</div>
-          </div>
-        </div>
-        <div class="grid-2">
-          <div class="sub-3d" style="text-align:center;font-weight:800;font-size:12px;">⚡ <span id="mine-day-rate">5.00 $VIKING/d</span></div>
-          <div class="sub-3d" style="text-align:center;font-weight:800;font-size:12px;color:var(--gb);direction:ltr;">🕒 <span id="shift-timer">24:00:00</span></div>
-        </div>
-      </div>
-
-      <div>
-        <button class="btn-3d-gold" id="btn-collect-main" style="justify-content:space-between;margin-bottom:7px;">
-          <span>🛡️</span><span data-i18n="collect_btn">COLLECT 24H MINING</span><span>→</span>
-        </button>
-        <div class="grid-2">
-          <button class="btn-3d-gold btn-stonfi-buy">🪙 <span data-i18n="buy_btn">Buy</span> <span class="coin-sym">$VIKING</span></button>
-          <button class="btn-3d-bronze" id="btn-goto-boost">⚡ <span data-i18n="levels_btn">Levels (1–100)</span></button>
-        </div>
+      <div style="display:none;">
+        <span id="mine-ths"></span><span id="mine-status-dot"></span><span id="mine-lvl-txt"></span>
+        <span id="mine-rank-title"></span><span id="mine-claimed-total"></span><span id="mine-cycle-label"></span>
+        <strong id="mine-to-go"></strong><div id="mine-prog-bar"></div>
       </div>
     </div>
+
 
     <!-- 2. TASKS PAGE -->
     <div id="page-tasks" class="page">
@@ -1290,6 +1287,7 @@
         mining_rate:"MINING RATE", current_rank:"WALLET LEVEL", claimed_in_app:"Claimed in the app",
         streak_txt:"🔥 24h Shift Rule", streak_sub:"Collect every 24h to keep mining",
         collect_btn:"COLLECT 24H MINING", buy_btn:"Buy", levels_btn:"Levels (1–100)",
+        mined_lbl:"MINED", day_rate_lbl:"DAY RATE", shift_cd_lbl:"SHIFT COUNTDOWN", collect_lbl:"COLLECT",
         maint_title:"Update in progress", maint_sub:"We are updating VIKING MINER right now. Please check back soon!",
         avatar_title:"Choose your warrior", avatar_sub:"Pick your avatar — it becomes your identity everywhere in the game.", avatar_perm:"This choice is permanent — your warrior becomes your identity forever. Choose wisely.", avatar_confirm:"CONFIRM SELECTION", avatar_confirm2:"LOCK IN PERMANENTLY", avatar_warn:"⚠ Once confirmed, your warrior cannot be changed",
         ch1_title:"📢 Official Telegram Channel", ch2_title:"💬 Payouts & Community Channel",
@@ -1337,6 +1335,7 @@
         mining_rate:"سرعة التعدين", current_rank:"مستوى المحفظة", claimed_in_app:"رصيدك المجموع بالتطبيق",
         streak_txt:"🔥 نظام الـ 24 ساعة", streak_sub:"اجمع كل 24 ساعة ليستمر التعدين",
         collect_btn:"اجمع عملات التعدين الآن", buy_btn:"شراء", levels_btn:"المستويات (1–100)",
+        mined_lbl:"المُعدّن", day_rate_lbl:"معدل اليوم", shift_cd_lbl:"عدّاد الوردية", collect_lbl:"اجمع",
         maint_title:"جارٍ التحديث", maint_sub:"بنحدّث VIKING MINER دلوقتي. ارجع تاني قريب!",
         avatar_title:"اختر المحارب بتاعك", avatar_sub:"اختار الأفاتار — دي هتبقى هويتك في اللعبة كلها.", avatar_perm:"الاختيار ده نهائي — المحارب ده هيبقى هويتك للأبد. اختار بحكمة.", avatar_confirm:"تأكيد الاختيار", avatar_confirm2:"قفل نهائي للأبد", avatar_warn:"⚠ بعد التأكيد مش هتقدر تغيّر المحارب",
         ch1_title:"📢 قناة التليجرام الرسمية", ch2_title:"💬 قناة إثباتات السحب والمجتمع",
@@ -1384,6 +1383,7 @@
         mining_rate:"СКОРОСТЬ", current_rank:"УРОВЕНЬ КОШЕЛЬКА", claimed_in_app:"Собрано в боте",
         streak_txt:"🔥 Цикл 24 часа", streak_sub:"Собирайте каждые 24ч",
         collect_btn:"СОБРАТЬ МОНЕТЫ", buy_btn:"Купить", levels_btn:"Уровни (1–100)",
+        mined_lbl:"ДОБЫТО", day_rate_lbl:"СТАВКА В ДЕНЬ", shift_cd_lbl:"ОБРАТНЫЙ ОТСЧЁТ", collect_lbl:"СОБРАТЬ",
         maint_title:"Идёт обновление", maint_sub:"Мы обновляем VIKING MINER прямо сейчас. Загляните чуть позже!",
         avatar_title:"Выберите воина", avatar_sub:"Выберите аватар — он станет вашим образом во всей игре.", avatar_perm:"Этот выбор навсегда — воин станет вашим образом навсегда. Выбирайте мудро.", avatar_confirm:"ПОДТВЕРДИТЬ ВЫБОР", avatar_confirm2:"ЗАФИКСИРОВАТЬ НАВСЕГДА", avatar_warn:"⚠ После подтверждения воина изменить нельзя",
         ch1_title:"📢 Официальный канал", ch2_title:"💬 Канал выплат",
@@ -2343,7 +2343,7 @@
       document.getElementById('mine-lvl-txt').innerText = "Level " + cur.level;
       document.getElementById('mine-rank-title').innerText = cur.name;
       document.getElementById('mine-claimed-total').innerText = Math.floor(minedInApp).toLocaleString();
-      document.getElementById('mine-day-rate').innerText = `${cur.perDay.toFixed(2)} ${config.coinSym}/d`;
+      document.getElementById('mine-day-rate').innerText = Number(cur.perDay.toFixed(2)).toLocaleString('en-US', {maximumFractionDigits: 2});
       document.getElementById('mine-to-go').innerText = `Hold: ${Math.floor(walletHold).toLocaleString()} ${config.coinSym}`;
 
       paintChBtn(1); paintChBtn(2);
@@ -2479,7 +2479,7 @@
       const cappedElapsed = Math.min(86400, rawElapsed);
       const pct24h = Math.min(100, (cappedElapsed / 86400) * 100);
 
-      document.getElementById('live-mined-num').innerText = (cappedElapsed * perSec).toFixed(6);
+      document.getElementById('live-mined-num').innerText = Number((cappedElapsed * perSec).toFixed(4)).toLocaleString('en-US', {maximumFractionDigits: 4});
       document.getElementById('mine-prog-bar').style.width = pct24h.toFixed(1) + "%";
 
       const rem = Math.max(0, 86400 - Math.floor(cappedElapsed));
