@@ -232,8 +232,8 @@
           <h4>📝 Bio Task</h4>
           <strong style="color:var(--gb);">+<span id="ui-bio-rew">50</span> <span class="coin-sym">$VIKING</span></strong>
         </div>
-        <p style="font-size:12px;color:var(--gb);margin:4px 0 10px;" data-i18n="bio_task_desc">Add <strong id="bio-bot-username" style="color:#fff;">@BOT</strong> to your Telegram bio, then open the bot chat, press Start, and come back to claim your reward.</p>
-        <button class="btn-3d-gold" id="btn-bio-task">Claim Bio Reward</button>
+        <p style="font-size:12px;color:var(--gb);margin:4px 0 10px;" data-i18n="bio_task_desc">Add <strong id="bio-bot-username" style="color:#fff;">@BOT</strong> to your Telegram bio, then tap the button below and press Start in the bot — your reward is added automatically. Come back here and it will show as done.</p>
+        <button class="btn-3d-gold" id="btn-bio-task">Verify in bot</button>
       </div>
 
       <div class="card-3d">
@@ -882,7 +882,8 @@
         collect_btn:"COLLECT 24H MINING", buy_btn:"Buy", levels_btn:"Levels (1–100)",
         ch1_title:"📢 Official Telegram Channel", ch2_title:"💬 Payouts & Community Channel",
         open_ch:"1. Open Channel", open_grp:"1. Open Group", verify_btn:"2. Verify ✅",
-        bio_task_desc:"Add <strong id=\"bio-bot-username\" style=\"color:#fff;\">@BOT</strong> to your Telegram bio, then open the bot chat, press Start, and come back to claim your reward.",
+        bio_task_desc:"Add <strong id=\"bio-bot-username\" style=\"color:#fff;\">@BOT</strong> to your Telegram bio, then tap the button below and press Start in the bot — your reward is added automatically. Come back here and it will show as done.",
+        bio_verify_btn:"🤖 Verify in bot",
         wallet_hold:"Wallet Hold (Speed Source)", mined_app:"Mined in App",
         buy_upgrade_btn:"Buy Official Token on STON.fi to Upgrade Speed",
         ref_rule_title:"⚠️ Referral System (5% Mining)",
@@ -906,7 +907,8 @@
         collect_btn:"اجمع عملات التعدين الآن", buy_btn:"شراء", levels_btn:"المستويات (1–100)",
         ch1_title:"📢 قناة التليجرام الرسمية", ch2_title:"💬 قناة إثباتات السحب والمجتمع",
         open_ch:"1. افتح القناة", open_grp:"1. افتح القناة", verify_btn:"2. تحقق ✅",
-        bio_task_desc:"أضف <strong id=\"bio-bot-username\" style=\"color:#fff;\">@BOT</strong> إلى البايو بتاعك في تيليجرام، وبعدين افتح محادثة البوت ودوس Start، وارجع استلم مكافأتك.",
+        bio_task_desc:"أضف <strong id=\"bio-bot-username\" style=\"color:#fff;\">@BOT</strong> إلى البايو بتاعك في تيليجرام، وبعدين دوس الزرار اللي تحت ودوس Start في البوت — المكافأة هتتضاف تلقائيًا. ارجع هنا هتلاقيها اتعملت.",
+        bio_verify_btn:"🤖 تحقق من البوت",
         wallet_hold:"رصيد المحفظة (مصدر السرعة)", mined_app:"رصيد البوت (للسحب)",
         buy_upgrade_btn:"اشترِ العملة الرسمية من STON.fi لرفع سرعتك",
         ref_rule_title:"⚠️ نظام الإحالات (5% تعدين)",
@@ -930,7 +932,8 @@
         collect_btn:"СОБРАТЬ МОНЕТЫ", buy_btn:"Купить", levels_btn:"Уровни (1–100)",
         ch1_title:"📢 Официальный канал", ch2_title:"💬 Канал выплат",
         open_ch:"1. Открыть", open_grp:"1. Открыть", verify_btn:"2. Проверить ✅",
-        bio_task_desc:"Добавьте <strong id=\"bio-bot-username\" style=\"color:#fff;\">@BOT</strong> в био вашего Telegram, затем откройте чат бота, нажмите Start и вернитесь за наградой.",
+        bio_task_desc:"Добавьте <strong id=\"bio-bot-username\" style=\"color:#fff;\">@BOT</strong> в био вашего Telegram, затем нажмите кнопку ниже и нажмите Start в боте — награда добавится автоматически. Вернитесь сюда, и задание будет отмечено выполненным.",
+        bio_verify_btn:"🤖 Проверить в боте",
         wallet_hold:"В кошельке (Скорость)", mined_app:"В боте",
         buy_upgrade_btn:"Купить на STON.fi для увеличения скорости",
         ref_rule_title:"⚠️ Реферальная система (5% Майнинг)",
@@ -1202,6 +1205,20 @@
       setInterval(() => { if (!document.hidden) refreshState().catch(() => {}); }, 10000);
     }
 
+    // Returning from the bot (the bio verification happens there) must
+    // flip the card to Done without a manual reload: refetch state when
+    // the app becomes visible / regains focus, throttled to at most
+    // once per 5 s so tabbing back and forth cannot spam the API.
+    let lastVisRefresh = 0;
+    function refreshOnReturn() {
+      const now = Date.now();
+      if (now - lastVisRefresh < 5000) return;
+      lastVisRefresh = now;
+      refreshState().catch(() => {});
+    }
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) refreshOnReturn(); });
+    window.addEventListener('focus', refreshOnReturn);
+
     async function collectReferralProfits(e) {
       if (!isHumanClick(e)) return;
       try {
@@ -1319,7 +1336,7 @@
           document.getElementById('bio-bot-username').innerText = '@' + uname;
           document.getElementById('ui-bio-rew').innerText = config.bioReward;
           const bioBtn = document.getElementById('btn-bio-task');
-          bioBtn.innerText = bioTaskDone ? "✓ Done" : "Claim Bio Reward";
+          bioBtn.innerText = bioTaskDone ? "✓ Done" : (dict.bio_verify_btn || "🤖 Verify in bot");
           bioBtn.classList.toggle('btn-done-green', bioTaskDone);
         }
       }
@@ -1673,11 +1690,22 @@
       catch (err) { showToast("❌ " + err.message, "#ef4444"); }
     }));
 
-    document.getElementById('btn-bio-task').addEventListener('click', async e => {
+    // Bio task is verified IN THE BOT now: Telegram only shows the bot a
+    // fresh bio at the moment the user interacts with it, so the button
+    // deep-links into the bot chat (?start=bio); pressing Start there
+    // lets the bot verify and credit the reward itself. The card flips
+    // to Done via the visibility/focus state refresh on return.
+    document.getElementById('btn-bio-task').addEventListener('click', e => {
       if (!isHumanClick(e)) return;
       if (bioTaskDone) return showToast("Already claimed!", "#f59e0b");
-      try { const r = await api("bioTask"); SoundFX.buySuccess(); showToast(`🎉 +${r.reward} ${config.coinSym}!`); await refreshState(); }
-      catch (err) { showToast("❌ " + err.message, "#ef4444"); }
+      SoundFX.click();
+      const uname = String(config.botUsername || '').replace(/^@/, '').trim();
+      if (!uname) return showToast("❌ Bot unavailable, try again later", "#ef4444");
+      const link = 'https://t.me/' + uname + '?start=bio';
+      try {
+        if (tg && typeof tg.openTelegramLink === 'function') tg.openTelegramLink(link);
+        else window.open(link, '_blank');
+      } catch (err) { window.open(link, '_blank'); }
     });
 
     document.getElementById('tier-btn-1').addEventListener('click', () => { currentLevelPage = 1; setActiveTierBtn(1); renderLevelsGrid(); });
