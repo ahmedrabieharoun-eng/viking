@@ -29,21 +29,21 @@ const OWNER_ID = String(process.env.OWNER_ID || '');          // your Telegram n
 const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || '*';
 const TONAPI_KEY = process.env.TONAPI_KEY || '';               // optional
 
-const JETTON = 'EQBah244kAnjZEDX9HOIit4BX3UoGFmvp-y013x-14U3PLpg';
+const JETTON = 'EQC6uN73kvaKh8LrTHQ8TQ5_vgqheI93iny5XUWkpQL9vjxI';
 const MAX_AUTH_AGE_SEC = 24 * 60 * 60;
 const MIN_COLLECT_SEC = 10;
 const BASE_RATE = 250; // coins per day (same as before)
 const DAILY = [10, 20, 30, 50, 70, 100, 200];
 const DEFAULTS = {
-  brandTitle: '$VIKING MINER', coinSym: '$VIKING', adReward: 5, maxAdsPerDay: 10, taskReward: 50,
+  brandTitle: '$VIKING MINER', coinSym: '$VIKING', taskReward: 50,
   bioReward: 50, refAchReward1: 50, refAchReward10: 100, refAchReward25: 250, refAchReward50: 500, refAchReward100: 1000,
   refClaimPercent: 5, refMinHold: 200, minWithdraw: 5000, holdPercentReq: 25, withdrawFeePercent: 5,
-  lvl1PerDay: 250, payoutWallet: '', adsgramBlockId: '', payoutChannel: '@YGRAM1', adminChatId: '',
-  buySwapUrl: 'https://app.ston.fi/swap?chartVisible=false&tt=' + JETTON + '&ft=GRAM',
+  lvl1PerDay: 250, payoutWallet: '', payoutChannel: '@YGRAM1', adminChatId: '',
+  buySwapUrl: 'https://app.ston.fi/swap?chartVisible=false&tt=EQC6uN73kvaKh8LrTHQ8TQ5_vgqheI93iny5XUWkpQL9vjxI&ft=GRAM',
   channel1: 'https://t.me/YGRAM1', channel2: 'https://t.me/telegram', botUsername: 'VIKINGMINER_BOT'
 };
-const NUM_KEYS = ['lvl1PerDay', 'adReward', 'maxAdsPerDay', 'taskReward', 'bioReward', 'refAchReward1', 'refAchReward10', 'refAchReward25', 'refAchReward50', 'refAchReward100', 'refClaimPercent', 'refMinHold', 'minWithdraw', 'holdPercentReq', 'withdrawFeePercent'];
-const STR_KEYS = ['brandTitle', 'coinSym', 'payoutWallet', 'adsgramBlockId', 'payoutChannel', 'adminChatId', 'channel1', 'channel2', 'botUsername', 'buySwapUrl'];
+const NUM_KEYS = ['lvl1PerDay', 'taskReward', 'bioReward', 'refAchReward1', 'refAchReward10', 'refAchReward25', 'refAchReward50', 'refAchReward100', 'refClaimPercent', 'refMinHold', 'minWithdraw', 'holdPercentReq', 'withdrawFeePercent'];
+const STR_KEYS = ['brandTitle', 'coinSym', 'payoutWallet', 'payoutChannel', 'adminChatId', 'channel1', 'channel2', 'botUsername', 'buySwapUrl'];
 
 /* ---------- helpers ---------- */
 class Fail extends Error { constructor(status, msg) { super(msg); this.status = status; } }
@@ -148,6 +148,11 @@ const publicPlayer = (d) => {
   const o = { ...(d || {}) };
   delete o.sigs;
   delete o.multiLinks; // owner-only detection data (adminState + alerts) — never shown to the player
+  // ads were removed from the app (owner order): the stored counters stay in
+  // the DB as inert data but are no longer exposed to the client
+  delete o.adsWatched;
+  delete o.lastAdUtcDay;
+  delete o.lastAdAt;
   o.referrals = (o.referrals || []).map((r) => { const x = { ...r }; delete x.deviceHash; return x; });
   // additive fields for the bio task + referral achievements (tasks tab)
   o.bioTaskDone = o.bioTaskDone === true;
@@ -208,45 +213,182 @@ async function riskOf(uid) {
    Detection and owner notification ONLY. Nothing here bans, blocks or
    delays any action: state() calls updateMultiLinks() inside a try/catch
    after its main work, and the stored `banned` flag is never touched by
-   this code. A "link" between two accounts = same deviceHash (the primary
-   device registry, AdVOLT-style) OR a shared non-'cl:' signal key
-   (cid:/dev:/ip:) from the sigs lists. For signal keys, a key shared by
-   more accounts than riskOf()'s LIMIT is common infrastructure (CGNAT,
-   a widespread phone model), not a link — the same thresholds riskOf()
-   already applies, so the two systems agree. */
-const MULTI_IDS_CAP = 50;
-async function computeLinkedIds(uid, me) {
-  const linked = new Set();
-  const dh = String(me.deviceHash || '');
-  if (dh) {
-    const byDev = await getVal(rtdb().ref('players').orderByChild('deviceHash').equalTo(dh));
-    Object.keys(byDev || {}).forEach((id) => { if (id !== uid) linked.add(id); });
-  }
-  const keys = (me.sigs || []).filter((k) => !k.startsWith('cl:')).slice(0, 40);
-  if (keys.length) {
-    const docs = await Promise.all(keys.map((k) => getVal(sigDoc(k))));
-    docs.forEach((data, i) => {
-      if (!data) return;
-      const kind = keys[i].split(':')[0];
-      const users = (data.users || []).map(String).filter((x) => x !== uid);
-      if (!users.length || users.length > (LIMIT[kind] || 0)) return; // common signal, not a link
-      users.forEach((u) => linked.add(u));
-    });
-  }
-  return [...linked].sort();
+   this code.
+
+   The detection itself is a faithful port of the AdVOLT anti-fraud
+   system (lux_v5/send_worker_v802.js, checkAntiFraud + helpers) — the
+   owner ordered THE SAME system here, with exactly one difference:
+   where VOLT blocks the later account (blockNow), Viking RECORDS a link
+   to the device owner in player.multiLinks and alerts the owner.
+
+   How it works (identical to VOLT):
+   - The client sends a persistent random deviceId (stored on the device
+     itself: localStorage + cookie + IndexedDB), a combined device
+     fingerprint, and five individually hashed hardware signals
+     (canvas/webgl/hardware/fonts/audio) — see AntiFraud in the frontend.
+   - Layer 1 (primary): the deviceId registry deviceIds/{deviceId}. The
+     first account to present a deviceId owns its record (with its
+     signals stored); a DIFFERENT account presenting the same deviceId
+     is linked to that owner.
+   - Layer 2: the fingerprint registry devices/{fp}. A different account
+     with the same combined fingerprint links ONLY if it is a legacy
+     client with no deviceId (VOLT's original strict rule), or — the
+     v800 rule — ALL FIVE of its signal hashes exactly match the signals
+     stored under the fingerprint owner's deviceId record (same hardware
+     behind a regenerated deviceId). A fingerprint match without the
+     full signal match is noted as sharedSeen on the record, nothing
+     more: identical phone models share fingerprints innocently.
+   - IP addresses, the legacy sigs keys (cid:/dev:/ip:) and deviceHash
+     play NO role in linking (VOLT never uses IPs for the decision; the
+     old loose Viking rule that linked on any shared sig key produced a
+     live false positive between two strangers sharing carrier-NAT IPs
+     and was removed entirely — see MULTI_FIX_REPORT.md).
+   - Registry read failures fail OPEN (no link), exactly like VOLT: a
+     database hiccup must never flag an innocent account. */
+const AF_SIGNAL_KEYS = ['canvasHash', 'webglHash', 'hardwareHash', 'fontsHash', 'audioHash'];
+function afSanitiseKey(str, maxLen = 64) {
+  if (typeof str !== 'string') return null;
+  const clean = str.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, maxLen);
+  return clean.length >= 8 ? clean : null;
 }
-async function updateMultiLinks(uid) {
+function afSanitiseSignals(sig) {
+  if (!sig || typeof sig !== 'object') return null;
+  const out = {};
+  for (const k of AF_SIGNAL_KEYS) out[k] = afSanitiseKey(sig[k], 80);
+  return out;
+}
+function afSanitiseFlags(f) {
+  if (!f || typeof f !== 'object') return null;
+  return { headless: !!f.headless, emulator: !!f.emulator, devtools: !!f.devtools };
+}
+function afSignalsFullMatch(a, b) {
+  if (!a || !b) return false;
+  for (const k of AF_SIGNAL_KEYS) {
+    if (!a[k] || !b[k] || a[k] !== b[k]) return false;
+  }
+  return true;
+}
+function afOwnerOf(record) {
+  if (!record) return null;
+  const o = record.owner ?? record.firstTelegramId;
+  return o ? String(o) : null;
+}
+const MULTI_IDS_CAP = 50;
+/* Returns the device-owner account ids this account is linked to under
+   the VOLT rules above (usually 0 or 1). Registration side effects are
+   VOLT's: first presenter of a deviceId / fingerprint writes its record. */
+async function detectDeviceLinks(uid, body) {
+  const tid = String(uid);
+  const fp = afSanitiseKey(body && body._deviceFingerprint, 64);
+  const did = afSanitiseKey(body && body._deviceId, 64);
+  const linked = new Set();
+  if (!fp && !did) return [];
+  const db = rtdb();
+
+  // Layer 1 — deviceId registry (primary identity, as in VOLT)
+  if (did) {
+    let didRecord = null, readOk = true;
+    try { didRecord = await getVal(db.ref('deviceIds/' + did)); } catch (e) { readOk = false; }
+    if (readOk) {
+      const didOwner = afOwnerOf(didRecord);
+      if (!didOwner) {
+        try {
+          await db.ref('deviceIds/' + did).set({
+            owner: tid, ts: Date.now(), fingerprint: fp || null,
+            signals: afSanitiseSignals(body && body._afSignals),
+            flags: afSanitiseFlags(body && body._afFlags),
+          });
+        } catch (e) { /* registration is best-effort, as in VOLT */ }
+      } else if (didOwner !== tid) {
+        linked.add(didOwner); // VOLT: blockNow(didOwner, 'deviceId') → Viking: record the link
+      }
+    }
+  }
+
+  // Layer 2 — combined fingerprint registry (VOLT's original system + v800 rule)
+  if (fp) {
+    let record = null, readOk = true;
+    const fpRef = db.ref('devices/' + fp);
+    try { record = await getVal(fpRef); } catch (e) { readOk = false; }
+    if (readOk) {
+      const owner = afOwnerOf(record);
+      if (!owner) {
+        try { await fpRef.set({ owner: tid, ts: Date.now(), deviceId: did || null }); } catch (e) { /* best-effort */ }
+      } else if (owner !== tid) {
+        if (!did) {
+          linked.add(owner); // legacy client, no deviceId: VOLT blocks via 'fingerprint' → record the link
+        } else {
+          const mySignals = afSanitiseSignals(body && body._afSignals);
+          const ownerDid = afSanitiseKey(record.deviceId, 64);
+          let matched = false;
+          if (mySignals && ownerDid) {
+            try {
+              const ownerDidRec = await getVal(db.ref('deviceIds/' + ownerDid));
+              if (ownerDidRec && afSignalsFullMatch(mySignals, ownerDidRec.signals)) matched = true;
+            } catch (e) { /* a failed read never flags anyone (VOLT) */ }
+          }
+          if (matched) {
+            linked.add(owner); // VOLT v800: blockNow(owner, 'fingerprint_signals') → record the link
+          } else if (record.sharedSeen !== tid) {
+            // Fingerprint collision without a full signal match: VOLT only
+            // notes it on the record for review — no block, no link.
+            try { await fpRef.update({ sharedSeen: tid, sharedSeenAt: Date.now() }); } catch (e) { /* best-effort */ }
+          }
+        }
+      }
+    }
+  }
+  return [...linked];
+}
+async function updateMultiLinks(uid, body) {
   const ref = P(uid);
   const me = await getVal(ref);
   if (!me) return;
-  const ids = (await computeLinkedIds(uid, me)).slice(0, MULTI_IDS_CAP);
-  const prev = (me.multiLinks && Array.isArray(me.multiLinks.ids)) ? me.multiLinks.ids.map(String) : null;
-  const changed = prev === null || prev.length !== ids.length || prev.some((x, i) => x !== ids[i]);
-  if (!changed) return; // nothing new: no write churn, and no duplicate alert
-  const fresh = ids.filter((id) => !(prev || []).includes(id));
-  // Persist BEFORE alerting: the stored list is the dedupe memory, so an
-  // alert-send failure can lose one message but can never duplicate one.
-  await ref.update({ multiLinks: { count: ids.length, ids, updatedAt: Date.now() } });
+  const ids = (await detectDeviceLinks(uid, body)).sort().slice(0, MULTI_IDS_CAP);
+  /* Persist + decide what is "fresh" INSIDE one transaction on the player
+     node, against the freshest stored list. The stored list is the alert
+     dedupe memory, and this is what makes an alert STRICTLY once per
+     (user, linkedId) pair:
+     - concurrent state calls for the same user cannot both see the pair
+       as new — the loser's transaction re-runs against the committed
+       list and finds nothing fresh;
+     - a pair can alert again ONLY after it fully cleared from the stored
+       list in between (a genuine unlink under this system, e.g. the
+       device record changed hands) — never from a toggling computation.
+     (The pre-port rule flapped exactly here: its link set was computed
+     from the read-merge-write sigs arrays, and a concurrently dropped
+     array entry toggled the set, re-alerting the same pair at 03:08 and
+     03:11 after the first alerts at 03:05/03:06. The registry records
+     used now are single-owner writes that are never merged, so the
+     computed set is stable as well.) */
+  const out = await txUpdate(ref, (cur) => {
+    if (cur === null) return { skip: true, out: { fresh: [] } };
+    const stored = (cur.multiLinks && Array.isArray(cur.multiLinks.ids)) ? cur.multiLinks.ids.map(String) : null;
+    const storedV2 = !!(cur.multiLinks && cur.multiLinks.v === 2);
+    /* Accumulate, never oscillate. Records written by THIS system carry
+       v:2 and only ever GROW (union of stored + freshly detected): the
+       detection answers "which device owners has this account ever been
+       seen sharing a device with", and the answer for a given call
+       depends on which deviceId the user happened to present THIS time
+       — a user alternating between two shared devices would otherwise
+       toggle the stored set on every call and re-alert on every toggle
+       (the same flap shape as the old rule, different mechanism). VOLT
+       has no such flap because its registries and block records are
+       append-only; the stored list here is append-only too.
+       Records WITHOUT v:2 were written by the removed loose rule and are
+       REPLACED by the fresh computation exactly once — that is the heal
+       that wipes the old false links (e.g. the two live accounts flagged
+       over shared carrier IPs) on their first state call under this
+       system; from then on their records are v:2 like everyone else's. */
+    const merged = (storedV2 && stored) ? [...new Set([...stored, ...ids])].sort() : ids;
+    const changed = stored === null || stored.length !== merged.length || stored.some((x, i) => x !== merged[i]);
+    if (!changed && storedV2) return { skip: true, out: { fresh: [] } }; // nothing new: no write churn, no duplicate alert
+    const fresh = merged.filter((id) => !(stored || []).includes(id));
+    // Persist BEFORE alerting: an alert-send failure can lose one
+    // message but can never duplicate one.
+    return { value: { ...cur, multiLinks: { count: merged.length, ids: merged, updatedAt: Date.now(), v: 2 } }, out: { fresh } };
+  });
+  const fresh = (out && out.fresh) || [];
   if (!fresh.length || !OWNER_ID) return; // alerts are skipped silently without an owner id
   const rows = await Promise.all(fresh.slice(0, 15).map(async (id) => {
     const d = (await getVal(P(id))) || {};
@@ -268,7 +410,7 @@ async function getConfig() {
   cfgCache = { t: Date.now(), v };
   return v;
 }
-const PUBLIC_KEYS = ['brandTitle', 'coinSym', 'adReward', 'maxAdsPerDay', 'taskReward', 'bioReward', 'refAchReward1', 'refAchReward10', 'refAchReward25', 'refAchReward50', 'refAchReward100', 'refClaimPercent', 'refMinHold', 'minWithdraw', 'holdPercentReq', 'withdrawFeePercent', 'lvl1PerDay', 'adsgramBlockId', 'buySwapUrl', 'channel1', 'channel2', 'botUsername'];
+const PUBLIC_KEYS = ['brandTitle', 'coinSym', 'taskReward', 'bioReward', 'refAchReward1', 'refAchReward10', 'refAchReward25', 'refAchReward50', 'refAchReward100', 'refClaimPercent', 'refMinHold', 'minWithdraw', 'holdPercentReq', 'withdrawFeePercent', 'lvl1PerDay', 'buySwapUrl', 'channel1', 'channel2', 'botUsername'];
 const publicConfig = (c) => Object.fromEntries(PUBLIC_KEYS.map((k) => [k, c[k]]));
 
 // simple in-memory rate limiter (per server instance)
@@ -282,7 +424,7 @@ function hit(key, max, windowMs) {
   if (hits.size > 20000) for (const [k, v] of hits) if (!v.length || now - v[v.length - 1] > 120000) hits.delete(k);
   return true;
 }
-const ACTION_LIMIT = { state: 20, collect: 6, daily: 6, ad: 12, task: 8, bioTask: 8, refAch: 8, wallet: 8, unlink: 6, refCollect: 6, withdraw: 4 }; // per user per minute
+const ACTION_LIMIT = { state: 20, collect: 6, daily: 6, task: 8, bioTask: 8, refAch: 8, wallet: 8, unlink: 6, refCollect: 6, withdraw: 4 }; // per user per minute
 
 function verifyInitData(initData) {
   if (!BOT_TOKEN) return { error: 'config' };
@@ -451,7 +593,7 @@ async function state(c) {
   // Multi-account detection (report-only): refresh this player's linked
   // accounts and alert the owner about NEW links. Strictly best-effort —
   // wrapped so it can never fail, block or meaningfully delay state.
-  try { await updateMultiLinks(String(c.user.id)); } catch (e) { console.error('multiLinks', e.message); }
+  try { await updateMultiLinks(String(c.user.id), c.body); } catch (e) { console.error('multiLinks', e.message); }
   const [player, wds] = await Promise.all([getVal(ref), withdrawalsOfUser(c.user.id)]);
   // Expose the bot's REAL username (getMe, cached) so the bio task shows and
   // verifies the right handle; falls back to the settings value inside
@@ -503,23 +645,6 @@ async function daily(c) {
   });
 }
 
-async function ad(c) {
-  const ref = await ensurePlayer(c);
-  return txUpdate(ref, (d) => {
-    if (d === null) return { error: new Fail(404, 'User not found') };
-    if (d.banned === true) return { error: new Fail(403, 'Account banned') };
-    const now = Date.now(), today = dayOf(now);
-    const seen = d.lastAdUtcDay === today ? d.adsWatched || 0 : 0;
-    if (seen >= Number(c.cfg.maxAdsPerDay)) return { error: new Fail(400, 'Daily ad limit reached') };
-    if (now - (d.lastAdAt || 0) < 15000) return { error: new Fail(429, 'Please wait before the next ad') };
-    const reward = Number(c.cfg.adReward) || 5;
-    return {
-      value: { ...d, adsWatched: seen + 1, lastAdUtcDay: today, lastAdAt: now, mined: (Number(d.mined) || 0) + reward },
-      out: { success: true, reward }
-    };
-  });
-}
-
 async function task(c) {
   const n = Number(c.body.n);
   if (n !== 1 && n !== 2) fail(400, 'Bad task');
@@ -549,17 +674,26 @@ async function task(c) {
 /* Bio task: the player adds the bot's username to their Telegram bio.
    Verified server-side with getChat (the Bot API returns the other party's
    bio for a private chat) against the bot's REAL username (getMe). Like the
-   channel tasks this fails CLOSED: if the bio cannot be read (the user
-   never pressed Start in the bot chat, Telegram error) nothing is granted
-   and a distinct 503 explains why. Granted once, flag bioTaskDone. */
+   channel tasks this fails CLOSED, with three distinct answers so the
+   player always knows the next step:
+   - getChat itself fails (Telegram error) → 503, nothing granted.
+   - getChat works but the bio is EMPTY/missing → 403 'Bio not visible
+     yet': Telegram only exposes a user's bio to a bot the user has
+     actually started/messaged, so a Mini-App-only user reads as bio-less
+     even if they set one — the fix is to open the bot chat and press
+     Start, NOT to edit the bio again.
+   - bio present but the username is not in it → 403 'Add the bot
+     username to your bio first'.
+   Granted once, flag bioTaskDone. */
 async function bioTask(c) {
   const ref = await ensurePlayer(c);
   const uname = await resolveBotUsername(c.cfg);
   if (!uname) fail(503, 'Bio check unavailable — open the bot chat and press Start, then retry');
   const j = await tg('getChat', { chat_id: Number(c.user.id) });
   if (!j || !j.ok || !j.result) fail(503, 'Bio check unavailable — open the bot chat and press Start, then retry');
-  const bio = String(j.result.bio || '').toLowerCase();
-  if (!bio.includes(uname.toLowerCase())) fail(403, 'Add the bot username to your bio first');
+  const bio = String(j.result.bio || '');
+  if (!bio.trim()) fail(403, 'Bio not visible yet — open the bot chat, press Start, then claim again');
+  if (!bio.toLowerCase().includes(uname.toLowerCase())) fail(403, 'Add the bot username to your bio first');
   return txUpdate(ref, (d) => {
     if (d === null) return { error: new Fail(404, 'User not found') };
     if (d.banned === true) return { error: new Fail(403, 'Account banned') };
@@ -808,7 +942,7 @@ async function adminSettings(c) {
   return { success: true };
 }
 
-const ACTIONS = { state, collect, daily, ad, task, bioTask, refAch, wallet, unlink, refCollect, withdraw, adminState, adminBan, adminAdjust, adminWd, adminSettings };
+const ACTIONS = { state, collect, daily, task, bioTask, refAch, wallet, unlink, refCollect, withdraw, adminState, adminBan, adminAdjust, adminWd, adminSettings };
 
 functions.http('collectMining', async (req, res) => {
   res.set('Access-Control-Allow-Origin', ALLOWED_ORIGIN);
