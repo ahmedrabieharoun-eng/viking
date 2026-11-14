@@ -18,8 +18,10 @@
  *      (owner correction): the user DM uses payout-banner2.webp
  *      (warrior) + «💸 Your Payout is Sent!» + his short wallet; the
  *      channel post uses payout-banner.webp (treasure chest) +
- *      «🏆 New Payout!» + first name, NO wallet. BOTH carry the
- *      «View Transaction» button when a tx link resolves.
+ *      «🏆 New Payout!» + FULL name + the FULL receiver wallet
+ *      (owner reversed his earlier no-wallet-in-channel rule).
+ *      BOTH carry the «View Transaction» button when a tx link
+ *      resolves.
  *
  *   P1  auto-pay success: record Paid ✅ / payoutState 'paid',
  *       exactly ONE transfer of net x 10^6 base units (decimals 6),
@@ -37,9 +39,10 @@
  *   P6  derivation: payoutEnabled() true with the test mnemonic;
  *       derivePayoutAddress maps it to the known V5 and V4
  *       addresses.
- *   C1  (in P1) exactly one user DM (banner2, personal caption,
- *       both buttons incl. the tonviewer tx link) + exactly one
- *       channel post (banner, public caption, NO wallet, both
+ *   C1  (in P1) exactly one user DM (banner2, personal caption
+ *       with the SHORT wallet, both buttons incl. the tonviewer
+ *       tx link) + exactly one channel post (banner, public
+ *       caption with the FULL friendly receiver wallet, both
  *       buttons).
  *   C2  adminWd approve on the auto-paid record: refused (400),
  *       and NOT one more celebration message.
@@ -47,6 +50,15 @@
  *       Paid, DM still sent, notified stamp set, failure logged.
  *   C4  the two designs are FIXED: a second payout reuses banner2
  *       for the DM and banner for the channel, same headers.
+ *   P7  tx-hash resolution: the stub's sendJetton returns a BOGUS
+ *       locally computed hash (the V5R1 trap — it is NOT the on-chain
+ *       tx id). Only findTransferTx's chain-resolved hash may be
+ *       stored or linked: in P1, payoutTx = the resolved hash and
+ *       the bogus hash appears NOWHERE in the record or the message
+ *       buttons; when findTransferTx returns null (timeout),
+ *       payoutTx stays '' + payoutTxLink = the payout wallet's
+ *       tonviewer page, both celebration buttons use it, and the
+ *       payout still completes Paid.
  *   C5  (in P5, child B) manual approve celebrates identically:
  *       one DM + one channel post, tx button = the stored txLink;
  *       a second approve is refused and sends nothing more.
@@ -73,7 +85,8 @@ const EMU = `127.0.0.1:${EMU_PORT}`;
 const JETTON = 'EQC6uN73kvaKh8LrTHQ8TQ5_vgqheI93iny5XUWkpQL9vjxI';
 const BANNER_DM = 'https://ahmedrabieharoun-eng.github.io/viking/payout-banner2.webp';
 const BANNER_CH = 'https://ahmedrabieharoun-eng.github.io/viking/payout-banner.webp';
-const STUB_TX_HASH = 'ab'.repeat(32); // 64 hex chars: resolves to a tonviewer transaction URL
+const STUB_TX_HASH = 'ab'.repeat(32); // 64 hex chars: the chain-RESOLVED hash the stub's findTransferTx returns
+const BOGUS_LOCAL_HASH = 'cd'.repeat(32); // the LOCALLY computed external hash the stub's sendJetton returns — NOT a tx id (the V5R1 trap); must never be stored or linked
 
 /* Throwaway test mnemonic (no funds, generated for this suite) and
    its known derivations — the same pair the derivation check uses. */
@@ -93,10 +106,14 @@ fs.writeFileSync(saPath, JSON.stringify({
 
 /* The file-backed payout stub: behaviour is driven by a JSON state
    file (flippable between scenarios), every sendJetton call is
-   appended to a JSONL log. Shared verbatim by child A and the
-   in-process instance through the PAYOUT_STUB_MODULE env seam. */
+   appended to a JSONL log and every findTransferTx call to a second
+   one. sendJetton returns a BOGUS locally computed hash;
+   findTransferTx returns the chain-resolved hash (or null when the
+   state sets findBehavior 'null'). Shared verbatim by child A and
+   the in-process instance through the PAYOUT_STUB_MODULE env seam. */
 const STUB_STATE = path.join(tmp, 'payout-state.json');
 const STUB_LOG = path.join(tmp, 'payout-sends.jsonl');
+const FIND_LOG = path.join(tmp, 'payout-finds.jsonl');
 const STUB_MODULE = path.join(tmp, 'payout-stub.js');
 fs.writeFileSync(STUB_MODULE, `
 const fs = require('fs');
@@ -111,7 +128,13 @@ exports.createPayoutClient = async () => ({
     if (st.sendDelayMs) await new Promise((r) => setTimeout(r, Number(st.sendDelayMs)));
     fs.appendFileSync(process.env.PAYOUT_STUB_LOG, JSON.stringify({ toRaw, amount: amount.toString(), comment }) + '\\n');
     if (st.sendBehavior === 'throw') throw new Error('stub broadcast boom');
-    return { seqno: 7, txHash: '${STUB_TX_HASH}' };
+    return { seqno: 7, txHash: '${BOGUS_LOCAL_HASH}' };
+  },
+  async findTransferTx({ comment, toRaw, amountBase, sinceMs }) {
+    const st = readState();
+    fs.appendFileSync(process.env.PAYOUT_STUB_FINDLOG, JSON.stringify({ comment, toRaw, amountBase: amountBase.toString(), sinceMs }) + String.fromCharCode(10));
+    if (st.findBehavior === 'null') return null;
+    return '${STUB_TX_HASH}';
   }
 });
 `);
@@ -119,8 +142,11 @@ const setStub = (o) => fs.writeFileSync(STUB_STATE, JSON.stringify(o));
 const RICH = { jettonBalanceBase: '1000000000000', sendBehavior: 'ok' }; // 1e12 base units = 1,000,000 coins at 6 decimals
 setStub(RICH);
 fs.writeFileSync(STUB_LOG, '');
+fs.writeFileSync(FIND_LOG, '');
 const sends = () => fs.readFileSync(STUB_LOG, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l));
 const sendsFor = (comment) => sends().filter((s) => s.comment === comment);
+const finds = () => fs.readFileSync(FIND_LOG, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l));
+const findsFor = (comment) => finds().filter((f) => f.comment === comment);
 
 process.env.BOT_TOKEN = BOT_TOKEN;
 process.env.OWNER_ID = OWNER_ID;
@@ -136,6 +162,7 @@ process.env.PAYOUT_MNEMONIC = TEST_MNEMONIC;
 process.env.PAYOUT_STUB_MODULE = STUB_MODULE;
 process.env.PAYOUT_STUB_STATE = STUB_STATE;
 process.env.PAYOUT_STUB_LOG = STUB_LOG;
+process.env.PAYOUT_STUB_FINDLOG = FIND_LOG;
 
 function envFor(extra, remove) {
   const env = { ...process.env };
@@ -309,7 +336,10 @@ async function doWithdraw(port, id, name, username) {
     await waitFor(async () => { const w = await dbGet('withdrawals/wd_' + n1); return w && w.payoutState === 'paid'; }, 20000, 'wd ' + n1 + ' paid');
     const wd1 = await dbGet('withdrawals/wd_' + n1);
     check('record flipped to Paid ✅ with payoutState paid', wd1.status === 'Paid ✅' && wd1.payoutState === 'paid', wd1);
-    check('payoutTx is the broadcast hash, payoutAt stamped', wd1.payoutTx === STUB_TX_HASH && typeof wd1.payoutAt === 'number', wd1);
+    check('payoutTx is the chain-RESOLVED hash (findTransferTx), payoutAt stamped', wd1.payoutTx === STUB_TX_HASH && typeof wd1.payoutAt === 'number', wd1);
+    check('the seam local hash was NOT stored — it appears nowhere in the record', wd1.payoutTx !== BOGUS_LOCAL_HASH && !JSON.stringify(wd1).includes(BOGUS_LOCAL_HASH), wd1);
+    const f1 = findsFor('WD-' + n1);
+    check('findTransferTx was asked for OUR transfer (comment + recipient + exact base amount)', f1.length >= 1 && f1[0].toRaw === W1 && f1[0].amountBase === '4750000000', f1);
     const s1 = sendsFor('WD-' + n1);
     check('exactly ONE jetton transfer for this withdrawal', s1.length === 1, s1);
     check('transfer amount = net 4750 x 10^6 base units (decimals 6, not 9)', s1.length === 1 && s1[0].amount === '4750000000', s1);
@@ -335,12 +365,19 @@ async function doWithdraw(port, id, name, username) {
     check('channel uses the TREASURE banner (payout-banner.webp)', ch1.length === 1 && ch1[0].photo === BANNER_CH, ch1[0] && ch1[0].photo);
     check('channel is the public design: «New Payout!» + FULL name + amount + WD number',
       ccap1.includes('New Payout!') && ccap1.includes('<b>Zayd Rich</b>') && ccap1.includes('4,750') && ccap1.includes('Withdrawal #' + n1), ccap1);
-    check('channel post carries NO wallet', !ccap1.includes('Wallet:') && !ccap1.includes(W1), ccap1);
+    const FRIENDLY_W1 = srv.toFriendlyAddress(W1);
+    check('channel post carries the FULL friendly receiver wallet in a code span (owner reversed the no-wallet rule)',
+      ccap1.includes('<code>' + FRIENDLY_W1 + '</code>') && ccap1.includes('👛'), ccap1); // the 👛 itself is premium-emoji-wrapped by tg(), so it is not adjacent to the <code> tag in the raw caption
+    check('channel caption shows the friendly form, never the raw address', !ccap1.includes(W1) && !ccap1.includes('Wallet:'), ccap1);
     check('channel buttons: Start Mining Now (/app) + View Transaction',
       kbUrls(ch1[0] || {}).includes('https://t.me/TestVikingBot/app') && kbUrls(ch1[0] || {}).includes('https://tonviewer.com/transaction/' + STUB_TX_HASH) &&
       kbTexts(ch1[0] || {}).some((t) => t.includes('Start Mining Now')) && kbTexts(ch1[0] || {}).some((t) => t.includes('View Transaction')),
       (ch1[0] || {}).reply_markup);
     check('the two designs are distinct (different image + different header)', dm1[0].photo !== ch1[0].photo && !cap1.includes('New Payout!') && !ccap1.includes('Your Payout is Sent!'));
+    const SHORT_W1 = FRIENDLY_W1.slice(0, 6) + '...' + FRIENDLY_W1.slice(-6);
+    check('wallet forms stay distinct: the DM shows the SHORT wallet, the channel shows the FULL one',
+      cap1.includes('<code>' + SHORT_W1 + '</code>') && !cap1.includes(FRIENDLY_W1) && ccap1.includes(FRIENDLY_W1), { cap1, ccap1 });
+    check('the bogus local hash is in NEITHER celebration button set', !kbUrls(dm1[0] || {}).join().includes(BOGUS_LOCAL_HASH) && !kbUrls(ch1[0] || {}).join().includes(BOGUS_LOCAL_HASH));
 
     /* ---------- C2: admin approve on the auto-paid record ---------- */
     console.log('\n[C2: adminWd approve on the auto-paid record — refused, nothing more sent]');
@@ -416,6 +453,29 @@ async function doWithdraw(port, id, name, username) {
     const ch5 = photosTo('@VIKING_PAYOUT').slice(-1)[0] || {};
     check('second DM: same warrior banner + same personal header', dm5.photo === BANNER_DM && String(dm5.caption || '').includes('Your Payout is Sent!'), dm5);
     check('second channel post: same treasure banner + same public header', ch5.photo === BANNER_CH && String(ch5.caption || '').includes('New Payout!'), ch5);
+
+    /* ---------- P7: hash resolution timeout — wallet-page link fallback ---------- */
+    console.log('\n[P7: findTransferTx returns null (timeout) — payoutTx empty, payoutTxLink = wallet page, still Paid]');
+    const U7 = '700009007', W7 = RAW('7');
+    await seedPlayer(U7, 'Nadia Timeout', 'nadiatimeout', 20000, W7);
+    setStub({ jettonBalanceBase: '1000000000000', sendBehavior: 'ok', findBehavior: 'null' });
+    const chBefore7 = photosTo('@VIKING_PAYOUT').length;
+    const n7 = await doWithdraw(APP_A, U7, 'Nadia', 'nadiatimeout');
+    await waitFor(async () => { const w = await dbGet('withdrawals/wd_' + n7); return w && w.payoutState === 'paid'; }, 20000, 'wd ' + n7 + ' paid');
+    const wd7 = await dbGet('withdrawals/wd_' + n7);
+    const WALLET_PAGE = 'https://tonviewer.com/' + TEST_V5;
+    check('timeout: the payout still completes — record Paid ✅ / payoutState paid', wd7.status === 'Paid ✅' && wd7.payoutState === 'paid', wd7);
+    check('timeout: payoutTx is EMPTY and payoutTxLink is the payout wallet page', wd7.payoutTx === '' && wd7.payoutTxLink === WALLET_PAGE, wd7);
+    check('timeout: the bogus local hash is nowhere in the record', !JSON.stringify(wd7).includes(BOGUS_LOCAL_HASH), wd7);
+    check('timeout: exactly one transfer was still broadcast', sendsFor('WD-' + n7).length === 1, sendsFor('WD-' + n7));
+    check('timeout: resolution was actually attempted for our comment', findsFor('WD-' + n7).length >= 1, findsFor('WD-' + n7));
+    await waitFor(async () => photosTo(U7).length === 1 && photosTo('@VIKING_PAYOUT').length === chBefore7 + 1, 15000, 'wd ' + n7 + ' celebration messages');
+    const dm7 = photosTo(U7)[0] || {};
+    const ch7 = photosTo('@VIKING_PAYOUT').slice(-1)[0] || {};
+    check('timeout: the DM tx button falls back to the payout wallet page', kbUrls(dm7).includes(WALLET_PAGE), dm7.reply_markup);
+    check('timeout: the channel tx button falls back to the payout wallet page', kbUrls(ch7).includes(WALLET_PAGE), ch7.reply_markup);
+    check('timeout: neither button carries the bogus local hash', !kbUrls(dm7).join().includes(BOGUS_LOCAL_HASH) && !kbUrls(ch7).join().includes(BOGUS_LOCAL_HASH));
+    setStub(RICH);
 
     /* ---------- P4: the state machine under concurrency / re-invocation (in-process) ---------- */
     console.log('\n[P4: attemptPayout state machine — concurrency, re-invoke, hands-off states]');

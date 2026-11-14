@@ -2233,8 +2233,13 @@ async function withdraw(c) {
      by withdraw() stands, exactly like a manual payout that is still
      waiting, and the owner is DM'd the reason.
    - On success the record is flipped to status 'Paid ✅' with
-     payoutState 'paid', payoutTx (external tx hash when obtainable,
-     else the wallet seqno) and payoutAt.
+     payoutState 'paid', payoutTx and payoutAt. payoutTx holds ONLY
+     the chain-resolved transaction hash (findTransferTx): the hash
+     the seam computes locally from the external message is NOT the
+     on-chain tx id for V5R1 wallets (live proof 2026-11-14 — links
+     built from it 404 on tonviewer), so it is logged, never stored.
+     When resolution times out, payoutTx stays '' and payoutTxLink
+     points at the payout wallet's tonviewer page instead.
 
    The chain layer sits behind getPayoutClient(): production builds
    the real @ton/ton client (createRealPayoutClient); local suites
@@ -2322,7 +2327,7 @@ async function createRealPayoutClient() {
       let txHash = '';
       if (typeof wallet.createTransfer === 'function' && typeof wallet.send === 'function') {
         const ext = await wallet.createTransfer({ seqno, secretKey: keyPair.secretKey, messages: [msg] });
-        txHash = ext.hash().toString('hex'); // the external message hash — the payout's on-chain tx id
+        txHash = ext.hash().toString('hex'); // LOCALLY computed external-message hash — NOT the on-chain tx id for V5R1 wallets (its tonviewer links 404); kept for logging only, findTransferTx resolves the real hash
         await wallet.send(ext);
       } else {
         await wallet.sendTransfer({ seqno, secretKey: keyPair.secretKey, messages: [msg] });
@@ -2336,6 +2341,74 @@ async function createRealPayoutClient() {
       }
       if (cur <= seqno) throw new Error('broadcast unconfirmed: seqno did not move within 60s');
       return { seqno, txHash };
+    },
+    /* Resolve the REAL on-chain transaction hash of a transfer this
+       client just broadcast (called after sendJetton's seqno
+       confirmation). Scan the payout wallet's newest transactions
+       (toncenter v3, newest first) for OURS: the transaction at or
+       after the broadcast whose FIRST out-message goes to our
+       jetton wallet carrying a TEP-74 transfer body (op 0x0f8a7ea5)
+       with the exact base amount and recipient, AND whose forward
+       comment — decoded from the payload ref with the exact layout
+       sendJetton builds (uint32 0 + string tail) — equals `comment`
+       (WD-<wdNum>, unique per withdrawal). Polls every 5 s for up
+       to ~90 s; a lagging index or a failed read just costs one
+       poll. Returns the lowercase hex hash, or null on timeout —
+       the caller then links the wallet page, never the local hash. */
+    async findTransferTx({ comment, toRaw, amountBase, sinceMs }) {
+      const { Cell } = core;
+      const jwRaw = toRawAddress((await myJettonWallet()).toRawString());
+      const ownerRaw = ownerAddr.toRawString();
+      const wantDest = toRawAddress(String(toRaw || ''));
+      let wantAmt;
+      try { wantAmt = BigInt(amountBase); } catch (e) { return null; }
+      const wantComment = String(comment || '');
+      const bodyMatches = (cell) => {
+        try {
+          const s = cell.beginParse();
+          if (s.loadUint(32) !== 0x0f8a7ea5) return false;   // TEP-74 transfer op
+          s.loadUint(64);                                    // query id
+          if (s.loadCoins() !== wantAmt) return false;       // exact base amount
+          if (toRawAddress(s.loadAddress().toRawString()) !== wantDest) return false; // recipient owner wallet
+          s.loadAddress();                                   // response destination (ourselves)
+          s.loadBit();                                       // no custom payload
+          s.loadCoins();                                     // forward TON amount
+          if (!s.loadBit()) return false;                    // forward payload lives in a ref (sendJetton's layout)
+          const f = s.loadRef().beginParse();
+          if (f.loadUint(32) !== 0) return false;            // text-comment opcode
+          return f.loadStringTail() === wantComment;
+        } catch (e) { return false; }
+      };
+      const cutoff = (Number(sinceMs) || 0) - 15000; // small slack for indexer/clock skew
+      const deadline = Date.now() + 90000;
+      for (;;) {
+        try {
+          const txs = await toncTransactions(ownerRaw, 10, 'desc');
+          for (const tx of txs) {
+            const txMs = (Number(tx && tx.now) || 0) * 1000;
+            if (!txMs || txMs < cutoff) continue;
+            const outs = (tx && tx.out_msgs) || [];
+            if (!Array.isArray(outs) || !outs.length) continue;
+            const out = outs[0]; // this wallet sends exactly one internal message per transfer
+            const dst = out && typeof out.destination === 'object' && out.destination ? out.destination.address : (out && out.destination);
+            if (toRawAddress(dst || '') !== jwRaw) continue; // the message must go to OUR jetton wallet
+            const mc = (out && out.message_content) || {};
+            const bodyStr = typeof mc.body === 'string' ? mc.body : (typeof mc.body_hex === 'string' ? mc.body_hex : '');
+            if (!bodyStr) continue;
+            let cell = null;
+            try {
+              cell = (/^[0-9a-fA-F]+$/.test(bodyStr) && bodyStr.length % 2 === 0)
+                ? Cell.fromBoc(Buffer.from(bodyStr, 'hex'))[0]
+                : Cell.fromBase64(bodyStr);
+            } catch (e) { continue; }
+            if (!cell || !bodyMatches(cell)) continue;
+            const h = txHashHex(tx.hash); // toncenter v3 hash is base64 — canonical hex
+            if (h) return h;
+          }
+        } catch (e) { /* a lagging/failing read is not a failure — keep polling until the deadline */ }
+        if (Date.now() >= deadline) return null;
+        await txSleep(5000);
+      }
     }
   };
 }
@@ -2397,13 +2470,32 @@ async function attemptPayout(wdNum) {
       await payoutAlert(wd, 'insufficient jetton balance');
       return;
     }
-    // 3+4) Broadcast the jetton transfer and, once the seqno
-    //      confirms it landed, flip the record to Paid.
+    // 3+4) Broadcast the jetton transfer; once the seqno confirms
+    //      it landed, resolve the REAL on-chain transaction hash and
+    //      only then flip the record to Paid. The seam's returned
+    //      hash is computed locally from the external message and,
+    //      for V5R1 wallets, is NOT the transaction id (live proof
+    //      2026-11-14: the stored local hash 404s on tonviewer while
+    //      the transfer sits on-chain under a different hash). It is
+    //      logged for forensics and NEVER stored or linked: payoutTx
+    //      holds only the chain-resolved hash; when resolution times
+    //      out the record keeps payoutTx '' and gains payoutTxLink
+    //      (the payout wallet's tonviewer page) as the link target.
+    const broadcastAt = Date.now();
     const sent = await client.sendJetton({ toRaw: wd.walletAddr, amount: amountBase, comment: 'WD-' + num });
-    const payoutTxVal = sent && sent.txHash ? String(sent.txHash) : (sent && sent.seqno !== undefined ? sent.seqno : '');
+    if (sent && sent.txHash) console.log('payout', num, 'local external hash (not the on-chain tx id):', String(sent.txHash));
+    let resolvedTx = '';
+    if (typeof client.findTransferTx === 'function') {
+      try {
+        resolvedTx = String((await client.findTransferTx({ comment: 'WD-' + num, toRaw: wd.walletAddr, amountBase, sinceMs: broadcastAt })) || '');
+      } catch (e) { console.error('payout tx resolve', num, e.message); }
+    }
+    if (!/^[0-9a-fA-F]{64}$/.test(resolvedTx)) resolvedTx = '';
+    const payoutTxLinkVal = resolvedTx ? '' : 'https://tonviewer.com/' + client.addressFriendly;
     await ref.update({
       status: 'Paid ✅', payoutState: 'paid',
-      payoutTx: payoutTxVal,
+      payoutTx: resolvedTx,
+      payoutTxLink: resolvedTx ? null : payoutTxLinkVal, // null deletes a stale link if one ever existed
       payoutAt: Date.now()
     });
     // The celebration (photo DM + payouts-channel post, exactly once
@@ -2414,7 +2506,7 @@ async function attemptPayout(wdNum) {
     try {
       const cfg = await getConfig();
       const p = await getVal(P(wd.userId)).catch(() => null);
-      await sendPayoutSuccess({ ...wd, payoutTx: payoutTxVal }, p, cfg);
+      await sendPayoutSuccess({ ...wd, payoutTx: resolvedTx, payoutTxLink: payoutTxLinkVal }, p, cfg);
     } catch (e) { console.error('payout success notify', num, e.message); }
   } catch (e) {
     // 5) ANY failure lands here exactly once per attempt: mark the
@@ -2436,7 +2528,8 @@ async function attemptPayout(wdNum) {
    personal one (warrior banner, «Your Payout is Sent!», his wallet,
    the tx button), the payouts-channel post (cfg.channel2) is the
    public proof (treasure-chest banner, «New Payout!», full name
-   only, NO wallet address).
+   + the FULL receiver wallet in a code span — the owner reversed
+   his earlier no-wallet-in-channel rule).
    Exactly-once is enforced on the record itself: the caller claims
    `payoutNotifiedAt` in a transaction BEFORE sending anything, so
    retries, races and re-approvals can never double-send. The claim
@@ -2447,13 +2540,17 @@ async function attemptPayout(wdNum) {
    simply start landing once the owner promotes it). */
 const PAYOUT_DM_BANNER = 'https://ahmedrabieharoun-eng.github.io/viking/payout-banner2.webp';       // warrior with the glowing coin
 const PAYOUT_CHANNEL_BANNER = 'https://ahmedrabieharoun-eng.github.io/viking/payout-banner.webp';   // treasure chest
-/* The on-chain link for a paid withdrawal: the auto path's payoutTx
-   when it is a real 64-hex transaction hash, else the txLink
-   adminWd stored on manual approval, else '' — no button is better
-   than a fake link. */
+/* The on-chain link for a paid withdrawal, in precedence order:
+   the chain-resolved payoutTx hash (auto path) → payoutTxLink (the
+   payout wallet's tonviewer page, stored when hash resolution
+   timed out) → the txLink adminWd stored on manual approval → ''.
+   No button is better than a dead link: the seam's locally computed
+   external hash is never part of this chain — for V5R1 wallets it
+   is not the transaction id, and links built from it 404. */
 function payoutTxUrl(wd) {
   const h = String((wd && wd.payoutTx) || '').trim();
   if (/^[0-9a-fA-F]{64}$/.test(h)) return 'https://tonviewer.com/transaction/' + h;
+  if (wd && wd.payoutTxLink) return String(wd.payoutTxLink);
   if (wd && wd.txLink) return String(wd.txLink);
   return '';
 }
@@ -2497,9 +2594,11 @@ async function sendPayoutSuccess(wd, player, cfg) {
         if (txUrl) rows.push([{ text: '🔗 View Transaction', url: txUrl }]);
         const kb = rows.length ? { inline_keyboard: rows } : undefined;
         // Public proof style — different wording/layout from the DM:
-        // FULL name (owner order 2026-11-14) + amount + WD number,
-        // NO wallet address.
-        const caption = `🏆 New Payout!\n👤 <b>${displayName}</b>\n💰 <b>${amount} ${esc(cfg.coinSym)}</b>\n🔢 Withdrawal #${num}`;
+        // FULL name (owner order 2026-11-14) + amount + the FULL
+        // friendly receiver wallet (owner reversed the earlier
+        // no-wallet-in-channel rule) + WD number. The DM still
+        // shows only the SHORT wallet form.
+        const caption = `🏆 New Payout!\n👤 <b>${displayName}</b>\n💰 <b>${amount} ${esc(cfg.coinSym)}</b>\n👛 <code>${esc(toFriendlyAddress(wd.walletAddr || ''))}</code>\n🔢 Withdrawal #${num}`;
         let ok = false;
         const photoRes = await tg('sendPhoto', { chat_id: chanId, photo: PAYOUT_CHANNEL_BANNER, caption, reply_markup: kb });
         if (photoRes && photoRes.ok) ok = true;
