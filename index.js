@@ -52,7 +52,6 @@ const PAYOUT_MNEMONIC = String(process.env.PAYOUT_MNEMONIC || '').trim();
 const PAYOUT_WALLET_VERSION = String(process.env.PAYOUT_WALLET_VERSION || 'v5').trim().toLowerCase();
 const MAX_AUTH_AGE_SEC = 24 * 60 * 60;
 const MIN_COLLECT_SEC = 10;
-const BASE_RATE = 250; // coins per day (same as before)
 const DAILY = [10, 20, 30, 50, 70, 100, 200];
 const DEFAULTS = {
   brandTitle: '$VIKING MINER', coinSym: '$VIKING', taskReward: 50,
@@ -1299,15 +1298,67 @@ async function state(c) {
   return { player: publicPlayer(player), settings: { ...publicConfig(c.cfg), ...(botUsername ? { botUsername } : {}) }, withdrawals: wds, now: Date.now() };
 }
 
+/* ---------- mining levels («packages»): server mirror of the app table ----------
+   The levels live in the frontend (customLevels in viking_frontend/
+   index.html) — LEVEL_DEFS below is a value-for-value copy of that
+   array and the two MUST stay in sync: collect() pays the player's
+   REAL level rate from this table (owner order 2026-11-14 — profit
+   follows the package your hold puts you in, not a flat rate).
+   buildLevelsTable() replicates the frontend's rebuildLevelsTable()
+   operation for operation: levels 1-30 take LEVEL_DEFS scaled by
+   cfg.lvl1PerDay (scale = lvl1PerDay/250, perDay kept to 2dp);
+   levels 31-100 derive recursively from level 30 (reqHold ×1.15,
+   perDay ×1.12, both Math.round). levelPerDay() replicates
+   getCurrentLevelObj: the highest level whose reqHold <= hold,
+   iterating ascending and stopping at the first level that fails.
+   The hold is the player's synced on-chain hold (player.hold — the
+   same value state() ships and the app itself tiers on). */
+const LEVEL_DEFS = [
+  { req: 0, day: 250 }, { req: 200, day: 300 }, { req: 1250, day: 500 }, { req: 2500, day: 750 },
+  { req: 5000, day: 1000 }, { req: 7000, day: 1200 }, { req: 10000, day: 1500 }, { req: 12000, day: 1800 },
+  { req: 15000, day: 2500 }, { req: 18000, day: 2800 }, { req: 22000, day: 3200 }, { req: 26000, day: 3600 },
+  { req: 31000, day: 4100 }, { req: 37000, day: 4700 }, { req: 44000, day: 5400 }, { req: 52000, day: 6200 },
+  { req: 61000, day: 7100 }, { req: 71000, day: 8100 }, { req: 82000, day: 9200 }, { req: 95000, day: 10500 },
+  { req: 110000, day: 12000 }, { req: 126000, day: 13600 }, { req: 144000, day: 15400 }, { req: 164000, day: 17400 },
+  { req: 186000, day: 19600 }, { req: 210000, day: 22000 }, { req: 236000, day: 24600 }, { req: 264000, day: 27400 },
+  { req: 294000, day: 30400 }, { req: 326000, day: 33600 }
+];
+function buildLevelsTable(cfg) {
+  const scale = (Number(cfg && cfg.lvl1PerDay) || 250) / 250;
+  const table = [];
+  for (let i = 1; i <= 100; i++) {
+    let reqHold, perDay;
+    if (i <= 30) {
+      reqHold = LEVEL_DEFS[i - 1].req;
+      perDay = +(LEVEL_DEFS[i - 1].day * scale).toFixed(2);
+    } else {
+      const prevLvl = table[i - 2];
+      reqHold = Math.round(prevLvl.reqHold * 1.15);
+      perDay = Math.round(prevLvl.perDay * 1.12);
+    }
+    table.push({ level: i, reqHold, perDay });
+  }
+  return table;
+}
+function levelPerDay(table, hold) {
+  let cur = table[0];
+  for (const l of table) { if (hold >= l.reqHold) cur = l; else break; }
+  return cur.perDay;
+}
+
 async function collect(c) {
   const ref = await ensurePlayer(c);
+  // The table is built ONCE per call, outside the transaction: the
+  // txUpdate callback may re-run under contention, so inside it the
+  // rate is a pure function of this table + the fresh record's hold.
+  const levels = buildLevelsTable(c.cfg);
   const out = await txUpdate(ref, (d) => {
     if (d === null) return { error: new Fail(404, 'User not found') };
     if (d.banned === true) return { error: new Fail(403, 'Account banned') };
     const now = Date.now();
     const elapsed = Math.max(0, (now - (Number(d.lastCollectTime) || now)) / 1000);
     if (elapsed < MIN_COLLECT_SEC) return { error: new Fail(400, 'Wait 10 seconds') };
-    const added = Math.min(86400, elapsed) * (BASE_RATE / 86400);
+    const added = Math.min(86400, elapsed) * (levelPerDay(levels, Number(d.hold) || 0) / 86400);
     return {
       value: { ...d, mined: (Number(d.mined) || 0) + added, earnMining: (Number(d.earnMining) || 0) + added, lastCollectTime: now },
       out: { added, inviterId: d.invitedBy && d.refBonusPaid ? String(d.invitedBy) : null }
