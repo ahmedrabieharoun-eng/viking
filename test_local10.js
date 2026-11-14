@@ -237,11 +237,13 @@ const U = (id, first_name, username) => ({ id, first_name, username });
     r = await api(frId, 'state');
     check('own state ships avatar 5', r.body.player.avatar === 5, r.body.player);
 
-    console.log('\n[avatar: re-pick is idempotent, solo player unaffected]');
+    console.log('\n[avatar: one-time lock (owner order 2026-11-14), solo player unaffected]');
     r = await api(frId, 'setAvatar', { n: 2 });
-    check('re-pick 2 -> 200', r.status === 200 && r.body.avatar === 2, r);
+    check('re-pick 2 -> 409 (chosen once, forever)', r.status === 409, r);
+    me = await dbGet('players/700000902');
+    check('stored avatar stays 5 after the rejected re-pick', me.avatar === 5, me.avatar);
     inv = await dbGet('players/700000901');
-    check('entry follows the re-pick', inv.referrals[0].avatar === 2, inv.referrals);
+    check('entry keeps the first pick', inv.referrals[0].avatar === 5, inv.referrals);
     const soloId = makeInitData(U(700000903, 'Solo', 'solo_a'));
     await api(soloId, 'state');
     r = await api(soloId, 'setAvatar', { n: 8 });

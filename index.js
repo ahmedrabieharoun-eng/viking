@@ -1337,6 +1337,8 @@ async function setAvatar(c) {
   const out = await txUpdate(ref, (d) => {
     if (d === null) return { error: new Fail(404, 'User not found') };
     if (d.banned === true) return { error: new Fail(403, 'Account banned') };
+    // Owner order 2026-11-14: the warrior is chosen ONCE, forever.
+    if (Number.isInteger(d.avatar) && d.avatar >= 1 && d.avatar <= 8) return { error: new Fail(409, 'Avatar already chosen') };
     return { value: { ...d, avatar: n }, out: { success: true, avatar: n } };
   });
   await syncRefAvatar(c.user.id, n);
