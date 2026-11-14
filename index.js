@@ -62,6 +62,13 @@ const DEFAULTS = {
   // Telegram ids never wait the 24 h between withdrawals (the owner
   // + Elshenawy, his tester). settings/global can override the list.
   withdrawCooldownExempt: [6970148965, 1111087186],
+  // Owner-only maintenance (owner order 2026-11-14): while
+  // settings/global.ownerOnly is true, the API answers 403
+  // {maintenance:true} and the bot answers an update notice to
+  // everyone except OWNER_ID; the app shows «update in progress».
+  // (403, not 503: the app treats 503 as a sleeping-server wake-up
+  // and would sit retrying behind the loader instead of showing it.)
+  ownerOnly: false,
   buySwapUrl: 'https://app.ston.fi/swap?chartVisible=false&tt=EQC6uN73kvaKh8LrTHQ8TQ5_vgqheI93iny5XUWkpQL9vjxI&ft=GRAM',
   channel1: 'https://t.me/YGRAM1', channel2: 'https://t.me/telegram', botUsername: 'VIKINGMINER_BOT',
   // Wallet verification (owner order 2026-11-14): the fee is paid to
@@ -258,7 +265,8 @@ const publicPlayer = (d) => {
   delete o.adsWatched;
   delete o.lastAdUtcDay;
   delete o.lastAdAt;
-  o.referrals = (o.referrals || []).map((r) => { const x = { ...r }; delete x.deviceHash; x.verified = x.verified === true; return x; });
+  o.referrals = (o.referrals || []).map((r) => { const x = { ...r }; delete x.deviceHash; x.verified = x.verified === true; x.avatar = (Number(x.avatar) >= 1 && Number(x.avatar) <= 8) ? Number(x.avatar) : 0; return x; });
+  o.avatar = (Number(o.avatar) >= 1 && Number(o.avatar) <= 8) ? Number(o.avatar) : 0; // chosen painted avatar (owner order 2026-11-14); 0 = not chosen yet
   // additive fields for the bio task + referral achievements (tasks tab)
   o.bioTaskDone = o.bioTaskDone === true;
   o.refAchClaimed = (o.refAchClaimed && typeof o.refAchClaimed === 'object') ? o.refAchClaimed : {};
@@ -651,7 +659,7 @@ function hit(key, max, windowMs) {
 // burst plus a manual re-check must fit with room to spare, or the user
 // hits this limiter for doing exactly what the UI told them to do. The
 // global per-user (90/min) and per-IP caps still bound abuse.
-const ACTION_LIMIT = { state: 20, collect: 6, daily: 6, task: 8, bioTask: 8, refAch: 8, wallet: 8, unlink: 6, refCollect: 6, withdraw: 4, verifyInfo: 20, verifyCheck: 20 }; // per user per minute
+const ACTION_LIMIT = { state: 20, collect: 6, daily: 6, task: 8, bioTask: 8, refAch: 8, wallet: 8, unlink: 6, refCollect: 6, withdraw: 4, verifyInfo: 20, verifyCheck: 20, setAvatar: 8 }; // per user per minute
 
 function verifyInitData(initData) {
   if (!BOT_TOKEN) return { error: 'config' };
@@ -1174,13 +1182,31 @@ async function syncRefVerifiedFlag(uid, verified) {
   } catch (e) { console.error('refVerifiedFlag', e.message); }
 }
 
+/* Same keep-in-sync pattern for the player's chosen avatar: the
+   inviter's Friends list renders the entry's avatar image, so the
+   choice is mirrored onto the referral entry when it is set.
+   Best-effort by design: it must never fail the setAvatar action. */
+async function syncRefAvatar(uid, n) {
+  try {
+    const me = await getVal(P(uid));
+    const inv = me && me.invitedBy;
+    if (!inv) return;
+    await txUpdate(P(inv), (d) => {
+      if (d === null) return { skip: true };
+      const refs = d.referrals || [];
+      if (!refs.some((r) => String(r.id) === String(uid))) return { skip: true };
+      return { value: { ...d, referrals: refs.map((r) => (String(r.id) === String(uid) ? { ...r, avatar: n } : r)) } };
+    });
+  } catch (e) { console.error('refAvatar', e.message); }
+}
+
 const newPlayer = (user, extra) => ({
   id: String(user.id), name: clean(user.first_name || 'Warrior', 64), username: clean(user.username || 'user', 64),
   deviceHash: '', mined: 0, hold: 0, lastCollectTime: Date.now(), walletAddr: '', banned: false, invitedBy: null,
   refBonusPaid: false, refCommissionEarned: 0, pendingRefComm: 0, lastWithdrawTime: 0, adsWatched: 0,
   earnMining: 0, earnDaily: 0, earnTasks: 0, earnRef: 0, // lifetime earnings by source (owner review card, 2026-11-14); pre-existing players read as 0 until they earn again
   lastAdUtcDay: dayOf(Date.now()), task1Done: false, task2Done: false, bioTaskDone: false, dailyStreak: 0, lastDailyCheckIn: 0,
-  lastSeen: Date.now(), referrals: [], createdAt: Date.now(), ...extra
+  lastSeen: Date.now(), referrals: [], createdAt: Date.now(), avatar: 0, ...extra
 });
 
 /* Create the caller's player record if it does not exist yet (same
@@ -1274,7 +1300,7 @@ async function state(c) {
     if (created) await assignUserNo(c.user.id); // permanent sequential userNo from meta/counters (see assignUserNo)
     if (created && ok) {
       const dup = inv.deviceHash && inv.deviceHash === dev;
-      const entry = { id: String(c.user.id), name: clean(c.user.first_name || 'Warrior', 64), deviceHash: dev, status: dup ? '⚠️ Duplicate' : 'Pending ⏳', profit: 0, at: Date.now() };
+      const entry = { id: String(c.user.id), name: clean(c.user.first_name || 'Warrior', 64), deviceHash: dev, status: dup ? '⚠️ Duplicate' : 'Pending ⏳', profit: 0, at: Date.now(), avatar: 0 };
       await txUpdate(invRef, (cur) => {
         if (cur === null) return { skip: true };
         const refs = cur.referrals || [];
@@ -1296,6 +1322,25 @@ async function state(c) {
   // resolveBotUsername, and publicConfig's copy is kept when both are empty.
   const botUsername = await resolveBotUsername(c.cfg);
   return { player: publicPlayer(player), settings: { ...publicConfig(c.cfg), ...(botUsername ? { botUsername } : {}) }, withdrawals: wds, now: Date.now() };
+}
+
+/* Avatar choice (owner order 2026-11-14): at first registration the
+   player picks one of the 8 painted avatars; the choice is stored on
+   the player record and mirrored onto the inviter's referral entry
+   (syncRefAvatar) — it replaces the Telegram photo everywhere the app
+   shows the player (profile card, Friends lists). Re-picking is
+   allowed (harmless, idempotent) but the app only offers it once. */
+async function setAvatar(c) {
+  const n = Number(c.body.n);
+  if (!Number.isInteger(n) || n < 1 || n > 8) fail(400, 'Bad avatar');
+  const ref = await ensurePlayer(c);
+  const out = await txUpdate(ref, (d) => {
+    if (d === null) return { error: new Fail(404, 'User not found') };
+    if (d.banned === true) return { error: new Fail(403, 'Account banned') };
+    return { value: { ...d, avatar: n }, out: { success: true, avatar: n } };
+  });
+  await syncRefAvatar(c.user.id, n);
+  return out;
 }
 
 /* ---------- mining levels («packages»): server mirror of the app table ----------
@@ -1760,6 +1805,16 @@ async function handleBotMessage(msg) {
   const from = msg.from;
   if (!/^\d+$/.test(String(from.id))) return;
   const chatId = msg.chat.id;
+  // Owner-only maintenance (owner order 2026-11-14): while
+  // settings/global.ownerOnly is on, a non-owner gets the update
+  // notice instead of the welcome / bio flow. Owner unaffected.
+  if (String(from.id) !== OWNER_ID) {
+    const cfgM = await getConfig();
+    if (cfgM.ownerOnly === true) {
+      try { await tg('sendMessage', { chat_id: chatId, text: '🔧 Update in progress — VIKING MINER is being updated right now. Please check back soon!' }); } catch (e) { /* the notice is best-effort */ }
+      return;
+    }
+  }
   // First contact via the DIRECT APP LINK: those users never send
   // /start, so Telegram's write_access_allowed service message — sent
   // when the user grants the Mini App write access (the app requests
@@ -3223,7 +3278,7 @@ async function adminSettings(c) {
   return { success: true };
 }
 
-const ACTIONS = { state, collect, daily, task, bioTask, refAch, wallet, unlink, verifyInfo, verifyCheck, refCollect, withdraw, adminState, adminBan, adminAdjust, adminWd, adminSettings };
+const ACTIONS = { state, collect, daily, task, bioTask, refAch, wallet, unlink, verifyInfo, verifyCheck, refCollect, withdraw, setAvatar, adminState, adminBan, adminAdjust, adminWd, adminSettings };
 
 ensureWebhook(); // self-register the Telegram webhook once per process (never blocks boot)
 startVerifyWatcher(); // background deposit watcher (see verifyWatchTick; no-op when VERIFY_WATCH_MS=0)
@@ -3273,6 +3328,9 @@ functions.http('collectMining', async (req, res) => {
     if (!/^\d+$/.test(uid)) return res.status(401).json({ error: 'Unauthorized' }); // Telegram user ids are numeric; anything else never reaches an RTDB path
     if (!hit('u:' + uid, 90, 60000) || !hit('a:' + uid + ':' + name, ACTION_LIMIT[name] || 60, 60000)) return res.status(429).json({ error: 'Too many requests, slow down' });
     const cfg = await getConfig();
+    // Owner-only maintenance gate (owner order 2026-11-14): the app
+    // renders its «update in progress» screen off the maintenance flag.
+    if (cfg.ownerOnly === true && uid !== OWNER_ID) return res.status(403).json({ error: 'Update in progress', maintenance: true });
     const actx = { user: auth.user, startParam: auth.startParam, authDate: auth.authDate, body, cfg, ip };
     let result;
     try {
