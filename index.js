@@ -28,6 +28,14 @@ const BOT_TOKEN = process.env.BOT_TOKEN || '';
 const OWNER_ID = String(process.env.OWNER_ID || '');          // your Telegram numeric ID
 const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || '*';
 const TONAPI_KEY = process.env.TONAPI_KEY || '';               // optional
+// Wallet verification (owner order 2026-11-14): payments are confirmed
+// on-chain through the TON Center v3 API. The key comes ONLY from the
+// TON_API_KEY env var (the owner sets the same key as AdVOLT on Render);
+// it is never stored in settings, never sent in any response, and the
+// feature works without it (public rate limits only). TON_API_BASE is
+// an env override for local testing, mirroring TG_API_BASE below.
+const TON_API_KEY = process.env.TON_API_KEY || '';
+const TON_API_BASE = (process.env.TON_API_BASE || 'https://toncenter.com/api/v3').replace(/\/+$/, '');
 
 const JETTON = 'EQC6uN73kvaKh8LrTHQ8TQ5_vgqheI93iny5XUWkpQL9vjxI';
 const MAX_AUTH_AGE_SEC = 24 * 60 * 60;
@@ -40,10 +48,14 @@ const DEFAULTS = {
   refClaimPercent: 5, refMinHold: 200, minWithdraw: 5000, holdPercentReq: 25, withdrawFeePercent: 5,
   lvl1PerDay: 250, payoutWallet: '', payoutChannel: '@YGRAM1', adminChatId: '',
   buySwapUrl: 'https://app.ston.fi/swap?chartVisible=false&tt=EQC6uN73kvaKh8LrTHQ8TQ5_vgqheI93iny5XUWkpQL9vjxI&ft=GRAM',
-  channel1: 'https://t.me/YGRAM1', channel2: 'https://t.me/telegram', botUsername: 'VIKINGMINER_BOT'
+  channel1: 'https://t.me/YGRAM1', channel2: 'https://t.me/telegram', botUsername: 'VIKINGMINER_BOT',
+  // Wallet verification (owner order 2026-11-14): the fee is paid to
+  // verifyDepositWallet with the comment VIKING-<userNo>; a wallet must
+  // be at least verifyMinAgeDays old to be verified.
+  verifyDepositWallet: 'UQBCoy7KjhL9VnKA_YOp4_hxmYKAQ8P8mIfx5FdIdSA6qvxE', verifyFeeTon: 0.05, verifyMinAgeDays: 7
 };
-const NUM_KEYS = ['lvl1PerDay', 'taskReward', 'bioReward', 'refAchReward1', 'refAchReward10', 'refAchReward25', 'refAchReward50', 'refAchReward100', 'refClaimPercent', 'refMinHold', 'minWithdraw', 'holdPercentReq', 'withdrawFeePercent'];
-const STR_KEYS = ['brandTitle', 'coinSym', 'payoutWallet', 'payoutChannel', 'adminChatId', 'channel1', 'channel2', 'botUsername', 'buySwapUrl'];
+const NUM_KEYS = ['lvl1PerDay', 'taskReward', 'bioReward', 'refAchReward1', 'refAchReward10', 'refAchReward25', 'refAchReward50', 'refAchReward100', 'refClaimPercent', 'refMinHold', 'minWithdraw', 'holdPercentReq', 'withdrawFeePercent', 'verifyFeeTon', 'verifyMinAgeDays'];
+const STR_KEYS = ['brandTitle', 'coinSym', 'payoutWallet', 'payoutChannel', 'adminChatId', 'channel1', 'channel2', 'botUsername', 'buySwapUrl', 'verifyDepositWallet'];
 
 /* ---------- helpers ---------- */
 class Fail extends Error { constructor(status, msg) { super(msg); this.status = status; } }
@@ -153,11 +165,19 @@ const publicPlayer = (d) => {
   delete o.adsWatched;
   delete o.lastAdUtcDay;
   delete o.lastAdAt;
-  o.referrals = (o.referrals || []).map((r) => { const x = { ...r }; delete x.deviceHash; return x; });
+  o.referrals = (o.referrals || []).map((r) => { const x = { ...r }; delete x.deviceHash; x.verified = x.verified === true; return x; });
   // additive fields for the bio task + referral achievements (tasks tab)
   o.bioTaskDone = o.bioTaskDone === true;
   o.refAchClaimed = (o.refAchClaimed && typeof o.refAchClaimed === 'object') ? o.refAchClaimed : {};
   o.activeRefs = countActiveRefs(o.referrals);
+  // wallet verification (owner order 2026-11-14): userNo is the player's
+  // permanent sequential number (0 until assigned — see assignUserNo);
+  // referrals entries above carry the invitee's `verified` flag, kept in
+  // sync by syncRefVerifiedFlag at verify/void time.
+  o.userNo = Number(o.userNo) || 0;
+  o.walletVerified = o.walletVerified === true;
+  o.verifiedWallet = o.verifiedWallet || '';
+  o.verifiedAt = Number(o.verifiedAt) || 0;
   return o;
 };
 const WHY = { cid: 'نفس نسخة التطبيق', dev: 'نفس الجهاز', ip: 'نفس الـ IP' };
@@ -204,7 +224,7 @@ async function riskOf(uid) {
   const top = ids.sort((a, b) => rank(b) - rank(a)).slice(0, 8);
   const rows = await Promise.all(top.map(async (id) => {
     const d = (await getVal(P(id))) || {};
-    return { id, name: d.name || '', mined: d.mined || 0, banned: d.banned === true, via: [...linked[id]].map((k) => WHY[k]) };
+    return { id, name: d.name || '', mined: d.mined || 0, banned: d.banned === true, verified: d.walletVerified === true, via: [...linked[id]].map((k) => WHY[k]) };
   }));
   return { level, reasons, linked: rows };
 }
@@ -425,7 +445,7 @@ function hit(key, max, windowMs) {
   if (hits.size > 20000) for (const [k, v] of hits) if (!v.length || now - v[v.length - 1] > 120000) hits.delete(k);
   return true;
 }
-const ACTION_LIMIT = { state: 20, collect: 6, daily: 6, task: 8, bioTask: 8, refAch: 8, wallet: 8, unlink: 6, refCollect: 6, withdraw: 4 }; // per user per minute
+const ACTION_LIMIT = { state: 20, collect: 6, daily: 6, task: 8, bioTask: 8, refAch: 8, wallet: 8, unlink: 6, refCollect: 6, withdraw: 4, verifyInfo: 8, verifyCheck: 6 }; // per user per minute
 
 function verifyInitData(initData) {
   if (!BOT_TOKEN) return { error: 'config' };
@@ -769,8 +789,9 @@ async function resolveBotUsername(cfg) {
   return String((cfg && cfg.botUsername) || '').replace(/^@/, '').trim() || null;
 }
 
+const TONAPI_BASE = (process.env.TONAPI_BASE || 'https://tonapi.io/v2').replace(/\/+$/, ''); // env override exists for local testing, like TG_API_BASE
 async function ton(path) {
-  const r = await fetch('https://tonapi.io/v2' + path, { headers: TONAPI_KEY ? { Authorization: 'Bearer ' + TONAPI_KEY } : {}, signal: AbortSignal.timeout(10000) });
+  const r = await fetch(TONAPI_BASE + path, { headers: TONAPI_KEY ? { Authorization: 'Bearer ' + TONAPI_KEY } : {}, signal: AbortSignal.timeout(10000) });
   if (r.status === 404 || r.status === 400) return null;
   if (!r.ok) fail(502, 'TON network is busy, try again');
   return r.json();
@@ -784,6 +805,96 @@ async function jettonHold(raw) {
   const j = await ton('/accounts/' + encodeURIComponent(raw) + '/jettons/' + JETTON);
   if (!j) return 0;
   return parseFloat(j.balance || '0') / Math.pow(10, (j.jetton && j.jetton.decimals) || 9);
+}
+
+/* ---------- wallet verification: TON Center v3 reads (owner order 2026-11-14) ---------- */
+/* Normalise any TON address (raw "0:ab..", bounceable/non-bounceable
+   user-friendly base64) to lowercase raw form, locally — no API call.
+   User-friendly form is 36 bytes: flags(1) workchain(1, signed)
+   hash(32) crc16(2). Unknown shapes pass through lowercased so a
+   comparison simply fails instead of throwing. */
+function toRawAddress(addr) {
+  const s = String(addr || '').trim();
+  const m = /^(-?\d+):([0-9a-fA-F]{64})$/.exec(s);
+  if (m) return m[1] + ':' + m[2].toLowerCase();
+  try {
+    const b = Buffer.from(s.replace(/-/g, '+').replace(/_/g, '/'), 'base64');
+    if (b.length === 36) return b.readInt8(1) + ':' + b.subarray(2, 34).toString('hex');
+  } catch (e) { /* fall through */ }
+  return s.toLowerCase();
+}
+async function tonc(path) {
+  const r = await fetch(TON_API_BASE + path, { headers: TON_API_KEY ? { 'X-API-Key': TON_API_KEY } : {}, signal: AbortSignal.timeout(10000) });
+  if (r.status === 404 || r.status === 400) return null;
+  if (!r.ok) fail(502, 'TON network is busy, try again');
+  return r.json();
+}
+/* Transactions of one account, newest (desc) or oldest (asc) first. */
+async function toncTransactions(rawAddr, limit, order) {
+  const j = await tonc('/transactions?account=' + encodeURIComponent(rawAddr) + '&limit=' + limit + '&sort_order=' + order);
+  return (j && Array.isArray(j.transactions)) ? j.transactions : [];
+}
+/* Wallet age in whole days = time since the wallet's FIRST transaction
+   (the ascending query). A wallet with no transactions at all is 0. */
+async function fetchWalletAgeDays(raw) {
+  const txs = await toncTransactions(raw, 1, 'asc');
+  if (!txs.length) return 0;
+  const first = Number(txs[0].now) || 0; // toncenter v3: unix seconds
+  if (!first) return 0;
+  return Math.max(0, Math.floor((Date.now() / 1000 - first) / 86400));
+}
+/* The age is cached on the player (walletAgeDays/walletAgeAt/
+   walletAgeFor) for at most WALLET_AGE_CACHE_MS and only ever for the
+   wallet it was computed for — a different wallet always recomputes. */
+const WALLET_AGE_CACHE_MS = 3 * 60 * 60 * 1000;
+async function walletAgeDays(ref, p, wallet) {
+  if (p.walletAgeFor === wallet && p.walletAgeAt && (Date.now() - p.walletAgeAt) < WALLET_AGE_CACHE_MS && Number(p.walletAgeDays) >= 0) {
+    return Number(p.walletAgeDays);
+  }
+  const days = await fetchWalletAgeDays(wallet);
+  try { await ref.update({ walletAgeDays: days, walletAgeAt: Date.now(), walletAgeFor: wallet }); } catch (e) { /* the cache is advisory */ }
+  return days;
+}
+/* Decode the text comment of an incoming message, robustly:
+   1. the API's own decoded body (message_content.decoded, type
+      'text_comment') when present;
+   2. otherwise the raw body hex: a text comment's body is the 4-byte
+      opcode 0x00000000 followed by the UTF-8 text;
+   3. a plain `comment` field, if an API variant provides one. */
+function decodeTextComment(inMsg) {
+  const mc = (inMsg && inMsg.message_content) || null;
+  if (mc) {
+    const dec = mc.decoded;
+    if (dec && typeof dec.comment === 'string' && dec.comment) return dec.comment;
+    const bodyHex = typeof mc.body === 'string' ? mc.body : (typeof mc.body_hex === 'string' ? mc.body_hex : '');
+    if (/^(?:[0-9a-fA-F]{2})+$/.test(bodyHex)) {
+      const buf = Buffer.from(bodyHex, 'hex');
+      if (buf.length > 4 && buf.readUInt32BE(0) === 0) {
+        const txt = buf.subarray(4).toString('utf8');
+        if (txt) return txt;
+      }
+    }
+  }
+  if (inMsg && typeof inMsg.comment === 'string' && inMsg.comment) return inMsg.comment;
+  return null;
+}
+const inMsgSourceRaw = (inMsg) => toRawAddress((inMsg && typeof inMsg.source === 'object' && inMsg.source) ? (inMsg.source.address || '') : ((inMsg && inMsg.source) || ''));
+/* Keep the inviter's referral entry for this player in sync with the
+   player's verified state (the Friends list renders the entry's flag —
+   storing it on the entry keeps state() free of per-referral lookups).
+   Best-effort by design: it must never fail a verify/void operation. */
+async function syncRefVerifiedFlag(uid, verified) {
+  try {
+    const me = await getVal(P(uid));
+    const inv = me && me.invitedBy;
+    if (!inv) return;
+    await txUpdate(P(inv), (d) => {
+      if (d === null) return { skip: true };
+      const refs = d.referrals || [];
+      if (!refs.some((r) => String(r.id) === String(uid))) return { skip: true };
+      return { value: { ...d, referrals: refs.map((r) => (String(r.id) === String(uid) ? { ...r, verified: !!verified } : r)) } };
+    });
+  } catch (e) { console.error('refVerifiedFlag', e.message); }
 }
 
 const newPlayer = (user, extra) => ({
@@ -804,11 +915,42 @@ const newPlayer = (user, extra) => ({
 async function ensurePlayer(c) {
   const ref = P(c.user.id);
   const dev = clean(c.body.deviceHash, 64);
-  await txUpdate(ref, (cur) => {
-    if (cur !== null) return { skip: true };
-    return { value: newPlayer(c.user, { deviceHash: dev, invitedBy: null }) };
+  const created = await txUpdate(ref, (cur) => {
+    if (cur !== null) return { skip: true, out: false };
+    return { value: newPlayer(c.user, { deviceHash: dev, invitedBy: null }), out: true };
   });
+  if (created) await assignUserNo(c.user.id);
   return ref;
+}
+
+/* ---------- permanent sequential user numbers (wallet verification) ----------
+   Every player owns a permanent sequential userNo (1, 2, 3, ...),
+   assigned at creation from the meta/counters `users` counter — the
+   same transaction pattern withdraw() uses for withdrawal numbers.
+   Players created before this feature get their number lazily, the
+   first time a verify action needs it (ensureUserNo). A number, once
+   assigned, never changes; a concurrently assigned duplicate number is
+   simply skipped (a gap), never reused. Best-effort: a numbering
+   failure must never break the action that triggered it. */
+async function assignUserNo(uid) {
+  try {
+    const ref = P(uid);
+    const cur = await getVal(ref);
+    if (!cur || Number(cur.userNo) > 0) return Number(cur && cur.userNo) || 0;
+    const cres = await rtdb().ref('meta/counters').transaction((c) => ({ ...(c || {}), users: ((c && c.users) || 0) + 1 }));
+    const n = (cres.snapshot.val() || {}).users;
+    if (!n) return 0;
+    return await txUpdate(ref, (d) => {
+      if (d === null) return { skip: true, out: 0 };
+      if (Number(d.userNo) > 0) return { skip: true, out: Number(d.userNo) }; // a racer assigned first; n stays a gap
+      return { value: { ...d, userNo: n }, out: n };
+    });
+  } catch (e) { console.error('assignUserNo', e.message); return 0; }
+}
+async function ensureUserNo(uid) {
+  const p = await getVal(P(uid));
+  if (p && Number(p.userNo) > 0) return Number(p.userNo);
+  return assignUserNo(uid);
 }
 
 async function withdrawalsOfUser(uid) {
@@ -834,6 +976,7 @@ async function state(c) {
       if (cur !== null) return { skip: true, out: false };
       return { value: newPlayer(c.user, { deviceHash: dev, invitedBy: ok ? sp : null }), out: true };
     });
+    if (created) await assignUserNo(c.user.id); // permanent sequential userNo from meta/counters (see assignUserNo)
     if (created && ok) {
       const dup = inv.deviceHash && inv.deviceHash === dev;
       const entry = { id: String(c.user.id), name: clean(c.user.first_name || 'Warrior', 64), deviceHash: dev, status: dup ? '⚠️ Duplicate' : 'Pending ⏳', profit: 0, at: Date.now() };
@@ -1353,11 +1496,17 @@ async function wallet(c) {
   const out = await txUpdate(ref, (d) => {
     if (d === null) return { error: new Fail(404, 'User not found') };
     const activate = !!(d.invitedBy && !d.refBonusPaid && hold >= need);
+    // Wallet verification is bound to ONE wallet (owner order
+    // 2026-11-14): binding a DIFFERENT address than the verified one
+    // voids the verification — the new wallet must be verified again.
+    // Re-syncing the same verified wallet keeps it.
+    const voidsVerify = d.walletVerified === true && (d.verifiedWallet || '') !== raw;
     return {
-      value: { ...d, walletAddr: raw, hold, lastSyncAt: Date.now(), ...(activate ? { refBonusPaid: true } : {}) },
-      out: { oldAddr: d.walletAddr || '', inviterId: activate ? String(d.invitedBy) : null, myDeviceHash: d.deviceHash }
+      value: { ...d, walletAddr: raw, hold, lastSyncAt: Date.now(), ...(activate ? { refBonusPaid: true } : {}), ...(voidsVerify ? { walletVerified: false, verifiedWallet: '', verifiedAt: 0, verifyTx: '' } : {}) },
+      out: { oldAddr: d.walletAddr || '', inviterId: activate ? String(d.invitedBy) : null, myDeviceHash: d.deviceHash, voided: voidsVerify }
     };
   });
+  if (out.voided) await syncRefVerifiedFlag(uid, false);
   if (out.oldAddr && out.oldAddr !== raw) await walletDoc(out.oldAddr).remove();
   if (out.inviterId) {
     await txUpdate(P(out.inviterId), (inv) => {
@@ -1373,10 +1522,118 @@ async function unlink(c) {
   const ref = await ensurePlayer(c);
   const out = await txUpdate(ref, (d) => {
     if (d === null) return { error: new Fail(404, 'User not found') };
-    return { value: { ...d, walletAddr: '', hold: 0 }, out: { oldAddr: d.walletAddr || '' } };
+    // Disconnecting voids the wallet verification with the binding
+    // (owner order 2026-11-14): a wallet bound later — even the same
+    // one — must be verified again.
+    const wasVerified = d.walletVerified === true;
+    return {
+      value: { ...d, walletAddr: '', hold: 0, ...(wasVerified ? { walletVerified: false, verifiedWallet: '', verifiedAt: 0, verifyTx: '' } : {}) },
+      out: { oldAddr: d.walletAddr || '', voided: wasVerified }
+    };
   });
+  if (out.voided) await syncRefVerifiedFlag(String(c.user.id), false);
   if (out.oldAddr) await walletDoc(out.oldAddr).remove();
   return { success: true };
+}
+
+/* ---------- wallet verification actions (owner order 2026-11-14) ----------
+   verifyInfo: everything the Profile verification card needs — the
+   player's permanent userNo, the exact payment instructions (deposit
+   wallet, fee, comment VIKING-<userNo>) and the on-chain age of the
+   currently bound wallet.
+   verifyCheck: re-validates EVERYTHING server-side and then confirms
+   the fee payment on-chain: it scans the deposit wallet's newest
+   incoming transactions for one sent FROM the player's bound wallet,
+   worth at least the fee (1% tolerance), carrying the EXACT comment,
+   whose hash has not been claimed before (verifyClaims/{txHash}).
+   On a match it claims the hash, marks the player verified, flags the
+   wallets-registry node, and syncs the inviter's referral entry. */
+const verifyComment = (userNo) => 'VIKING-' + userNo;
+async function verifyGatePlayer(c) {
+  const ref = await ensurePlayer(c);
+  const p = await getVal(ref);
+  if (!p) fail(404, 'User not found'); // unreachable after ensurePlayer; kept as a guard
+  if (p.banned === true) fail(403, 'Account banned');
+  return { ref, p };
+}
+async function verifyInfo(c) {
+  const { ref, p } = await verifyGatePlayer(c);
+  const userNo = await ensureUserNo(c.user.id); // lazy assignment for pre-feature players
+  if (!userNo) fail(500, 'Server error');
+  const wallet = p.walletAddr || '';
+  const minAge = Number(c.cfg.verifyMinAgeDays) || 7;
+  let ageDays = null;
+  if (wallet) ageDays = await walletAgeDays(ref, p, wallet);
+  return {
+    userNo,
+    depositWallet: String(c.cfg.verifyDepositWallet || ''),
+    feeTon: Number(c.cfg.verifyFeeTon) || 0,
+    comment: verifyComment(userNo),
+    wallet,
+    ageDays,
+    minAgeDays: minAge,
+    ageOk: ageDays !== null && ageDays >= minAge,
+    verified: p.walletVerified === true,
+    verifiedWallet: p.verifiedWallet || ''
+  };
+}
+
+async function verifyCheck(c) {
+  const { ref, p } = await verifyGatePlayer(c);
+  const uid = String(c.user.id);
+  const wallet = p.walletAddr || '';
+  if (!wallet) fail(400, 'Connect a wallet first');
+  // Already verified for THIS wallet: nothing to re-prove.
+  if (p.walletVerified === true && p.verifiedWallet === wallet) return { verified: true, tx: p.verifyTx || '', already: true };
+  const userNo = await ensureUserNo(uid);
+  if (!userNo) fail(500, 'Server error');
+  const minAge = Number(c.cfg.verifyMinAgeDays) || 7;
+  const age = await walletAgeDays(ref, p, wallet); // cache-aware; recomputes when stale or the wallet changed
+  if (age < minAge) fail(400, 'Wallet too new: ' + age + ' days, needs ' + minAge);
+  const feeTon = Number(c.cfg.verifyFeeTon) || 0;
+  const minNano = BigInt(Math.floor(feeTon * 1e9 * 0.99)); // 1% tolerance for wallet-side rounding
+  const comment = verifyComment(userNo);
+  const depRaw = toRawAddress(c.cfg.verifyDepositWallet);
+  const txs = await toncTransactions(depRaw, 50, 'desc');
+  for (const tx of txs) {
+    const inMsg = tx && tx.in_msg;
+    if (!inMsg) continue;
+    if (inMsgSourceRaw(inMsg) !== wallet) continue; // must be sent FROM the player's bound wallet
+    let val;
+    try { val = BigInt(String(inMsg.value || '0')); } catch (e) { continue; }
+    if (val < minNano) continue;
+    const text = decodeTextComment(inMsg);
+    if (!text || text.trim() !== comment) continue;
+    const hash = String(tx.hash || '');
+    if (!/^[0-9a-fA-F]{16,128}$/.test(hash)) continue;
+    const claimRef = rtdb().ref('verifyClaims/' + hash);
+    const prior = await getVal(claimRef);
+    if (prior && String(prior.userId) !== uid) continue; // claimed by someone else — never reusable
+    if (!prior) {
+      // Claim the hash FIRST (atomic): two racing checks for the same
+      // payment can never both pass this point.
+      const claimed = await txUpdate(claimRef, (cur) => {
+        if (cur !== null) return { skip: true, out: false };
+        return { value: { userId: uid, at: Date.now() }, out: true };
+      });
+      if (!claimed) continue;
+    }
+    await txUpdate(ref, (d) => {
+      if (d === null) return { error: new Fail(404, 'User not found') };
+      if ((d.walletAddr || '') !== wallet) return { error: new Fail(409, 'Wallet changed, try again') };
+      return { value: { ...d, walletVerified: true, verifiedWallet: wallet, verifiedAt: Date.now(), verifyTx: hash }, out: true };
+    });
+    // Flag the wallets-registry node for this address as verified
+    // (preserving its ownership record — the node normally exists
+    // from the wallet binding; recreate it WITH the owner if not).
+    const wRef = walletDoc(wallet);
+    const wDoc = await getVal(wRef);
+    if (wDoc) await wRef.update({ verified: true });
+    else await wRef.set({ userId: uid, verified: true });
+    await syncRefVerifiedFlag(uid, true);
+    return { verified: true, tx: hash };
+  }
+  fail(404, 'Payment not found yet');
 }
 
 async function refCollect(c) {
@@ -1464,6 +1721,17 @@ async function adminState(c) {
     p.multiLinks = { ...p.multiLinks, users };
   }));
   const wds = Object.entries(wdsObj || {}).map(([docId, v]) => ({ docId, ...v })).sort((a, b) => (b.wdNum || 0) - (a.wdNum || 0));
+  // Verified badges in the admin withdrawal list: one bounded lookup
+  // per distinct withdrawal user (from this page where possible).
+  {
+    const seen = new Map();
+    await Promise.all([...new Set(wds.map((x) => String(x.userId)))].map(async (id) => {
+      let src = byId.get(id);
+      if (!src) { try { src = await getVal(P(id)); } catch (e) { src = null; } }
+      seen.set(id, !!(src && src.walletVerified === true));
+    }));
+    wds.forEach((x) => { x.userVerified = seen.get(String(x.userId)) === true; });
+  }
   const pending = wds.filter((x) => String(x.status).includes('Pending')).slice(0, 15);
   await Promise.all(pending.map(async (x) => { try { x.risk = await riskOf(x.userId); } catch (e) { console.error('risk', e.message); } }));
   return { players, withdrawals: wds, config: c.cfg };
@@ -1551,7 +1819,7 @@ async function adminSettings(c) {
   return { success: true };
 }
 
-const ACTIONS = { state, collect, daily, task, bioTask, refAch, wallet, unlink, refCollect, withdraw, adminState, adminBan, adminAdjust, adminWd, adminSettings };
+const ACTIONS = { state, collect, daily, task, bioTask, refAch, wallet, unlink, verifyInfo, verifyCheck, refCollect, withdraw, adminState, adminBan, adminAdjust, adminWd, adminSettings };
 
 ensureWebhook(); // self-register the Telegram webhook once per process (never blocks boot)
 
