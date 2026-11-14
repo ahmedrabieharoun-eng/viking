@@ -1411,7 +1411,7 @@
       document.getElementById('ref-pending-count').innerText = myReferrals.length - verCount;
       document.getElementById('ref-verified-count').innerText = verCount;
       document.getElementById('ref-earned-total').innerText = Math.floor(refCommissionEarned).toLocaleString();
-      document.getElementById('ref-link-box').value = `https://t.me/${config.botUsername}?startapp=ref_${CURRENT_UID}`;
+      document.getElementById('ref-link-box').value = `https://t.me/${config.botUsername}/app?startapp=ref_${CURRENT_UID}`;
       
       const prcEl = document.getElementById('pending-ref-comm-display');
       if (prcEl) prcEl.innerText = pendingRefComm.toFixed(4);
