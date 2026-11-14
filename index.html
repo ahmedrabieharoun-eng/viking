@@ -159,24 +159,62 @@
     #avatar-picker .ap-tile:active{transform:scale(.94)}
     #avatar-picker .ap-tile.picked{border-color:var(--gold2);box-shadow:0 0 20px rgba(245,215,110,.9)}
   </style>
+  <link rel="preload" as="image" href="assets/boot_scene.webp">
+  <link rel="preload" as="image" href="assets/frame.webp">
+  <link rel="preload" as="image" href="assets/hero_tier1.webp">
+  <style id="epic-replica">
+    /* Replica pass (owner order 2026-11-14): every page rebuilt from
+       the approved reference pictures — carved frame on all screens,
+       boot from the approved loading art, scroll tasks, medallion
+       levels header, Mine ribbon + arch. Visual layer only. */
+    body{background-image:linear-gradient(rgba(4,6,10,.90),rgba(4,6,10,.94)),url('assets/rock.webp')!important;background-size:auto,340px!important}
+    #epic-frame{position:fixed;inset:0;z-index:100001;pointer-events:none;border-style:solid;border-width:24px;border-image-source:url('assets/frame.webp');border-image-slice:150;border-image-repeat:stretch}
+    .app-shell{padding-left:27px;padding-right:27px;padding-bottom:102px}
+    .bottom-nav-3d{bottom:20px}
+    /* boot — the approved loading composition */
+    .boot-plaque{width:min(300px,88%);filter:drop-shadow(0 12px 24px rgba(0,0,0,.75));-webkit-mask-image:radial-gradient(ellipse 74% 80% at 50% 46%, #000 60%, transparent 98%);mask-image:radial-gradient(ellipse 74% 80% at 50% 46%, #000 60%, transparent 98%)}
+    .boot-panel{width:100%;background:linear-gradient(180deg,#3a2413,#1c1007);border:1px solid rgba(212,175,55,.7);border-bottom:4px solid #04060a;border-radius:14px;padding:14px 18px 12px;text-align:center;box-shadow:0 14px 30px rgba(0,0,0,.65), inset 0 1px 0 rgba(245,215,110,.25)}
+    #boot-pct{font-family:Georgia,'Times New Roman',serif;font-size:42px;font-weight:900;color:var(--gold2);text-shadow:0 2px 14px rgba(245,215,110,.45);line-height:1;margin-bottom:10px}
+    /* Mine — level ribbon over the hero + arch mined panel */
+    #mine-level-ribbon{position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:3;background:linear-gradient(180deg,#3a2413,#1c1007);border:1px solid rgba(212,175,55,.8);color:var(--gold2);font-family:Georgia,'Times New Roman',serif;font-size:11px;font-weight:700;letter-spacing:1.5px;padding:5px 14px;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,.65);white-space:nowrap}
+    .live-counter-3d{background:linear-gradient(180deg,#1c2942,#0c1424);border:1px solid rgba(212,175,55,.65);border-bottom:4px solid #04060a;border-radius:120px 120px 14px 14px;padding:18px 10px 12px;margin:10px auto 2px;max-width:300px;box-shadow:inset 0 0 26px rgba(0,0,0,.55),0 8px 18px rgba(0,0,0,.5)}
+    div[data-i18n="claimed_in_app"]{background:linear-gradient(180deg,#2b1a0c,#1a0f06)!important;color:var(--gold2);border:1px solid rgba(212,175,55,.55)}
+    /* Tasks — parchment scrolls on the dark board */
+    #page-tasks .card-3d{background:linear-gradient(90deg, rgba(93,69,23,.65), rgba(93,69,23,0) 20px, rgba(93,69,23,0) calc(100% - 20px), rgba(93,69,23,.65)),linear-gradient(172deg,#efdfae,#e0c78d 55%,#cdb27a);box-shadow:inset 0 0 0 1px rgba(93,69,23,.35), inset 12px 0 18px -10px rgba(93,69,23,.55), inset -12px 0 18px -10px rgba(93,69,23,.55), 0 8px 18px rgba(0,0,0,.6)}
+    .quests-plaque{display:block;width:min(290px,86%);margin:0 auto 12px;filter:drop-shadow(0 8px 16px rgba(0,0,0,.7))}
+    /* Boost — round tier medallion header like the reference */
+    #page-boost > .card-3d:first-of-type{position:relative}
+    #boost-hero{position:absolute;top:12px;left:12px;width:88px;height:88px;border-radius:50%;object-fit:cover;object-position:50% 18%;border:3px solid var(--gold);box-shadow:0 0 0 3px #2b1a0c,0 8px 18px rgba(0,0,0,.6)}
+    #page-boost > .card-3d:first-of-type > div[style*="space-between"]{padding-left:112px;min-height:100px;align-items:flex-start}
+    /* Level cards — centered LVL plaque + state ribbons */
+    .lvl-pill-tag{left:50%!important;right:auto!important;transform:translateX(-50%)}
+    .lvl-ribbon{position:absolute;top:9px;right:-27px;transform:rotate(38deg);width:96px;text-align:center;font-size:8.5px;font-weight:900;letter-spacing:.6px;padding:3px 0;z-index:4;box-shadow:0 3px 8px rgba(0,0,0,.5)}
+    .lvl-ribbon.rb-unlocked{background:linear-gradient(180deg,#3f9e57,#256b38);color:#eaffea}
+    .lvl-ribbon.rb-active{background:linear-gradient(180deg,#f7dc6f,#c39a2e);color:#23160a}
+    /* Profile — big framed portrait + gold serif name */
+    #prof-avatar{width:96px!important;height:96px!important;border-radius:14px!important;border:3px solid var(--gold)!important;box-shadow:0 0 0 3px #2b1a0c,0 8px 18px rgba(0,0,0,.6)!important}
+    #prof-name{font-family:Georgia,'Times New Roman',serif;color:var(--gold2);font-size:24px;letter-spacing:.5px}
+  </style>
 </head>
 <body oncontextmenu="return false;">
 
   <div id="boot-loader">
-    <img src="assets/loading_bg.webp" alt="Viking" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0.95;" onerror="this.style.display='none'">
-    <div style="position:absolute;inset:0;background:radial-gradient(circle, rgba(5,7,11,0.4) 0%, rgba(5,7,11,0.95) 100%);"></div>
-    <div style="position:relative;z-index:2;width:80%;max-width:300px;">
-      <div style="margin-bottom:15px;">
-        <svg width="64" height="64" viewBox="0 0 24 24" fill="none"><path d="M12 2L4 5v6.09c0 5.05 3.41 9.76 8 10.91 4.59-1.15 8-5.86 8-10.91V5l-8-3z" fill="#f59e0b" stroke="#fde047" stroke-width="1.5"/></svg>
+    <img src="assets/boot_scene.webp" alt="Viking" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;" onerror="this.style.display='none'">
+    <div style="position:absolute;inset:0;background:linear-gradient(180deg, rgba(5,7,11,0.30) 0%, rgba(5,7,11,0) 30%, rgba(5,7,11,0) 52%, rgba(5,7,11,0.60) 100%);"></div>
+    <div style="position:relative;z-index:2;width:88%;max-width:340px;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:space-between;padding:36px 0 34px;">
+      <img src="assets/boot_plaque.webp" alt="VIKING MINER" class="boot-plaque" onerror="this.style.display='none'">
+      <div class="boot-panel">
+        <div id="boot-pct">0%</div>
+        <div id="boot-progress-wrap" style="width:100%;height:10px;background:#1e293b;border-radius:10px;overflow:hidden;border:1px solid #f59e0b;">
+          <div id="boot-progress" style="width:0%;height:100%;background:linear-gradient(90deg,#ea580c,#f59e0b,#fde047);transition:width 0.15s;"></div>
+        </div>
+        <div id="boot-status-text" style="color:#cbd5e1;font-size:11px;margin-top:8px;">Loading...</div>
+        <button id="boot-retry-btn" class="btn-3d-gold" style="display:none;margin-top:14px;">🔄 Retry</button>
       </div>
-      <div class="boot-title" style="color:var(--gb);font-weight:900;font-size:22px;margin-bottom:15px;text-shadow:0 2px 10px #f59e0b;">$VIKING MINER</div>
-      <div id="boot-progress-wrap" style="width:100%;height:10px;background:#1e293b;border-radius:10px;overflow:hidden;border:1px solid #f59e0b;">
-        <div id="boot-progress" style="width:0%;height:100%;background:linear-gradient(90deg,#ea580c,#f59e0b,#fde047);transition:width 0.15s;"></div>
-      </div>
-      <div id="boot-status-text" style="color:#cbd5e1;font-size:11px;margin-top:8px;">Loading...</div>
-      <button id="boot-retry-btn" class="btn-3d-gold" style="display:none;margin-top:14px;">🔄 Retry</button>
     </div>
   </div>
+
+  <div id="epic-frame"></div>
 
   <div id="banned-screen">
     <div style="font-size:58px;">🚫</div>
@@ -254,6 +292,7 @@
       <div>
         <div class="coin-stage-3d" id="coin-3d-trigger">
           <img id="hero-img" src="assets/hero_tier1.webp" alt="Viking">
+          <div id="mine-level-ribbon">LEVEL 1 - SHIELDBEARER</div>
         </div>
         <div class="live-counter-3d">+<span id="live-mined-num">0.000000</span></div>
       </div>
@@ -293,6 +332,7 @@
     <!-- 2. TASKS PAGE -->
     <div id="page-tasks" class="page">
       <div class="card-3d">
+        <img src="assets/quests_plaque.webp" alt="Quests" class="quests-plaque" onerror="this.style.display='none'">
         <div style="display:flex;justify-content:space-between;margin-bottom:8px;">
           <h4 data-i18n="daily_login_title">🎁 Daily Login (7 Days)</h4>
         </div>
@@ -986,7 +1026,7 @@
         if (this.on || !soundEnabled) return;
         let ctx; try { ctx = ac(); } catch (e) { return; }
         this.on = true;
-        const master = ctx.createGain(); master.gain.value = 0.14; master.connect(ctx.destination);
+        const master = ctx.createGain(); master.gain.value = 0.22; master.connect(ctx.destination);
         this.nodes.push(master);
         const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 210; lp.connect(master);
         [55, 82.41].forEach((f) => { const o = ctx.createOscillator(); o.type = 'sine'; o.frequency.value = f; o.connect(lp); o.start(); this.nodes.push(o); });
@@ -1033,10 +1073,10 @@
       sync() { if (soundEnabled) this.start(); else this.stop(); }
     };
     const SoundFX = {
-      collect: () => { coinShimmer(); },
-      buySuccess: () => { hornSwell(); setTimeout(coinShimmer, 120); },
-      click: () => { woodTap(); },
-      error: () => { drumThud(0.22); }
+      collect: () => { Ambience.sync(); coinShimmer(); },
+      buySuccess: () => { Ambience.sync(); hornSwell(); setTimeout(coinShimmer, 120); },
+      click: () => { Ambience.sync(); woodTap(); },
+      error: () => { Ambience.sync(); drumThud(0.22); }
     };
 
     const I18N = {
@@ -1241,6 +1281,8 @@
       if (bootProg > 95) bootProg = 95;
       const el = document.getElementById('boot-progress');
       if (el) el.style.width = bootProg + '%';
+      const bp = document.getElementById('boot-pct');
+      if (bp) bp.textContent = Math.floor(bootProg) + '%';
     }, 150);
 
     function finishBoot() {
@@ -1249,6 +1291,8 @@
       clearInterval(bootTimer);
       const el = document.getElementById('boot-progress');
       if (el) el.style.width = '100%';
+      const bp = document.getElementById('boot-pct');
+      if (bp) bp.textContent = '100%';
       setTimeout(() => {
         const loader = document.getElementById('boot-loader');
         if (loader) loader.style.display = 'none';
@@ -2137,7 +2181,9 @@
       const dict = I18N[currentLang] || I18N.en;
       const perSec = cur.perDay / 86400;
       syncTierArt(cur.level);
-      
+      const rb = document.getElementById('mine-level-ribbon');
+      if (rb) rb.textContent = 'LEVEL ' + cur.level + ' - ' + String(cur.name || '').replace(/\s+\d+\s*$/, '').toUpperCase();
+
       if (Date.now() < lastCollectTime - 60000) lastCollectTime = Date.now();
 
       const rawElapsed = Math.max(0, (Date.now() - lastCollectTime) / 1000);
@@ -2200,6 +2246,7 @@
             <div>
               <div class="miner-art-3d ${(!isCur && !isPass) ? 'locked' : ''}">
                 <span class="lvl-pill-tag">LVL ${it.level}</span>
+                ${isCur ? '<span class="lvl-ribbon rb-active">ACTIVE</span>' : (isPass ? '<span class="lvl-ribbon rb-unlocked">UNLOCKED</span>' : '')}
                 ${getLevelArtSVG(it.level)}
               </div>
               <h4 style="font-size:12.5px;color:#fff;margin-bottom:3px;">${it.name}</h4>
