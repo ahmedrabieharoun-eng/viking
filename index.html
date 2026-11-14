@@ -178,7 +178,7 @@
     /* Profile replica (owner order 2026-11-14): the profile page rebuilt
        1:1 from his reference picture. Scoped to #page-profile only. */
     .pf-titlebar{font-family:Georgia,serif;font-size:19px;font-weight:900;letter-spacing:5px;color:var(--gold2);text-align:center;border:1px solid rgba(212,175,55,.55);background:rgba(9,13,22,.65);padding:9px 0 8px;margin-bottom:12px}
-    .pf-settings{display:grid;grid-template-columns:1fr 1fr 1fr;gap:9px;margin-bottom:16px;direction:ltr}
+    .pf-settings{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-bottom:16px;direction:ltr}
     .pf-set-cell{position:relative;background:linear-gradient(180deg,#141f36,#0a101d);border:1px solid rgba(212,175,55,.55);border-radius:9px;padding:10px 4px 8px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;cursor:pointer;color:var(--gold2);box-shadow:0 5px 12px rgba(0,0,0,.5);transition:transform .1s}
     .pf-set-cell:active{transform:scale(.95)}
     .pf-set-cell > svg{width:21px;height:21px}
@@ -590,10 +590,6 @@
             <div class="lang-opt" data-lang="ar"><span>🇪🇬 العربية</span><span id="chk-ar"></span></div>
             <div class="lang-opt" data-lang="ru"><span>🇷🇺 Русский</span><span id="chk-ru"></span></div>
           </div>
-        </div>
-        <div class="pf-set-cell" id="top-wallet-shortcut">
-          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M21 18v1c0 1.1-.9 2-2 2H5c-1.11 0-2-.9-2-2V5c0-1.1.89-2 2-2h14c1.1 0 2 .9 2 2v1h-9c-1.11 0-2 .9-2 2v8c0 1.1.89 2 2 2h9zm-9-2h10V8H12v8zm4-2.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/></svg>
-          <span data-i18n="prof_wallet_lbl">WALLET</span>
         </div>
       </div>
 
@@ -2481,9 +2477,8 @@
     document.getElementById('lang-menu-btn').addEventListener('click', e => { e.stopPropagation(); document.getElementById('lang-dropdown').classList.toggle('show'); });
     document.querySelectorAll('.lang-opt').forEach(o => o.addEventListener('click', e => { e.stopPropagation(); currentLang = o.getAttribute('data-lang'); localStorage.setItem('vk_lang', currentLang); document.getElementById('lang-dropdown').classList.remove('show'); applyUI(); }));
     document.addEventListener('click', () => document.getElementById('lang-dropdown').classList.remove('show'));
-    // The wallet cell now lives IN the Profile page (top bar removed):
-    // it opens the TonConnect wallet modal, same as Connect Wallet.
-    document.getElementById('top-wallet-shortcut').addEventListener('click', connectTonWallet);
+    // (The settings-row wallet cell was removed again by owner order
+    // 2026-11-14 — wallet connect lives in the WALLET section itself.)
 
 
     document.getElementById('coin-3d-trigger').addEventListener('click', collectMining);
