@@ -645,8 +645,7 @@
           <div class="pf-line-sub"><span data-i18n="min_wd_lbl">Minimum:</span> <strong id="wd-min-ui">5,000</strong> · <span data-i18n="hold_cond_lbl">25% Hold Required:</span> <strong id="wd-req-hold-num">1,250</strong> (<span data-i18n="your_hold_lbl">Your Hold:</span> <strong id="wd-cur-hold-num">0</strong>)</div>
         </div>
         <button class="pf-wd-btn" id="btn-request-wd"><img src="assets/icon_chest.webp" alt=""><span id="wd-btn-arrow">↗</span> <span id="wd-btn-label" data-i18n="req_wd_btn">Request Withdrawal</span></button>
-        <button class="btn-3d-bronze btn-stonfi-buy">🪙 <span data-i18n="buy_hold_btn">Buy on STON.fi to Unlock 25% Hold</span></button>
-        <button class="btn-3d-bronze btn-tonkeeper-buy" style="margin-top:8px;">💎 <span data-i18n="buy_tonkeeper_btn">Buy on Tonkeeper</span></button>
+        <button class="btn-3d-bronze btn-stonfi-buy" id="btn-wd-buy" style="display:none;justify-content:center;">🪙 <span data-i18n="buy_stonfi_btn">Buy on STON.fi</span></button>
       </section>
 
       <div class="pf-contract">
@@ -1190,11 +1189,11 @@
         my_referrals_title:"👥 My Invited Friends", pending_ref_title:"Pending Referral Profits", collect_ref_btn:"Collect Referral Profits",
         ton_wallet_title:"TON Blockchain Wallet", connect_wallet_btn:"Connect TON Wallet",
         sync_hold_btn:"Verify Wallet Hold", disconnect_wallet_btn:"Disconnect",
-        prof_page_title:"PROFILE", prof_username_lbl:"USERNAME", prof_wallet_lbl:"WALLET", prof_amount_lbl:"AMOUNT",
+        prof_page_title:"PROFILE", prof_username_lbl:"USERNAME", prof_wallet_lbl:"WALLET", prof_amount_lbl:"AMOUNT", buy_stonfi_btn:"Buy on STON.fi",
         hold_wallet_lbl:"Wallet Hold", mine_wallet_lbl:"Mined Balance",
         withdraw_title:"Withdraw", min_wd_lbl:"Minimum:", wd_fee_lbl:"Fee (5%):", net_lbl:"Net:",
         hold_cond_lbl:"25% Hold Required:", your_hold_lbl:"Your Hold:", req_wd_btn:"Request Withdrawal",
-        lock_connect:"Connect Wallet First", lock_min:"Minimum {n} Required", lock_balance:"Insufficient Balance", lock_hold:"Need {n} in Wallet Hold", lock_cooldown:"Wait {t}",
+        lock_connect:"Connect Wallet First", lock_min:"Minimum {n} Required", lock_balance:"Insufficient Balance", lock_hold:"You must hold 25% of the withdrawal in your wallet (need {n})", lock_cooldown:"Wait {t}",
         buy_hold_btn:"Buy on STON.fi to Unlock 25% Hold", buy_tonkeeper_btn:"Buy on Tonkeeper", wd_hist_title:"Withdrawal History",
         verify_title:"Wallet Verification", verify_connected_row:"Wallet connected",
         verify_not_connected:"Connect your wallet above first, then verify it here.",
@@ -1236,11 +1235,11 @@
         my_referrals_title:"👥 أصدقائي المدعوون", pending_ref_title:"أرباح الإحالات المعلقة", collect_ref_btn:"جمع أرباح الإحالات",
         ton_wallet_title:"محفظة شبكة TON", connect_wallet_btn:"ربط محفظة TON الآن",
         sync_hold_btn:"تحديث رصيد المحفظة", disconnect_wallet_btn:"إلغاء الربط",
-        prof_page_title:"الملف الشخصي", prof_username_lbl:"اسم المستخدم", prof_wallet_lbl:"المحفظة", prof_amount_lbl:"المبلغ",
+        prof_page_title:"الملف الشخصي", prof_username_lbl:"اسم المستخدم", prof_wallet_lbl:"المحفظة", prof_amount_lbl:"المبلغ", buy_stonfi_btn:"اشترِ من STON.fi",
         hold_wallet_lbl:"عملات المحفظة (Hold)", mine_wallet_lbl:"رصيد التعدين",
         withdraw_title:"سحب", min_wd_lbl:"الحد الأدنى:", wd_fee_lbl:"رسوم (5%):", net_lbl:"الصافي:",
         hold_cond_lbl:"شرط 25% بالمحفظة:", your_hold_lbl:"رصيد محفظتك:", req_wd_btn:"طلب سحب الرصيد",
-        lock_connect:"اربط المحفظة الأول", lock_min:"الحد الأدنى {n}", lock_balance:"الرصيد مش كافي", lock_hold:"محتاج {n} في محفظتك", lock_cooldown:"استنى {t}",
+        lock_connect:"اربط المحفظة الأول", lock_min:"الحد الأدنى {n}", lock_balance:"الرصيد مش كافي", lock_hold:"يجب الاحتفاظ بـ 25% من قيمة السحب في المحفظة (تحتاج {n})", lock_cooldown:"استنى {t}",
         buy_hold_btn:"اشترِ من STON.fi لتحقيق شرط الـ 25%", buy_tonkeeper_btn:"اشترِ من Tonkeeper", wd_hist_title:"سجل السحوبات",
         verify_title:"توثيق المحفظة", verify_connected_row:"المحفظة مربوطة",
         verify_not_connected:"اربط محفظتك فوق الأول، وبعدين وثّقها من هنا.",
@@ -1282,11 +1281,11 @@
         my_referrals_title:"👥 Мои рефералы", pending_ref_title:"Ожидаемый доход", collect_ref_btn:"Собрать доход",
         ton_wallet_title:"Кошелек TON", connect_wallet_btn:"Подключить TON Кошелек",
         sync_hold_btn:"Обновить Холд", disconnect_wallet_btn:"Отключить",
-        prof_page_title:"ПРОФИЛЬ", prof_username_lbl:"ИМЯ ПОЛЬЗОВАТЕЛЯ", prof_wallet_lbl:"КОШЕЛЁК", prof_amount_lbl:"СУММА",
+        prof_page_title:"ПРОФИЛЬ", prof_username_lbl:"ИМЯ ПОЛЬЗОВАТЕЛЯ", prof_wallet_lbl:"КОШЕЛЁК", prof_amount_lbl:"СУММА", buy_stonfi_btn:"Купить на STON.fi",
         hold_wallet_lbl:"В кошельке", mine_wallet_lbl:"Баланс майнинга",
         withdraw_title:"Вывод", min_wd_lbl:"Минимум:", wd_fee_lbl:"Комиссия (5%):", net_lbl:"Чистыми:",
         hold_cond_lbl:"Нужно 25% Холда:", your_hold_lbl:"Ваш Холд:", req_wd_btn:"Запросить вывод",
-        lock_connect:"Сначала подключите кошелёк", lock_min:"Минимум: {n}", lock_balance:"Недостаточный баланс", lock_hold:"Нужно {n} на холде", lock_cooldown:"Подождите {t}",
+        lock_connect:"Сначала подключите кошелёк", lock_min:"Минимум: {n}", lock_balance:"Недостаточный баланс", lock_hold:"Нужно держать 25% суммы вывода в кошельке (нужно {n})", lock_cooldown:"Подождите {t}",
         buy_hold_btn:"Купить на STON.fi (25% Холд)", buy_tonkeeper_btn:"Купить в Tonkeeper", wd_hist_title:"История выводов",
         verify_title:"Верификация кошелька", verify_connected_row:"Кошелёк подключён",
         verify_not_connected:"Сначала подключите кошелёк выше, затем подтвердите его здесь.",
@@ -2283,17 +2282,19 @@
       const wdArrow = document.getElementById('wd-btn-arrow');
       const dict = I18N[currentLang] || I18N.en;
       let lockReason = '';
+      let lockKind = '';
       const cdRemain = (lastWithdrawTime + 86400000) - Date.now();
       wdCooldownActive = cdRemain > 0;
-      if (!linkedWalletAddr) lockReason = dict.lock_connect;
+      if (!linkedWalletAddr) { lockReason = dict.lock_connect; lockKind = 'connect'; }
       else if (cdRemain > 0) {
         const s = Math.ceil(cdRemain / 1000);
         const hh = String(Math.floor(s / 3600)).padStart(2, '0'), mm = String(Math.floor((s % 3600) / 60)).padStart(2, '0'), ss = String(s % 60).padStart(2, '0');
         lockReason = dict.lock_cooldown.replace('{t}', `${hh}:${mm}:${ss}`);
+        lockKind = 'cooldown';
       }
-      else if (rawAmt < config.minWithdraw) lockReason = dict.lock_min.replace('{n}', config.minWithdraw.toLocaleString());
-      else if (rawAmt > minedInApp) lockReason = dict.lock_balance;
-      else if (walletHold < reqHold) lockReason = dict.lock_hold.replace('{n}', reqHold.toLocaleString());
+      else if (rawAmt < config.minWithdraw) { lockReason = dict.lock_min.replace('{n}', config.minWithdraw.toLocaleString()); lockKind = 'min'; }
+      else if (rawAmt > minedInApp) { lockReason = dict.lock_balance; lockKind = 'balance'; }
+      else if (walletHold < reqHold) { lockReason = dict.lock_hold.replace('{n}', reqHold.toLocaleString()); lockKind = 'hold'; }
       if (lockReason) {
         wdBtn.disabled = true;
         wdBtn.classList.add('btn-wd-locked');
@@ -2305,6 +2306,12 @@
         wdArrow.style.display = '';
         wdLbl.textContent = dict.req_wd_btn;
       }
+      // Owner order 2026-11-14: the two permanent buy buttons under the
+      // withdraw button are gone. ONE STON.fi button appears ONLY while
+      // the withdraw is locked for the hold reason — a player who
+      // already holds enough never sees a buy button here.
+      const wdBuyBtn = document.getElementById('btn-wd-buy');
+      if (wdBuyBtn) wdBuyBtn.style.display = (lockKind === 'hold') ? 'flex' : 'none';
     }
 
     function updateLiveMining() {
