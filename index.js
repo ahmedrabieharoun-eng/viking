@@ -408,6 +408,7 @@ async function getConfig() {
   const v = { ...DEFAULTS, ...(s || {}) };
   delete v.botToken;
   cfgCache = { t: Date.now(), v };
+  await loadHarvestedEmoji(); // the harvested premium-emoji map rides the same refresh cycle
   return v;
 }
 const PUBLIC_KEYS = ['brandTitle', 'coinSym', 'taskReward', 'bioReward', 'refAchReward1', 'refAchReward10', 'refAchReward25', 'refAchReward50', 'refAchReward100', 'refClaimPercent', 'refMinHold', 'minWithdraw', 'holdPercentReq', 'withdrawFeePercent', 'lvl1PerDay', 'buySwapUrl', 'channel1', 'channel2', 'botUsername'];
@@ -545,7 +546,15 @@ const PREMIUM_SUBS = {
   '📺': ['🖥', '5282843764451195532'],
   '🎬': ['▶️', '5264919878082509254'],
   '📁': ['🧾', '5204242830687494041'],
+  // Zero-loss substitutions (owner order 2026-11-14): the display char IS
+  // the wanted glyph itself — 🎯 borrows the target sticker 🔘 maps to,
+  // and 🌩️ renders with the premium ⚡ sticker. NOTE: '🎯' must stay
+  // BEFORE '🔘' in this literal — PREMIUM_SUB_KEYS is a stable
+  // length-sort and 🔘's display char is 🎯 itself, so processing 🎯
+  // first keeps the 🔘 replacement from being re-wrapped by the 🎯 pass.
+  '🎯': ['🎯', '5461009483314517035'],
   '🔘': ['🎯', '5461009483314517035'],
+  '🌩️': ['⚡', '5456140674028019486'],
 };
 const PREMIUM_SUB_KEYS = Object.keys(PREMIUM_SUBS).sort((a, b) => b.length - a.length);
 function pz(text) {
@@ -560,10 +569,64 @@ function pz(text) {
     const sub = PREMIUM_SUBS[orig];
     out = out.split(orig).join('<tg-emoji emoji-id="' + sub[1] + '">' + sub[0] + '</tg-emoji>');
   }
-  return out;
+  return pzHarvested(out);
 }
 function pzStrip(text) {
   return String(text || '').replace(/<tg-emoji emoji-id="[^"]+">/g, '').replace(/<\/tg-emoji>/g, '');
+}
+
+// ─── Harvested premium emoji (RTDB node `premiumEmoji`) ─────────────
+// Real per-glyph IDs harvested by the owner's bot tools (/emojihunt,
+// /emojipack, the entity extractor — see handleOwnerTools below) and
+// persisted at the TOP-LEVEL RTDB node `premiumEmoji` (deliberately NOT
+// inside settings/global). pz() consults this map LAST — after
+// PREMIUM_EMOJI and PREMIUM_SUBS — and so does premiumIconFor(). The
+// map rides the config cache's refresh cycle (getConfig reloads it on
+// every cache miss) and is updated in-process the moment a tool saves,
+// so a fresh harvest takes effect without a restart. A missing node is
+// simply an empty map, never an error.
+let harvestedEmoji = {};
+let harvestedKeys = [];
+function refreshHarvestedKeys() {
+  harvestedKeys = Object.keys(harvestedEmoji).sort((a, b) => b.length - a.length);
+}
+async function loadHarvestedEmoji() {
+  try {
+    const v = await getVal(rtdb().ref('premiumEmoji'));
+    harvestedEmoji = (v && typeof v === 'object') ? v : {};
+  } catch (e) { /* keep whatever is cached — harvesting is best-effort */ }
+  refreshHarvestedKeys();
+}
+// found: { bareChar -> custom_emoji_id }. Each char is stored under BOTH
+// its bare form and its U+FE0F form (same id); ref.update() merges into
+// the node, so entries already stored are never deleted.
+async function saveHarvestedEmoji(found) {
+  const updates = {};
+  for (const [ch, id] of Object.entries(found || {})) {
+    if (!ch || !id) continue;
+    updates[ch] = String(id);
+    updates[ch + '\uFE0F'] = String(id); // second key form: char + U+FE0F
+  }
+  if (!Object.keys(updates).length) return;
+  Object.assign(harvestedEmoji, updates);
+  refreshHarvestedKeys();
+  try { await rtdb().ref('premiumEmoji').update(updates); }
+  catch (e) { console.error('premiumEmoji save', e.message); }
+}
+function pzHarvested(text) {
+  if (!harvestedKeys.length || typeof text !== 'string') return text;
+  // Only the segments OUTSIDE existing <tg-emoji> tags are processed, so
+  // a harvested char that already appears as a wrapped display char
+  // (e.g. 🎯 inside the 🔘 substitution tag) is never re-wrapped. The
+  // single regex pass (keys are length-sorted, longest first) also stops
+  // a shorter key from matching inside a tag this pass just inserted
+  // (e.g. bare ⚔ inside a freshly wrapped ⚔️).
+  const re = new RegExp(harvestedKeys.map((k) => k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|'), 'g');
+  const parts = text.split(/(<tg-emoji[^>]*>[\s\S]*?<\/tg-emoji>)/g);
+  for (let i = 0; i < parts.length; i += 2) {
+    parts[i] = parts[i].replace(re, (ch) => '<tg-emoji emoji-id="' + harvestedEmoji[ch] + '">' + ch + '</tg-emoji>');
+  }
+  return parts.join('');
 }
 
 // ─── Premium button icons ─────────────────────────────────────────────
@@ -579,6 +642,7 @@ function premiumIconFor(text) {
   if (!text || typeof text !== 'string') return null;
   for (const ch of PREMIUM_KEYS) if (text.indexOf(ch) !== -1) return { icon: PREMIUM_EMOJI[ch], ch };
   for (const orig of PREMIUM_SUB_KEYS) if (text.indexOf(orig) !== -1) return { icon: PREMIUM_SUBS[orig][1], ch: orig };
+  for (const ch of harvestedKeys) if (text.indexOf(ch) !== -1) return { icon: harvestedEmoji[ch], ch };
   return null;
 }
 function premiumizeKeyboard(rm) {
@@ -941,6 +1005,7 @@ async function bioTask(c) {
    bioTaskDone transaction guard make crediting idempotent even if
    Telegram retries a delivery or the set was trimmed. */
 const APP_URL = 'https://ahmedrabieharoun-eng.github.io/viking/';
+const WELCOME_IMAGE_URL = 'https://ahmedrabieharoun-eng.github.io/viking/welcome-banner.webp?v=2'; // ?v=2: the titled banner replaced v1 at the same path; Telegram caches photo-by-URL
 const webhookSecret = () => crypto.createHash('sha256').update(BOT_TOKEN || '').digest('hex').slice(0, 32);
 let webhookRegistered = false;
 function ensureWebhook() {
@@ -1002,6 +1067,110 @@ const bioLangOf = (from) => {
   return lc.startsWith('ar') ? 'ar' : lc.startsWith('ru') ? 'ru' : 'en';
 };
 
+/* ---------- owner-only emoji-harvest tools ----------
+   Mirrors the AdVOLT messages bot's admin tools, adapted to this
+   server's raw tg() style. Gated STRICTLY to OWNER_ID in a private
+   chat (and, like everything on this endpoint, behind the webhook
+   secret); anyone else falls through to the normal handling,
+   completely untouched. Three tools:
+     /emojipack <name> — list every sticker of a t.me/addemoji pack as
+                         'char → <code>custom_emoji_id</code>'.
+     /emojihunt        — sweep the built-in candidate packs for the
+                         WANTED glyphs and report what is still missing.
+     (extractor)       — any other owner message that carries custom-
+                         emoji entities gets an ID listing back.
+   Whenever a WANTED glyph's ID surfaces through ANY of the three, it
+   is auto-saved into the RTDB `premiumEmoji` node, so pz() starts
+   rendering that glyph premium (animated) everywhere the bot writes. */
+const EMOJI_WANTED = ['⚔', '🔥', '🛡', '❄', '⛏', '🩸', '👇', '🌩', '🎯'];
+const EMOJI_WANTED_SET = new Set(EMOJI_WANTED);
+const EMOJI_PACK_CANDIDATES = ['RestrictedEmoji']; // Telegram's official animated standard-emoji pack (ex-Telemoji); extend this list to hunt more packs
+const bareEmoji = (ch) => String(ch || '').replace(/\uFE0F/g, '');
+
+async function emojiPack(chatId, name) {
+  if (!name) {
+    await tg('sendMessage', { chat_id: chatId, text: 'Usage: /emojipack <packName> — the name from a t.me/addemoji/<packName> link' });
+    return;
+  }
+  const j = await tg('getStickerSet', { name });
+  if (!j || !j.ok || !j.result) {
+    await tg('sendMessage', { chat_id: chatId, text: '❌ ' + esc((j && j.description) || 'pack not found') });
+    return;
+  }
+  const stickers = Array.isArray(j.result.stickers) ? j.result.stickers : [];
+  const found = {};
+  for (const s of stickers) {
+    const bare = bareEmoji(s && s.emoji);
+    if (bare && EMOJI_WANTED_SET.has(bare) && s.custom_emoji_id) found[bare] = String(s.custom_emoji_id);
+  }
+  await saveHarvestedEmoji(found);
+  const total = stickers.length;
+  let lines = stickers.map((s) => `${(s && s.emoji) || '?'} → <code>${s && s.custom_emoji_id}</code>`);
+  let truncated = false;
+  if (lines.length > 200) { lines = lines.slice(0, 200); truncated = true; }
+  const build = () => `🎨 <b>${esc(j.result.title || name)}</b> (${total})\n\n${lines.join('\n')}${truncated ? `\n… (truncated — ${total} stickers in the pack)` : ''}`;
+  let body = build();
+  while (body.length > 3900 && lines.length > 1) { lines.pop(); truncated = true; body = build(); }
+  await tg('sendMessage', { chat_id: chatId, text: body });
+}
+
+async function emojiHunt(chatId) {
+  const sections = [];
+  for (const name of EMOJI_PACK_CANDIDATES) {
+    const j = await tg('getStickerSet', { name });
+    if (!j || !j.ok || !j.result) {
+      sections.push(`🎨 <b>${esc(name)}</b>\n❌ ${esc((j && j.description) || 'pack not found')}`);
+      continue;
+    }
+    const stickers = Array.isArray(j.result.stickers) ? j.result.stickers : [];
+    const found = {};
+    const lines = [];
+    for (const s of stickers) {
+      const bare = bareEmoji(s && s.emoji);
+      if (bare && EMOJI_WANTED_SET.has(bare) && s.custom_emoji_id) {
+        if (!(bare in found)) lines.push(`${s.emoji} → <code>${s.custom_emoji_id}</code>`);
+        found[bare] = String(s.custom_emoji_id);
+      }
+    }
+    await saveHarvestedEmoji(found);
+    sections.push(`🎨 <b>${esc(j.result.title || name)}</b> — ${lines.length} wanted found\n${lines.join('\n') || '(none of the wanted glyphs in this pack)'}`);
+  }
+  const have = new Set(Object.keys(harvestedEmoji).map(bareEmoji));
+  const missing = EMOJI_WANTED.filter((w) => !have.has(w));
+  sections.push(missing.length ? `Still missing: ${missing.join(' ')}` : '✅ All wanted emoji harvested!');
+  await tg('sendMessage', { chat_id: chatId, text: sections.join('\n\n') });
+}
+
+/* Returns true when a tool consumed the message. Runs BEFORE the
+   /start handling. The entity extractor only fires when the text does
+   NOT start with '/', so it can never swallow the owner's /start,
+   /emojipack or /emojihunt messages. */
+async function handleOwnerTools(msg, text) {
+  if (!OWNER_ID || !msg.from || String(msg.from.id) !== OWNER_ID) return false;
+  const chatId = msg.chat.id;
+  if (/^\/emojihunt(@\w+)?(\s|$)/.test(text)) { await emojiHunt(chatId); return true; }
+  const pm = /^\/emojipack(@\w+)?(?:\s+(\S+))?/.exec(text);
+  if (pm) { await emojiPack(chatId, (pm[2] || '').trim()); return true; }
+  if (text.startsWith('/')) return false; // commands (incl. /start) never reach the extractor
+  const rawText = typeof msg.text === 'string' ? msg.text : (typeof msg.caption === 'string' ? msg.caption : '');
+  const ents = [].concat(msg.entities || [], msg.caption_entities || []);
+  const customs = ents.filter((e) => e && e.type === 'custom_emoji' && e.custom_emoji_id);
+  if (!customs.length) return false;
+  const byId = new Map(); // distinct custom emoji only, first occurrence wins
+  for (const e of customs) if (!byId.has(String(e.custom_emoji_id))) byId.set(String(e.custom_emoji_id), e);
+  const lines = [];
+  const found = {};
+  for (const [id, e] of byId) {
+    const glyph = rawText.substring(e.offset, e.offset + e.length); // Telegram offsets are UTF-16 code units; JS slicing matches
+    lines.push(`${glyph} → <code>${id}</code>`);
+    const bare = bareEmoji(glyph);
+    if (bare && EMOJI_WANTED_SET.has(bare)) found[bare] = id;
+  }
+  await saveHarvestedEmoji(found);
+  await tg('sendMessage', { chat_id: chatId, text: `🎨 Premium emoji IDs:\n\n${lines.join('\n')}` });
+  return true;
+}
+
 /* One /start message (private chats only; anything else is ignored).
    Param 'bio' = the dedicated verification flow: always answers with
    the outcome (granted / already / instructions / retry). A plain
@@ -1011,6 +1180,10 @@ const bioLangOf = (from) => {
 async function handleBotMessage(msg) {
   if (!msg || !msg.from || !msg.chat || msg.chat.type !== 'private') return;
   const text = typeof msg.text === 'string' ? msg.text.trim() : '';
+  // Owner-only emoji-harvest tools run BEFORE the /start handling and
+  // consume the message when they fire. For everyone else — and for the
+  // owner's own /start — they are completely silent (see handleOwnerTools).
+  if (await handleOwnerTools(msg, text)) return;
   if (!text.startsWith('/start')) return;
   const parts = text.split(/\s+/);
   if (!/^\/start(@[A-Za-z0-9_]+)?$/.test(parts[0])) return;
@@ -1044,6 +1217,12 @@ async function handleBotMessage(msg) {
     // The name lands inside an HTML message: escape it (tg() runs pz()
     // over the composed text afterwards, which only wraps emoji chars).
     const displayName = esc(String(from.first_name || '').trim() || T.warrior);
+    // Owner-approved welcome photo (2026-11-14): sent FIRST, with NO
+    // caption — a photo caption cannot hold the full welcome text, so
+    // the text follows as its own message with the keyboard. A failed
+    // photo must never cost the user the greeting, so the result is
+    // ignored and the welcome send proceeds unconditionally.
+    try { await tg('sendPhoto', { chat_id: chatId, photo: WELCOME_IMAGE_URL }); } catch (e) { /* greeting still goes out */ }
     await tg('sendMessage', {
       chat_id: chatId, text: T.welcome(displayName),
       reply_markup: { inline_keyboard: rows }
