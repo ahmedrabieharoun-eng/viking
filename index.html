@@ -29,7 +29,7 @@
     .lang-menu-popup.show{display:block}
     .lang-opt{display:flex;justify-content:space-between;padding:8px 10px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;color:#e2e8f0}
     .lang-opt.active{background:rgba(245,158,11,.2);color:var(--gb)}
-    .page{display:none;flex:1;overflow-y:auto;padding-bottom:10px;scrollbar-width:none}
+    .page{display:none;flex:1;overflow-y:auto;overflow-x:hidden;padding-bottom:10px;scrollbar-width:none}
     .page::-webkit-scrollbar{display:none}
     .page.active{display:block}
     #page-mine.page.active{display:flex;flex-direction:column;justify-content:space-between;overflow:hidden!important;height:100%;padding-bottom:4px}
@@ -229,10 +229,10 @@
     .pf-sec{position:relative;background:url('assets/ref_stone_plain.webp') center/cover;border:1px solid rgba(212,175,55,.55);border-radius:12px;padding:16px 14px 14px;margin:0 0 14px;box-shadow:0 8px 18px rgba(0,0,0,.55),inset 0 0 0 1px rgba(255,255,255,.05)}
     .pf-sec + .pf-sec{margin-top:24px}
     .pf-ribbon{position:absolute;top:-12px;left:50%;transform:translateX(-50%);background:linear-gradient(180deg,#3a2413,#1c1007);border:1px solid rgba(212,175,55,.85);color:var(--gold2);font-family:Georgia,serif;font-size:12px;font-weight:900;letter-spacing:2.5px;padding:4px 30px;white-space:nowrap;clip-path:polygon(10px 0,calc(100% - 10px) 0,100% 50%,calc(100% - 10px) 100%,10px 100%,0 50%);text-transform:uppercase}
-    .pf-id{display:flex;gap:14px;align-items:stretch}
+    .pf-id{display:flex;gap:14px;align-items:stretch;overflow:hidden}
     #page-profile #prof-avatar{width:148px!important;height:auto!important;min-height:148px;border-radius:6px!important;border:2px solid rgba(212,175,55,.8)!important;object-fit:cover;flex:none;box-shadow:0 8px 20px rgba(0,0,0,.6)!important;background:#131f36}
     .pf-id-info{display:flex;flex-direction:column;justify-content:center;min-width:0}
-    #page-profile #prof-name{font-size:29px!important;letter-spacing:1.5px;text-transform:uppercase;line-height:1.05;margin-bottom:10px}
+    #page-profile #prof-name{font-size:clamp(15px,5.6vw,24px)!important;letter-spacing:.8px;text-transform:uppercase;line-height:1.1;margin-bottom:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     .pf-lvl{display:flex;align-items:center;gap:9px;background:linear-gradient(180deg,#2a1c0d,#170e05);border:1px solid rgba(212,175,55,.75);border-radius:6px;padding:5px 12px 5px 6px;margin-bottom:11px;width:max-content;max-width:100%}
     .pf-lvl img{width:40px;height:40px;border-radius:4px;display:block}
     .pf-lvl-num{font-family:Georgia,serif;font-weight:900;color:var(--gold2);font-size:15.5px;letter-spacing:1px;line-height:1.1}
@@ -307,12 +307,12 @@
     .fr-collect:active{transform:scale(.98)}
     .fr-rule{display:flex;gap:9px;align-items:flex-start;font-size:10.5px;line-height:1.5;color:#dbe7f5;padding:4px 0}
     .fr-rule-ic{flex:none;font-size:13px}
-    .fr-friends-head{font-size:11px;font-weight:900;letter-spacing:2px;color:var(--gold2);margin:3px 0 7px;text-transform:uppercase}
+    .fr-friends-head{font-size:11px;font-weight:900;letter-spacing:2px;color:var(--gold2);margin:3px 0 7px;padding:0 11px;text-transform:uppercase}
     #my-referrals-list{max-height:330px;overflow-y:auto}
     /* Boost cards unified with the Friends stone style (owner order 2026-11-14) */
     #page-boost > .card-3d{background:url('assets/ref_stone_plain.webp') center/100% 100% no-repeat;border:1px solid rgba(212,175,55,.55);border-radius:12px;box-shadow:0 8px 18px rgba(0,0,0,.55),inset 0 0 0 1px rgba(255,255,255,.05)}
     #page-boost .sub-3d{background:rgba(5,9,17,.55);border:1px solid rgba(212,175,55,.25);border-radius:10px}
-    #page-boost .miner-card-3d{background:url('assets/ref_stone_plain.webp') center/100% 100% no-repeat;border:1px solid rgba(212,175,55,.55);border-radius:12px;box-shadow:0 8px 16px rgba(0,0,0,.55),inset 0 0 0 1px rgba(255,255,255,.05)}
+    #page-boost .miner-card-3d{background:url('assets/ref_stone_plain.webp') center/100% 100% no-repeat;border:1px solid rgba(212,175,55,.55);border-radius:12px;box-shadow:0 8px 16px rgba(0,0,0,.55),inset 0 0 0 1px rgba(255,255,255,.05);overflow:hidden}
     .fr-row{display:flex;align-items:center;gap:8px;background:url('assets/ref_stone_plain.webp') center/100% 100% no-repeat;border:1px solid rgba(212,175,55,.55);border-radius:12px;box-shadow:0 6px 14px rgba(0,0,0,.5),inset 0 0 0 1px rgba(255,255,255,.05);padding:5px 8px;margin-bottom:5px}
     .fr-ava{width:33px!important;height:33px!important;border-radius:50%!important;border:2px solid rgba(212,175,55,.85)!important;object-fit:cover;flex:none;box-shadow:0 0 0 3px rgba(20,14,4,.9),0 4px 10px rgba(0,0,0,.6)}
     .fr-row-main{flex:1;min-width:0}
@@ -415,6 +415,26 @@
     #boot-progress{background:linear-gradient(180deg,#fff3c4 0%,#fde047 38%,#f59e0b 72%,#b45309 100%);box-shadow:0 0 14px 3px rgba(245,158,11,.55), inset 0 0 6px rgba(255,255,255,.5);border-radius:999px}
     #boot-status-text{position:absolute;top:79.5%;left:0;width:100%;margin:0!important}
     #boot-retry-btn{position:absolute;left:50%;transform:translateX(-50%);top:104%}
+  </style>
+  <style id="norse-font">
+    /* Viking-letter section titles (owner order 2026-11-15): the
+       Norse display font — angular runic-style Latin capitals — for
+       every section title bar (Tasks / Boost / Friends / Profile),
+       with a carved metallic-gold finish. Arabic/Cyrillic titles
+       fall back to Georgia, unchanged. */
+    @font-face{font-family:'Norse';src:url('assets/font_norse.woff') format('woff');font-weight:400;font-style:normal;font-display:swap}
+    @font-face{font-family:'Norse';src:url('assets/font_norse_bold.woff') format('woff');font-weight:700;font-style:normal;font-display:swap}
+    .pf-titlebar{font-family:'Norse',Georgia,serif;font-size:26px;font-weight:700;letter-spacing:3px;padding:10px 0 9px;color:#f7dc6f;text-shadow:0 1px 0 rgba(255,243,196,.55),0 -1px 1px rgba(0,0,0,.6),0 3px 7px rgba(0,0,0,.65),0 0 20px rgba(212,175,55,.28)}
+  </style>
+  <style id="desktop-fit">
+    /* Desktop / wide-screen fit (owner order 2026-11-15): the app is a
+       phone app — on a computer it must stay a centered phone-width
+       column instead of stretching across the whole monitor. */
+    .app-shell{width:100%;max-width:460px;margin-left:auto;margin-right:auto}
+    .bottom-nav-3d{left:50%;right:auto;transform:translateX(-50%);width:100%;max-width:460px}
+    @media (min-width:520px){
+      .app-shell{border-left:1px solid rgba(212,175,55,.25);border-right:1px solid rgba(212,175,55,.25);box-shadow:0 0 60px rgba(0,0,0,.65)}
+    }
   </style>
 </head>
 <body oncontextmenu="return false;">
@@ -626,6 +646,11 @@
         <div class="fr-head-earn" data-i18n="ref_head_earn">Earn 5% of your friends mining</div>
         <div class="fr-head-sub" data-i18n="ref_head_sub">A friend activates at Level 2</div>
       </div>
+      <section class="fr-sec">
+        <div class="fr-sec-lbl">📜 <span data-i18n="ref_how_title">HOW IT WORKS</span></div>
+        <div class="fr-rule"><span class="fr-rule-ic">⚡</span><span data-i18n="ref_rule_cond">Activation: your friend reaches Level 2 — holding 200+ $VIKING in their wallet</span></div>
+        <div class="fr-rule"><span class="fr-rule-ic">💰</span><span data-i18n="ref_rule_5">You earn 5% of everything your active referrals earn — automatically</span></div>
+      </section>
       <div class="fr-tablets">
         <div class="fr-tablet"><div class="fr-tab-notch"></div><small data-i18n="ref_pending">Pending</small><div class="fr-tab-num fr-num-pending" id="ref-pending-count">0</div></div>
         <div class="fr-tablet"><div class="fr-tab-notch"></div><small data-i18n="ref_verified">Active</small><div class="fr-tab-num" id="ref-verified-count">0</div></div>
@@ -643,12 +668,6 @@
         <div class="fr-sec-lbl">💰 <span data-i18n="pending_ref_title">Pending Referral Profits</span></div>
         <div class="fr-profits-num" id="pending-ref-comm-display">0.00</div>
         <button class="fr-collect" id="btn-collect-ref"><span data-i18n="collect_ref_btn">Collect Referral Profits</span></button>
-      </section>
-      <section class="fr-sec">
-        <div class="fr-sec-lbl">📜 <span data-i18n="ref_how_title">HOW IT WORKS</span></div>
-        <div class="fr-rule"><span class="fr-rule-ic">🎁</span><span data-i18n="ref_rule_100">+100 coins for every ACTIVE referral</span></div>
-        <div class="fr-rule"><span class="fr-rule-ic">⚡</span><span data-i18n="ref_rule_cond">Activation: your friend reaches Level 2 — holding 200+ $VIKING in their wallet</span></div>
-        <div class="fr-rule"><span class="fr-rule-ic">💰</span><span data-i18n="ref_rule_5">You earn 5% of everything your active referrals earn — automatically</span></div>
       </section>
       <div class="fr-friends-head">ᚱ <span data-i18n="ref_friends_title">MY INVITED FRIENDS</span></div>
       <div id="my-referrals-list"></div>
@@ -1519,6 +1538,11 @@
         if (loader) loader.style.display = 'none';
         const app = document.getElementById('main-app-shell');
         if (app && document.getElementById('banned-screen').style.display !== 'flex') app.style.display = 'flex';
+        // First entry with the real state in hand: a brand-new user
+        // who has not chosen an avatar gets the picker now — and a
+        // user who already chose never sees it (maybeShowAvatarPicker
+        // hides it whenever the saved avatar is present).
+        try { maybeShowAvatarPicker(); } catch (e) {}
       }, 300);
     }
 
@@ -1873,6 +1897,13 @@
         storeSavedPick();
         return;
       }
+      // Owner order 2026-11-15: the picker may ONLY appear for a
+      // first-time user who has not chosen yet — and only after the
+      // first real state has fully loaded and the app is entered.
+      // Never during boot and never on an empty/failed state payload:
+      // that was the flash he reported (the picker blinked over the
+      // loading screen on every open, then closed again).
+      if (!initialLoadDone || !myUserNo) { pk.classList.remove('show'); return; }
       // Owner report 2026-11-14: the picker kept reappearing after he
       // had already chosen. His pick IS saved server-side, so never
       // re-show the picker on a device that already confirmed a pick
