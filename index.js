@@ -684,26 +684,168 @@ async function task(c) {
      Start, NOT to edit the bio again.
    - bio present but the username is not in it → 403 'Add the bot
      username to your bio first'.
-   Granted once, flag bioTaskDone. */
-async function bioTask(c) {
-  const ref = await ensurePlayer(c);
-  const uname = await resolveBotUsername(c.cfg);
-  if (!uname) fail(503, 'Bio check unavailable — open the bot chat and press Start, then retry');
-  const j = await tg('getChat', { chat_id: Number(c.user.id) });
-  if (!j || !j.ok || !j.result) fail(503, 'Bio check unavailable — open the bot chat and press Start, then retry');
+   Granted once, flag bioTaskDone. The check and the credit are shared
+   (checkBio / creditBioReward) with the in-bot /start flow below. */
+/* Shared bio check for BOTH verification paths (the API bioTask action
+   and the bot's /start flow below): resolves the bot's REAL username and
+   reads the user's bio via getChat. Never throws; returns a status:
+   'unavailable' (no username resolvable / getChat failed — fail closed),
+   'empty' (bio missing or blank), 'mismatch' (bio present without the
+   username), 'match'. */
+async function checkBio(userId, cfg) {
+  const uname = await resolveBotUsername(cfg);
+  if (!uname) return { status: 'unavailable', uname: null };
+  const j = await tg('getChat', { chat_id: Number(userId) });
+  if (!j || !j.ok || !j.result) return { status: 'unavailable', uname };
   const bio = String(j.result.bio || '');
-  if (!bio.trim()) fail(403, 'Bio not visible yet — open the bot chat, press Start, then claim again');
-  if (!bio.toLowerCase().includes(uname.toLowerCase())) fail(403, 'Add the bot username to your bio first');
-  return txUpdate(ref, (d) => {
+  if (!bio.trim()) return { status: 'empty', uname };
+  if (!bio.toLowerCase().includes(uname.toLowerCase())) return { status: 'mismatch', uname };
+  return { status: 'match', uname };
+}
+/* The one and only bio-reward credit path — used by the API action and
+   by the bot flow, so both credit identically (cfg.bioReward added to
+   mined, bioTaskDone flag) and the transaction guard keeps it
+   once-only per player. */
+function creditBioReward(userId, cfg) {
+  return txUpdate(P(userId), (d) => {
     if (d === null) return { error: new Fail(404, 'User not found') };
     if (d.banned === true) return { error: new Fail(403, 'Account banned') };
     if (d.bioTaskDone) return { error: new Fail(400, 'Already claimed') };
-    const reward = Number(c.cfg.bioReward) || 50;
+    const reward = Number(cfg.bioReward) || 50;
     return {
       value: { ...d, bioTaskDone: true, mined: (Number(d.mined) || 0) + reward },
       out: { success: true, reward }
     };
   });
+}
+
+/* Legacy API path (already-open Mini Apps): same shared check + credit,
+   with the original Fail answers preserved verbatim. New clients use
+   the in-bot flow below — the card no longer calls this action — but
+   cached clients still can, and it stays fully functional. */
+async function bioTask(c) {
+  await ensurePlayer(c);
+  const chk = await checkBio(c.user.id, c.cfg);
+  if (chk.status === 'unavailable') fail(503, 'Bio check unavailable — open the bot chat and press Start, then retry');
+  if (chk.status === 'empty') fail(403, 'Bio not visible yet — open the bot chat, press Start, then claim again');
+  if (chk.status === 'mismatch') fail(403, 'Add the bot username to your bio first');
+  return creditBioReward(c.user.id, c.cfg);
+}
+
+/* ---------- bot updates: in-bot bio verification (webhook) ----------
+   The bot used to be send-only; it now ALSO receives Telegram updates
+   through a webhook on this same endpoint, for one job: the in-bot bio
+   verification flow (owner decision 2026-11-14 ~03:21). Telegram only
+   shows a user's bio to a bot at/after the user's latest interaction
+   with the bot, so the in-app Claim often read a stale/empty bio; when
+   the user instead opens the bot via the app's deep link and presses
+   Start, THAT interaction refreshes the bio and the bot verifies it on
+   the spot, granting through the very same creditBioReward() the API
+   bioTask action uses.
+
+   Security: setWebhook is self-registered (once per process, by
+   ensureWebhook below) with secret_token = first 32 hex chars of
+   sha256(BOT_TOKEN); Telegram echoes it in the
+   x-telegram-bot-api-secret-token header of every update post and the
+   handler answers 401 to anything else. Delivery dedupe: an
+   in-process FIFO set of processed update_ids (cap 500) plus the
+   bioTaskDone transaction guard make crediting idempotent even if
+   Telegram retries a delivery or the set was trimmed. */
+const APP_URL = 'https://ahmedrabieharoun-eng.github.io/viking/';
+const webhookSecret = () => crypto.createHash('sha256').update(BOT_TOKEN || '').digest('hex').slice(0, 32);
+let webhookRegistered = false;
+function ensureWebhook() {
+  if (webhookRegistered || !BOT_TOKEN) return;
+  webhookRegistered = true;
+  // Fire-and-forget: a failed registration (Telegram down, local stub)
+  // must never crash or delay boot; the next process start retries.
+  Promise.resolve(tg('setWebhook', {
+    url: process.env.PUBLIC_URL || 'https://viking-miner-server.onrender.com/',
+    secret_token: webhookSecret(),
+    allowed_updates: ['message']
+  })).catch(() => {});
+}
+const seenUpdateIds = new Set();
+function markUpdateSeen(updateId) {
+  if (seenUpdateIds.has(updateId)) return false;
+  seenUpdateIds.add(updateId);
+  while (seenUpdateIds.size > 500) seenUpdateIds.delete(seenUpdateIds.values().next().value); // FIFO trim
+  return true;
+}
+
+const BIO_TEXTS = {
+  en: {
+    welcome: (brand) => `👋 Welcome to ${brand}!\nTap the button below to open the app and start mining.`,
+    openApp: '⚔️ Open the app',
+    granted: (reward, sym) => `✅ Bio verified! +${reward} ${sym} was added to your balance.`,
+    already: '✅ Your bio is already verified — the reward was already added.',
+    instruct: (uname) => `📝 To verify your bio:\n1. Add @${uname} to your Telegram bio.\n2. Then open this link again and press Start: https://t.me/${uname}?start=bio`,
+    retry: '⚠️ Could not check your bio right now — please try again in a minute.'
+  },
+  ar: {
+    welcome: (brand) => `👋 أهلًا بيك في ${brand}!\nدوس الزرار اللي تحت عشان تفتح التطبيق وتبدأ التعدين.`,
+    openApp: '⚔️ افتح التطبيق',
+    granted: (reward, sym) => `✅ تم التحقق من البايو! اتضاف +${reward} ${sym} لرصيدك.`,
+    already: '✅ البايو بتاعك متحقق منه قبل كده — المكافأة اتضافت خلاص.',
+    instruct: (uname) => `📝 عشان يتحقق البايو:\n١. ضيف @${uname} في البايو بتاعك في تيليجرام.\n٢. وبعدين افتح اللينك ده تاني ودوس Start: https://t.me/${uname}?start=bio`,
+    retry: '⚠️ مش قادر أتحقق من البايو دلوقتي — جرب تاني بعد دقيقة.'
+  },
+  ru: {
+    welcome: (brand) => `👋 Добро пожаловать в ${brand}!\nНажмите кнопку ниже, чтобы открыть приложение и начать майнинг.`,
+    openApp: '⚔️ Открыть приложение',
+    granted: (reward, sym) => `✅ Био подтверждено! +${reward} ${sym} добавлено на ваш баланс.`,
+    already: '✅ Ваше био уже подтверждено — награда уже была добавлена.',
+    instruct: (uname) => `📝 Чтобы подтвердить био:\n1. Добавьте @${uname} в био вашего Telegram.\n2. Затем снова откройте эту ссылку и нажмите Start: https://t.me/${uname}?start=bio`,
+    retry: '⚠️ Не удалось проверить био прямо сейчас — попробуйте ещё раз через минуту.'
+  }
+};
+const bioLangOf = (from) => {
+  const lc = String((from && from.language_code) || '').toLowerCase();
+  return lc.startsWith('ar') ? 'ar' : lc.startsWith('ru') ? 'ru' : 'en';
+};
+
+/* One /start message (private chats only; anything else is ignored).
+   Param 'bio' = the dedicated verification flow: always answers with
+   the outcome (granted / already / instructions / retry). A plain
+   /start greets FIRST (welcome + Web App button) and then reports ONLY
+   a grant or an already-verified result — a non-matching bio stays
+   silent there (no nagging). */
+async function handleBotMessage(msg) {
+  if (!msg || !msg.from || !msg.chat || msg.chat.type !== 'private') return;
+  const text = typeof msg.text === 'string' ? msg.text.trim() : '';
+  if (!text.startsWith('/start')) return;
+  const parts = text.split(/\s+/);
+  if (!/^\/start(@[A-Za-z0-9_]+)?$/.test(parts[0])) return;
+  const param = parts[1] || '';
+  const from = msg.from;
+  if (!/^\d+$/.test(String(from.id))) return;
+  const chatId = msg.chat.id;
+  const cfg = await getConfig();
+  await ensurePlayer({ user: from, body: {} }); // same creation path as the API actions
+  const T = BIO_TEXTS[bioLangOf(from)];
+  const chk = await checkBio(from.id, cfg);
+  let outcome = chk.status, reward = 0;
+  if (chk.status === 'match') {
+    try {
+      const r = await creditBioReward(from.id, cfg);
+      outcome = 'granted'; reward = r.reward;
+    } catch (e) {
+      outcome = (e instanceof Fail && e.message === 'Already claimed') ? 'already' : 'unavailable';
+    }
+  }
+  if (param !== 'bio') {
+    await tg('sendMessage', {
+      chat_id: chatId, text: T.welcome(cfg.brandTitle),
+      reply_markup: { inline_keyboard: [[{ text: T.openApp, web_app: { url: APP_URL } }]] }
+    });
+    if (outcome === 'granted') await tg('sendMessage', { chat_id: chatId, text: T.granted(reward, cfg.coinSym) });
+    else if (outcome === 'already') await tg('sendMessage', { chat_id: chatId, text: T.already });
+    return;
+  }
+  if (outcome === 'granted') await tg('sendMessage', { chat_id: chatId, text: T.granted(reward, cfg.coinSym) });
+  else if (outcome === 'already') await tg('sendMessage', { chat_id: chatId, text: T.already });
+  else if (outcome === 'unavailable') await tg('sendMessage', { chat_id: chatId, text: T.retry });
+  else await tg('sendMessage', { chat_id: chatId, text: T.instruct(chk.uname) }); // 'empty' or 'mismatch'
 }
 
 /* Referral achievements: milestones for ACTIVE (verified) referrals only.
@@ -944,6 +1086,8 @@ async function adminSettings(c) {
 
 const ACTIONS = { state, collect, daily, task, bioTask, refAch, wallet, unlink, refCollect, withdraw, adminState, adminBan, adminAdjust, adminWd, adminSettings };
 
+ensureWebhook(); // self-register the Telegram webhook once per process (never blocks boot)
+
 functions.http('collectMining', async (req, res) => {
   res.set('Access-Control-Allow-Origin', ALLOWED_ORIGIN);
   res.set('Vary', 'Origin');
@@ -953,6 +1097,23 @@ functions.http('collectMining', async (req, res) => {
     return res.status(204).send('');
   }
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  // Telegram webhook updates arrive on this same endpoint: they carry
+  // update_id + message instead of initData/action and are authenticated
+  // by the webhook secret header, never by initData — handled BEFORE
+  // the API path (and before its rate limiter: Telegram retries must
+  // not be throttled into dropping a verification).
+  const updBody = req.body || {};
+  if (typeof updBody.update_id === 'number' && updBody.message) {
+    const given = String(req.headers['x-telegram-bot-api-secret-token'] || '');
+    const secret = webhookSecret();
+    if (!BOT_TOKEN || given.length !== secret.length || !crypto.timingSafeEqual(Buffer.from(given), Buffer.from(secret))) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    if (markUpdateSeen(updBody.update_id)) {
+      try { await handleBotMessage(updBody.message); } catch (e) { console.error('bot update', e.message); }
+    }
+    return res.status(200).json({ ok: true });
+  }
   try {
     const ip = clientIp(req);
     if (!hit('ip:' + ip, 600, 60000)) return res.status(429).json({ error: 'Too many requests, slow down' });
