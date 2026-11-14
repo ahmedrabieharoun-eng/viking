@@ -45,6 +45,9 @@
     .btn-3d-gold:active{transform:translateY(3px);box-shadow:0 1px 0 #78350f}
     .btn-done-green{background:linear-gradient(180deg,#4ade80,#22c55e,#16a34a)!important;color:#fff!important;box-shadow:0 4px 0 #14532d!important;border-top:1px solid #bbf7d0!important}
     .btn-done-green:active{box-shadow:0 1px 0 #14532d!important}
+    .btn-busy{opacity:.78;pointer-events:none}
+    .btn-spinner{display:inline-block;width:13px;height:13px;border-radius:50%;border:2px solid rgba(128,128,128,.35);border-top-color:currentColor;animation:btnspin .7s linear infinite;flex:none}
+    @keyframes btnspin{to{transform:rotate(360deg)}}
     .btn-3d-bronze{width:100%;padding:10px;border-radius:14px;border:none;background:linear-gradient(180deg,#9a3412,#7c2d12);color:var(--gb);font-size:12px;font-weight:800;cursor:pointer;box-shadow:0 4px 0 #431407;text-align:center;display:flex;align-items:center;justify-content:center;gap:5px}
     .btn-3d-danger{width:100%;padding:10px;border-radius:14px;border:none;background:linear-gradient(180deg,#dc2626,#991b1b);color:#fff;font-size:12px;font-weight:800;cursor:pointer;box-shadow:0 4px 0 #450a0a;text-align:center}
     .btn-3d-dark{width:100%;padding:9px;border-radius:12px;border:1px solid rgba(255,255,255,.12);background:linear-gradient(180deg,#1e293b,#0f172a);color:#cbd5e1;font-size:11.5px;font-weight:700;cursor:pointer;text-align:center;box-shadow:0 3px 0 #05080f}
@@ -374,7 +377,7 @@
       </div>
 
       <div class="card-3d" style="font-size:10px;color:var(--m);direction:ltr;word-break:break-all;">
-        <strong>OFFICIAL CONTRACT:</strong> EQC6uN73kvaKh8LrTHQ8TQ5_vgqheI93iny5XUWkpQL9vjxI
+        <strong>OFFICIAL CONTRACT:</strong> <span id="official-contract-addr" style="font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace;">EQC6uN73kvaKh8LrTHQ8TQ5_vgqheI93iny5XUWkpQL9vjxI</span> <button class="btn-3d-dark" id="btn-copy-contract" data-i18n="verify_copy_btn" style="width:auto;padding:2px 8px;font-size:10px;">Copy</button>
       </div>
 
       <div class="card-3d">
@@ -925,10 +928,13 @@
         verify_tonkeeper_btn:"Pay with Tonkeeper", verify_verified_on:"Verified on",
         verify_verified_badge:"Verified", verify_not_verified_badge:"Not verified",
         verify_sent_toast:"Confirm the payment in your wallet…",
-        verify_notfound_toast:"Payment not found yet — wait a minute and tap Check verification.",
+        verify_notfound_toast:"Payment not found yet — don't worry, the app keeps checking automatically.",
         verify_success_toast:"Wallet verified!", verify_too_new:"Wallet too new: %D% days, needs %N%",
         verify_manual_hint:"Send the exact amount with the exact comment using the details below.",
         verify_rate_toast:"Too many checks — wait a few seconds and try again.",
+        verify_checking_auto:"Checking for your payment automatically…",
+        verify_connect_hint:"Connect your wallet first — then tap Verify again.",
+        months:["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"],
         nav_mine:"Mine", nav_tasks:"Tasks", nav_boost:"Boost", nav_friends:"Friends", nav_profile:"Profile",
         tank_full:"🛑 24h Tank Full (100%) - Collect Now!", tank_fill:"⏳ 24h Mining Tank:",
         daily_login_title:"🎁 Daily Login (7 Days)", claim_daily_btn:"Claim Daily Reward",
@@ -964,10 +970,13 @@
         verify_tonkeeper_btn:"ادفع بـ Tonkeeper", verify_verified_on:"تم التوثيق في",
         verify_verified_badge:"موثّقة", verify_not_verified_badge:"غير موثّقة",
         verify_sent_toast:"أكّد الدفع في محفظتك…",
-        verify_notfound_toast:"الدفع لسه موصلش — استنى دقيقة ودوس التحقق من التوثيق.",
+        verify_notfound_toast:"الدفع لسه موصلش — متقلقش، التطبيق بيراجع تلقائيًا.",
         verify_success_toast:"المحفظة اتوثّقت!", verify_too_new:"المحفظة جديدة: %D% يوم، محتاجة %N% يوم",
         verify_manual_hint:"ابعت المبلغ بالظبط بالتعليق بالظبط باستخدام البيانات اللي تحت.",
         verify_rate_toast:"محاولات تحقق كتير — استنى ثواني وجرّب تاني.",
+        verify_checking_auto:"بنراجع دفعك تلقائيًا…",
+        verify_connect_hint:"اربط محفظتك الأول — وبعدين دوس توثيق تاني.",
+        months:["يناير","فبراير","مارس","أبريل","مايو","يونيو","يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر"],
         nav_mine:"التعدين", nav_tasks:"المهام", nav_boost:"السرعة", nav_friends:"الأصدقاء", nav_profile:"حسابي",
         tank_full:"🛑 خزان 24 ساعة ممتلئ (100%) - اجمع الآن!", tank_fill:"⏳ خزان 24 ساعة:",
         daily_login_title:"🎁 تسجيل الدخول اليومي (7 أيام)", claim_daily_btn:"استلام المكافأة اليومية",
@@ -1003,10 +1012,13 @@
         verify_tonkeeper_btn:"Оплатить в Tonkeeper", verify_verified_on:"Подтверждено",
         verify_verified_badge:"Подтверждено", verify_not_verified_badge:"Не подтверждено",
         verify_sent_toast:"Подтвердите платёж в кошельке…",
-        verify_notfound_toast:"Платёж пока не найден — подождите минуту и нажмите «Проверить верификацию».",
+        verify_notfound_toast:"Платёж пока не найден — не волнуйтесь, приложение продолжит проверку автоматически.",
         verify_success_toast:"Кошелёк подтверждён!", verify_too_new:"Кошелёк слишком новый: %D% дн., нужно %N%",
         verify_manual_hint:"Отправьте точную сумму с точным комментарием по реквизитам ниже.",
         verify_rate_toast:"Слишком много проверок — подождите несколько секунд и попробуйте снова.",
+        verify_checking_auto:"Проверяем ваш платёж автоматически…",
+        verify_connect_hint:"Сначала подключите кошелёк — затем снова нажмите «Подтвердить».",
+        months:["янв.","февр.","мар.","апр.","мая","июн.","июл.","авг.","сент.","окт.","нояб.","дек."],
         nav_mine:"Майнинг", nav_tasks:"Задания", nav_boost:"Буст", nav_friends:"Друзья", nav_profile:"Профиль",
         tank_full:"🛑 Бак 24ч полон (100%) - Соберите!", tank_fill:"⏳ Бак майнинга 24ч:",
         daily_login_title:"🎁 Ежедневный вход (7 Дней)", claim_daily_btn:"Получить награду",
@@ -1171,12 +1183,14 @@
 
     async function claimDailyLogin(e) {
       if (!isHumanClick(e)) return;
-      try {
-        const r = await api("daily");
-        SoundFX.buySuccess();
-        showToast(`🎁 +${r.reward} ${config.coinSym} Daily Reward!`, "#10b981");
-        await refreshState();
-      } catch (err) { showToast("❌ " + err.message, "#ef4444"); }
+      await withBtnBusy(e.currentTarget, async () => {
+        try {
+          const r = await api("daily");
+          SoundFX.buySuccess();
+          showToast(`🎁 +${r.reward} ${config.coinSym} Daily Reward!`, "#10b981");
+          await refreshState();
+        } catch (err) { showToast("❌ " + err.message, "#ef4444"); }
+      });
     }
 
     function checkTimeIntegrity(clientTime) {
@@ -1204,8 +1218,16 @@
     // response cannot double-apply. withdraw and admin* are NEVER in
     // this set — a blind resend could double an irreversible action.
     const API_RETRY_ONCE = new Set(["state", "verifyInfo", "verifyCheck", "wallet", "collect", "daily", "task", "bioTask", "refAch", "refCollect"]);
+    // Wake-up tolerance (owner order 2026-11-14): a sleeping free-tier
+    // server can take the better part of a minute to answer, so safe
+    // actions retry network failures and 502/503/504s up to 3 times
+    // (~2.5 s, 6 s, 12 s apart) before any error surfaces. withdraw
+    // and admin* are NEVER auto-retried — they are not in the set.
+    const API_RETRY_WAITS = [2500, 6000, 12000];
     async function api(action, body) {
       const payload = JSON.stringify(Object.assign({ initData: tg.initData, action }, body || {}));
+      const retryable = API_RETRY_ONCE.has(action);
+      let healed = false;
       for (let attempt = 0; ; attempt++) {
         let r = null, netErr = null;
         try {
@@ -1213,18 +1235,65 @@
         } catch (e) { netErr = e; }
         // A network-level failure or a 502/503/504 means the request
         // hit a sleeping free-tier server (Render wake-up serves a
-        // non-JSON error page) rather than a real app answer — retry
-        // once after a short wait instead of surfacing "Server error".
+        // non-JSON error page) rather than a real app answer.
         const wakeup = netErr !== null || (r && (r.status === 502 || r.status === 503 || r.status === 504));
-        if (wakeup && attempt === 0 && API_RETRY_ONCE.has(action)) {
-          await new Promise((res) => setTimeout(res, 2500));
+        if (wakeup && retryable && attempt < API_RETRY_WAITS.length) {
+          await new Promise((res) => setTimeout(res, API_RETRY_WAITS[attempt]));
           continue;
         }
         if (netErr) throw netErr;
         const j = await r.json().catch(() => ({}));
-        if (!r.ok || j.error) throw new Error(j.error || "Server error");
+        if (!r.ok || j.error) {
+          const msg = j.error || "Server error";
+          // Self-heal: a 'User not found' on a safe action means this
+          // client's view of the player record raced its creation —
+          // refresh state once (state re-creates/syncs the record
+          // server-side) and retry the action once, silently. Only
+          // the final failure ever reaches a toast.
+          if (msg === "User not found" && retryable && !healed && action !== "state") {
+            healed = true;
+            try { await refreshState(); } catch (e) { /* the retry below surfaces the real outcome */ }
+            continue;
+          }
+          throw new Error(msg);
+        }
         return j;
       }
+    }
+
+    /* Busy state for action buttons (owner order 2026-11-14): while a
+       button's async work runs, the button shows a spinner and
+       ignores further taps — a slow round-trip must never look like
+       a frozen bot. pointer-events (not the disabled attribute)
+       blocks re-taps, so mid-flight re-renders that rewrite a
+       button's content or disabled state (daily claim, task buttons)
+       are never fought over the restore. */
+    async function withBtnBusy(btn, fn) {
+      if (!btn) return fn();
+      if (btn.dataset.busy === "1") return;
+      btn.dataset.busy = "1";
+      btn.classList.add('btn-busy');
+      const spin = document.createElement('span');
+      spin.className = 'btn-spinner';
+      btn.prepend(spin);
+      try { return await fn(); }
+      finally {
+        spin.remove();
+        btn.classList.remove('btn-busy');
+        delete btn.dataset.busy;
+      }
+    }
+    /* Same busy flash for buttons that open an external page instead
+       of awaiting the server (the STON.fi / Tonkeeper buy buttons):
+       the tap visibly registers while the external page loads. */
+    function flashBtnBusy(btn) {
+      if (!btn || btn.dataset.busy === "1") return;
+      btn.dataset.busy = "1";
+      btn.classList.add('btn-busy');
+      const spin = document.createElement('span');
+      spin.className = 'btn-spinner';
+      btn.prepend(spin);
+      setTimeout(() => { spin.remove(); btn.classList.remove('btn-busy'); delete btn.dataset.busy; }, 900);
     }
 
     async function refreshState() {
@@ -1287,10 +1356,11 @@
 
     // Boot state with backoff: a sleeping free-tier server can take
     // most of a minute to wake, so the first load retries behind the
-    // boot loader (attempts land at ~0/3/8/15/25/40 s) instead of
-    // failing into an empty app with a "Server error" toast. If every
-    // attempt fails, the loader stays up and offers a tap-to-retry.
-    const BOOT_RETRY_WAITS = [3000, 5000, 7000, 10000, 15000];
+    // boot loader (attempts land at ~0/4/11/22/38/60 s — a ~60 s
+    // window) instead of failing into an empty app with a "Server
+    // error" toast. If every attempt fails, the loader stays up and
+    // offers a tap-to-retry.
+    const BOOT_RETRY_WAITS = [4000, 7000, 11000, 16000, 22000];
     async function bootWithRetry() {
       for (let i = 0; ; i++) {
         try { await refreshState(); return; }
@@ -1334,12 +1404,14 @@
 
     async function collectReferralProfits(e) {
       if (!isHumanClick(e)) return;
-      try {
-        const r = await api("refCollect");
-        SoundFX.buySuccess();
-        showToast(`💰 Collected ${Number(r.amount).toFixed(4)} ${config.coinSym}!`);
-        await refreshState();
-      } catch (err) { showToast("❌ " + err.message, "#ef4444"); }
+      await withBtnBusy(e.currentTarget, async () => {
+        try {
+          const r = await api("refCollect");
+          SoundFX.buySuccess();
+          showToast(`💰 Collected ${Number(r.amount).toFixed(4)} ${config.coinSym}!`);
+          await refreshState();
+        } catch (err) { showToast("❌ " + err.message, "#ef4444"); }
+      });
     }
 
     let tonConnectUI = null, userClickedConnect = false;
@@ -1353,11 +1425,26 @@
         if (!addr) return;
         const announce = userClickedConnect;
         userClickedConnect = false;
+        // This exact wallet is already linked server-side (e.g. the
+        // SDK re-firing for a restored session): binding again would
+        // only trip the wallet action's sync cooldown — nothing to do.
+        if (linkedWalletAddr && addr.toLowerCase() === linkedWalletAddr.toLowerCase()) return;
         try {
           await api("wallet", { address: addr });
           await refreshState();
           if (announce) { SoundFX.buySuccess(); showToast("👛 Wallet Connected!"); }
-        } catch (err) { if (announce) showToast("❌ " + err.message, "#ef4444"); }
+        } catch (err) {
+          // The server REJECTED this binding (e.g. 'This wallet is
+          // linked to another account'): TonConnect would otherwise
+          // keep the rejected wallet's session locally, so every
+          // later Connect press silently reused it and the owner
+          // could not link ANY wallet afterwards (owner report
+          // 2026-11-14). Clear the local session so the next Connect
+          // starts from a clean wallet picker; the server's warning
+          // still shows exactly as before.
+          try { await tonConnectUI.disconnect(); } catch (e) {}
+          if (announce) showToast("❌ " + err.message, "#ef4444");
+        }
       });
     } catch (e) {}
 
@@ -1367,23 +1454,30 @@
       userClickedConnect = true;
       if (tonConnectUI) {
         try {
+          // The SDK thinks a wallet is connected but the server has
+          // NONE linked (a rejected binding whose local session
+          // survived): opening the modal would land on the stale
+          // session instead of the wallet picker. Drop it first.
+          if (tonConnectUI.connected && !linkedWalletAddr) await tonConnectUI.disconnect();
           await tonConnectUI.openModal();
         } catch (err) {}
       }
     }
-    
+
     async function disconnectTonWallet(e) {
       if (!isHumanClick(e)) return;
       SoundFX.click();
-      try { if (tonConnectUI?.connected) await tonConnectUI.disconnect(); } catch (err) {}
-      try { await api("unlink"); await refreshState(); showToast("🔌 Wallet Disconnected!"); }
-      catch (err) { showToast("❌ " + err.message, "#ef4444"); }
+      await withBtnBusy(e.currentTarget, async () => {
+        try { if (tonConnectUI?.connected) await tonConnectUI.disconnect(); } catch (err) {}
+        try { await api("unlink"); await refreshState(); showToast("🔌 Wallet Disconnected!"); }
+        catch (err) { showToast("❌ " + err.message, "#ef4444"); }
+      });
     }
 
-    function openStonfiSwap() { SoundFX.click(); safeOpen(config.buySwapUrl); }
+    function openStonfiSwap(e) { SoundFX.click(); safeOpen(config.buySwapUrl); if (e && e.currentTarget) flashBtnBusy(e.currentTarget); }
 
     const TONKEEPER_BUY_URL = "https://app.tonkeeper.com/dapp/https%3A%2F%2Fapp.ston.fi%2Fswap%3Fft%3DGRAM%26tt%3DEQC6uN73kvaKh8LrTHQ8TQ5_vgqheI93iny5XUWkpQL9vjxI%26utm_source%3Dtonkeeper%26utm_medium%3Dorganic%26utm_campaign%3Ddefi%26utm_content%3DEQDCJL0iQHofcBBvFBHdVG233Ri2V4kCNFgfRT-gqAd3Oc86%26chartVisible%3Dfalse";
-    function openTonkeeperSwap() { SoundFX.click(); safeOpen(TONKEEPER_BUY_URL); }
+    function openTonkeeperSwap(e) { SoundFX.click(); safeOpen(TONKEEPER_BUY_URL); if (e && e.currentTarget) flashBtnBusy(e.currentTarget); }
 
     async function syncOnChainJettonHold(showNotification = true) {
       if (!linkedWalletAddr) { if (showNotification) showToast("❌ Connect TON Wallet first!", "#ef4444"); return; }
@@ -1427,6 +1521,20 @@
     function shortAddr(a) {
       const f = friendlyAddr(a);
       return f ? (f.slice(0, 6) + "..." + f.slice(-6)) : "";
+    }
+
+    // Verified-date display: "14 Nov 2026" (D Mon YYYY) with the
+    // month name from the active language's own array, wrapped by
+    // the caller in a bidi-isolated LTR span. The old
+    // toLocaleDateString() slash form got its segments shuffled by
+    // bidi in mixed-direction contexts (owner screenshot showed
+    // "142026/11/").
+    function fmtVerifiedDate(ts) {
+      const d = new Date(Number(ts) || 0);
+      if (!d.getTime()) return "";
+      const dict = I18N[currentLang] || I18N.en;
+      const months = dict.months || I18N.en.months;
+      return d.getDate() + " " + months[d.getMonth()] + " " + d.getFullYear();
     }
 
     // Telegram-style blue verified badge (rosette + white check),
@@ -1495,8 +1603,8 @@
       const info = (verifyInfoData && verifyInfoAddr === linkedWalletAddr) ? verifyInfoData : null;
       let html = verifyRow(true, `<strong style="color:#fff;">${dict.verify_connected_row}</strong>`, `<span style="direction:ltr;display:inline-block;">${esc(shortAddr(linkedWalletAddr))}</span>`);
       if (isVerified) {
-        const dstr = myVerifiedAt ? new Date(myVerifiedAt).toLocaleDateString() : "";
-        html += verifyRow(true, `<strong style="color:#fff;">${dict.verify_verified_on}${dstr ? ": " + esc(dstr) : ""}</strong>`, "");
+        const dstr = myVerifiedAt ? fmtVerifiedDate(myVerifiedAt) : "";
+        html += verifyRow(true, `<strong style="color:#fff;">${dict.verify_verified_on}${dstr ? `: <span dir="ltr" style="unicode-bidi:isolate;">${esc(dstr)}</span>` : ""}</strong>`, "");
         rows.innerHTML = html;
         acts.innerHTML = '';
         return;
@@ -1510,29 +1618,19 @@
       }
       rows.innerHTML = html;
       const fee = info ? Number(info.feeTon || 0) : 0.05;
+      // Payment is ONLY the gold TonConnect button (owner order
+      // 2026-11-14): the manual-deposit block (deposit address /
+      // amount / comment rows, Copy buttons, Tonkeeper button) and
+      // the manual Check button are GONE — the server watcher keeps
+      // checking for the payment in the background, and the pending
+      // line below says so.
       let a = `<button class="btn-3d-gold" id="btn-verify-pay"${info && info.ageOk === false ? ' disabled style="opacity:0.45;pointer-events:none;"' : ''}>🛡️ ${dict.verify_btn} — ${fee} TON</button>`;
-      if (info) {
-        const nano = Math.round(fee * 1e9);
-        const tkUrl = `https://app.tonkeeper.com/transfer/${encodeURIComponent(info.depositWallet)}?amount=${nano}&text=${encodeURIComponent(info.comment)}`;
-        a += `<div class="sub-3d" style="margin-top:8px;font-size:11px;line-height:1.8;">
-          <div style="font-weight:800;color:var(--gb);">${dict.verify_pay_title}</div>
-          <div>${dict.verify_deposit_lbl}: <span style="direction:ltr;display:inline-block;word-break:break-all;">${esc(friendlyAddr(info.depositWallet))}</span> <button class="btn-3d-dark verify-copy" data-copy="${esc(info.depositWallet)}" style="width:auto;padding:2px 8px;font-size:10px;">${dict.verify_copy_btn}</button></div>
-          <div>${dict.verify_amount_lbl}: <strong>${fee} TON</strong> <button class="btn-3d-dark verify-copy" data-copy="${fee} TON" style="width:auto;padding:2px 8px;font-size:10px;">${dict.verify_copy_btn}</button></div>
-          <div>${dict.verify_comment_lbl}: <strong style="direction:ltr;">${esc(info.comment)}</strong> <button class="btn-3d-dark verify-copy" data-copy="${esc(info.comment)}" style="width:auto;padding:2px 8px;font-size:10px;">${dict.verify_copy_btn}</button></div>
-          <button class="btn-3d-bronze" id="btn-verify-tonkeeper" data-url="${esc(tkUrl)}" style="margin-top:6px;">💎 ${dict.verify_tonkeeper_btn}</button>
-        </div>`;
+      if (info && info.verifyPending) {
+        a += `<div style="margin-top:8px;font-size:11px;color:var(--gb);">⏳ ${dict.verify_checking_auto}</div>`;
       }
-      a += `<button class="btn-3d-bronze" id="btn-verify-check" style="margin-top:8px;">🔍 ${dict.verify_check_btn}</button>`;
       acts.innerHTML = a;
       const payBtn = document.getElementById('btn-verify-pay');
       if (payBtn) payBtn.addEventListener('click', startVerifyPayment);
-      const chkBtn = document.getElementById('btn-verify-check');
-      if (chkBtn) chkBtn.addEventListener('click', manualVerifyCheck);
-      const tkBtn = document.getElementById('btn-verify-tonkeeper');
-      if (tkBtn) tkBtn.addEventListener('click', () => { SoundFX.click(); safeOpen(tkBtn.getAttribute('data-url')); });
-      acts.querySelectorAll('.verify-copy').forEach(b => b.addEventListener('click', () => {
-        try { navigator.clipboard.writeText(b.getAttribute('data-copy')); showToast("📋 Copied!"); } catch (e) {}
-      }));
     }
 
     // Minimal BoC serializer for a single-cell TON text-comment
@@ -1557,27 +1655,35 @@
     async function startVerifyPayment(e) {
       if (!isHumanClick(e) || verifyBusy) return;
       SoundFX.click();
-      let info = (verifyInfoData && verifyInfoAddr === linkedWalletAddr) ? verifyInfoData : null;
-      if (!info) { info = await loadVerifyInfo(); renderVerifyCard(); }
-      if (!info) return;
-      const dict = I18N[currentLang] || I18N.en;
-      if (info.ageOk === false) return showToast("❌ " + dict.verify_too_new.replace('%D%', info.ageDays).replace('%N%', info.minAgeDays || 7), "#ef4444");
-      if (!tonConnectUI || !tonConnectUI.connected) {
-        // No live TonConnect session (e.g. a reopened app): the manual
-        // payment block (address + amount + comment + Tonkeeper link)
-        // is the way — the server detects it exactly the same.
-        return showToast("ℹ️ " + dict.verify_manual_hint, "#0284c7");
-      }
-      verifyBusy = true;
-      try {
-        showToast("💸 " + dict.verify_sent_toast);
-        await tonConnectUI.sendTransaction({
-          validUntil: Math.floor(Date.now() / 1000) + 600,
-          messages: [{ address: info.depositWallet, amount: String(Math.round(Number(info.feeTon || 0) * 1e9)), payload: buildCommentPayloadBoc(info.comment) }]
-        });
-        await pollVerifyCheck();
-      } catch (err) { showToast("❌ " + (err && err.message ? err.message : "Payment cancelled"), "#ef4444"); }
-      finally { verifyBusy = false; }
+      await withBtnBusy(e.currentTarget, async () => {
+        let info = (verifyInfoData && verifyInfoAddr === linkedWalletAddr) ? verifyInfoData : null;
+        if (!info) { info = await loadVerifyInfo(); renderVerifyCard(); }
+        if (!info) return;
+        const dict = I18N[currentLang] || I18N.en;
+        if (info.ageOk === false) return showToast("❌ " + dict.verify_too_new.replace('%D%', info.ageDays).replace('%N%', info.minAgeDays || 7), "#ef4444");
+        if (!tonConnectUI || !tonConnectUI.connected) {
+          // No live TonConnect session (e.g. a reopened app): payment
+          // is only possible through the connected wallet now (the
+          // manual-deposit block is gone) — open the connect flow and
+          // ask for a second tap on Verify once connected.
+          showToast("ℹ️ " + dict.verify_connect_hint, "#0284c7");
+          if (tonConnectUI) {
+            userClickedConnect = true;
+            try { await tonConnectUI.openModal(); } catch (err) {}
+          }
+          return;
+        }
+        verifyBusy = true;
+        try {
+          showToast("💸 " + dict.verify_sent_toast);
+          await tonConnectUI.sendTransaction({
+            validUntil: Math.floor(Date.now() / 1000) + 600,
+            messages: [{ address: info.depositWallet, amount: String(Math.round(Number(info.feeTon || 0) * 1e9)), payload: buildCommentPayloadBoc(info.comment) }]
+          });
+          await pollVerifyCheck();
+        } catch (err) { showToast("❌ " + (err && err.message ? err.message : "Payment cancelled"), "#ef4444"); }
+        finally { verifyBusy = false; }
+      });
     }
 
     const sleepMs = (ms) => new Promise(r => setTimeout(r, ms));
@@ -1597,25 +1703,11 @@
           if (!/Payment not found/.test(msg) && !/Too many requests/.test(msg)) { showToast("❌ " + msg, "#ef4444"); return; }
         }
       }
+      // Not on-chain yet: the background watcher keeps checking (the
+      // card shows the "checking automatically" pending line), so
+      // this toast just sets expectations.
       showToast("⏳ " + dict.verify_notfound_toast, "#f59e0b");
-    }
-
-    async function manualVerifyCheck(e) {
-      if (!isHumanClick(e) || verifyBusy) return;
-      SoundFX.click();
-      verifyBusy = true;
-      try {
-        const r = await api("verifyCheck");
-        if (r.verified) { SoundFX.buySuccess(); showToast("🎉 " + (I18N[currentLang] || I18N.en).verify_success_toast, "#10b981"); }
-        await refreshState();
-      } catch (err) {
-        // A 429 here is just the rate limiter (often the tail of an
-        // automatic poll burst) — show the calm localized hint instead
-        // of the raw server string.
-        if (/Too many requests/.test(err.message || "")) showToast("⏳ " + (I18N[currentLang] || I18N.en).verify_rate_toast, "#f59e0b");
-        else showToast("❌ " + err.message, "#ef4444");
-      }
-      finally { verifyBusy = false; }
+      renderVerifyCard();
     }
 
     function renderMyReferralsList() {
@@ -1703,8 +1795,10 @@
       box.querySelectorAll('.ref-ach-claim').forEach(b => b.addEventListener('click', async e => {
         if (!isHumanClick(e)) return;
         const n = Number(b.getAttribute('data-n'));
-        try { const r = await api("refAch", { n }); SoundFX.buySuccess(); showToast(`🏆 +${r.reward} ${config.coinSym}!`); await refreshState(); }
-        catch (err) { showToast("❌ " + err.message, "#ef4444"); }
+        await withBtnBusy(b, async () => {
+          try { const r = await api("refAch", { n }); SoundFX.buySuccess(); showToast(`🏆 +${r.reward} ${config.coinSym}!`); await refreshState(); }
+          catch (err) { showToast("❌ " + err.message, "#ef4444"); }
+        });
       }));
     }
 
@@ -1859,12 +1953,14 @@
       if (!isHumanClick(e)) return;
       if (!linkedWalletAddr) { SoundFX.error(); return showToast("❌ Connect TON Wallet first!", "#ef4444"); }
       const amt = parseFloat(document.getElementById('wd-input-amt').value) || 0;
-      try {
-        const r = await api("withdraw", { amount: amt });
-        SoundFX.buySuccess();
-        showToast(`✅ Withdrawal #${r.wdNum} Requested!`);
-        await refreshState();
-      } catch (err) { SoundFX.error(); showToast("❌ " + err.message, "#ef4444"); }
+      await withBtnBusy(e.currentTarget, async () => {
+        try {
+          const r = await api("withdraw", { amount: amt });
+          SoundFX.buySuccess();
+          showToast(`✅ Withdrawal #${r.wdNum} Requested!`);
+          await refreshState();
+        } catch (err) { SoundFX.error(); showToast("❌ " + err.message, "#ef4444"); }
+      });
     }
 
     function renderWithdrawHistory() {
@@ -2012,7 +2108,14 @@
     document.querySelectorAll('.btn-stonfi-buy').forEach(b => b.addEventListener('click', openStonfiSwap));
     document.querySelectorAll('.btn-tonkeeper-buy').forEach(b => b.addEventListener('click', openTonkeeperSwap));
     document.getElementById('btn-connect-wallet').addEventListener('click', connectTonWallet);
-    document.getElementById('btn-sync-hold').addEventListener('click', () => syncOnChainJettonHold(true));
+    document.getElementById('btn-sync-hold').addEventListener('click', (e) => withBtnBusy(e.currentTarget, () => syncOnChainJettonHold(true)));
+    // Official-contract copy: copies the address exactly as rendered
+    // (the card shows it in monospace so I / l / 1 stay distinct).
+    document.getElementById('btn-copy-contract').addEventListener('click', () => {
+      SoundFX.click();
+      const a = (document.getElementById('official-contract-addr').textContent || "").trim();
+      try { navigator.clipboard.writeText(a); showToast("📋 Copied!"); } catch (e) {}
+    });
     document.getElementById('btn-disconnect-wallet').addEventListener('click', disconnectTonWallet);
     document.getElementById('wd-input-amt').addEventListener('input', updateWdCalculation);
     document.getElementById('btn-request-wd').addEventListener('click', requestWithdrawal);
@@ -2024,8 +2127,10 @@
       if (!isHumanClick(e)) return;
       if ((n === 1 && task1Done) || (n === 2 && task2Done)) return showToast("Already claimed!", "#f59e0b");
       if (!chV[n]) return showToast("❌ Open channel first!", "#ef4444");
-      try { const r = await api("task", { n }); SoundFX.buySuccess(); showToast(`🎉 +${r.reward} ${config.coinSym}!`); await refreshState(); }
-      catch (err) { showToast("❌ " + err.message, "#ef4444"); }
+      await withBtnBusy(e.currentTarget, async () => {
+        try { const r = await api("task", { n }); SoundFX.buySuccess(); showToast(`🎉 +${r.reward} ${config.coinSym}!`); await refreshState(); }
+        catch (err) { showToast("❌ " + err.message, "#ef4444"); }
+      });
     }));
 
     // Bio task is verified IN THE BOT now: Telegram only shows the bot a
