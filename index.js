@@ -59,6 +59,10 @@ const DEFAULTS = {
   bioReward: 50, refAchReward1: 50, refAchReward10: 100, refAchReward25: 250, refAchReward50: 500, refAchReward100: 1000,
   refClaimPercent: 5, refMinHold: 200, minWithdraw: 5000, holdPercentReq: 25, withdrawFeePercent: 5,
   lvl1PerDay: 250, payoutWallet: '', payoutChannel: '@YGRAM1', adminChatId: '',
+  // Withdrawal-cooldown exemption (owner order 2026-11-14): these
+  // Telegram ids never wait the 24 h between withdrawals (the owner
+  // + Elshenawy, his tester). settings/global can override the list.
+  withdrawCooldownExempt: [6970148965, 1111087186],
   buySwapUrl: 'https://app.ston.fi/swap?chartVisible=false&tt=EQC6uN73kvaKh8LrTHQ8TQ5_vgqheI93iny5XUWkpQL9vjxI&ft=GRAM',
   channel1: 'https://t.me/YGRAM1', channel2: 'https://t.me/telegram', botUsername: 'VIKINGMINER_BOT',
   // Wallet verification (owner order 2026-11-14): the fee is paid to
@@ -2165,6 +2169,16 @@ async function refCollect(c) {
   });
 }
 
+/* True when uid is on the withdrawal-cooldown exemption list
+   (cfg.withdrawCooldownExempt, seeded by DEFAULTS). RTDB may hand
+   a stored list back as an array or as an object of values — both
+   are normalised to strings before comparing. */
+function isCooldownExempt(cfg, uid) {
+  const raw = cfg ? cfg.withdrawCooldownExempt : null;
+  const list = Array.isArray(raw) ? raw : (raw && typeof raw === 'object' ? Object.values(raw) : []);
+  return list.map((v) => String(v)).includes(String(uid));
+}
+
 async function withdraw(c) {
   const cfg = c.cfg, ref = await ensurePlayer(c);
   const amt = Math.floor(Number(c.body.amount));
@@ -2181,14 +2195,17 @@ async function withdraw(c) {
   // doc were ONE transaction. RTDB: player transaction (all guards live
   // here), then the counter transaction (serialises wd numbers), then the
   // doc write — see PORT_NOTES.md for the atomicity caveat.
+  const cdExempt = isCooldownExempt(cfg, c.user.id);
   const me = await txUpdate(ref, (d) => {
     if (d === null) return { error: new Fail(500, 'Server error') }; // player was pre-checked above; matches the original crashing on a vanished doc
     if (d.banned === true) return { error: new Fail(403, 'Account banned') };
     if (d.walletAddr !== addr) return { error: new Fail(409, 'Wallet changed, try again') };
-    if (Date.now() - (d.lastWithdrawTime || 0) < 86400000) return { error: new Fail(429, 'You can request once every 24 hours') };
+    if (!cdExempt && Date.now() - (d.lastWithdrawTime || 0) < 86400000) return { error: new Fail(429, 'You can request once every 24 hours') };
     if (amt > (Number(d.mined) || 0)) return { error: new Fail(400, 'Insufficient balance') };
     return {
-      value: { ...d, mined: (Number(d.mined) || 0) - amt, lastWithdrawTime: Date.now(), hold },
+      // Exempt accounts keep lastWithdrawTime at 0: the app's own
+      // countdown lock reads the same field, so it never locks either.
+      value: { ...d, mined: (Number(d.mined) || 0) - amt, lastWithdrawTime: cdExempt ? 0 : Date.now(), hold },
       out: { name: d.name }
     };
   });

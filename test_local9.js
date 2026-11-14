@@ -521,6 +521,27 @@ async function botCallback(port, data, fromId, card) {
     check('no transfer from the disabled server', sendsFor('VIKING-' + nD).length === 0, sendsFor('VIKING-' + nD));
     await botCallback(APP_B, 'wdno:' + nD, OWNER_ID, ownerCardsFor(nD)[0]); // cleanup: leave nothing pending
     await waitFor(async () => { const w = await dbGet('withdrawals/wd_' + nD); return w && w.status === 'Rejected ❌'; }, 15000, 'cleanup reject on child B');
+
+    /* ---------- (l) cooldown exemption: exempt ids never wait 24 h ---------- */
+    console.log('\n[(l): withdraw cooldown — exempt ids withdraw back-to-back, everyone else still 429s]');
+    const EX1 = '6970148965'; // the owner — DEFAULTS.withdrawCooldownExempt
+    await seedPlayer(EX1, { name: 'Exempt Owner', username: 'exemptowner', mined: 20000, walletAddr: RAW('e'), userNo: 21 });
+    const nE1 = await doWithdraw(APP_A, EX1, 'ExemptOwner', 'exemptowner');
+    const nE2 = await doWithdraw(APP_A, EX1, 'ExemptOwner', 'exemptowner');
+    check('exempt account withdrew twice back-to-back', nE2 === nE1 + 1, { nE1, nE2 });
+    const pE = await dbGet('players/' + EX1);
+    check('exempt lastWithdrawTime stays 0 (the app countdown never locks)', pE.lastWithdrawTime === 0, pE.lastWithdrawTime);
+    check('both exempt withdrawals deducted (mined 20000 -> 10000)', pE.mined === 10000, pE.mined);
+    const EX2 = '1111087186'; // Elshenawy — second id on the DEFAULTS list
+    await seedPlayer(EX2, { name: 'Exempt Shenawy', username: 'exemptshenawy', mined: 20000, walletAddr: RAW('f'), userNo: 22 });
+    const nS1 = await doWithdraw(APP_A, EX2, 'ExemptShenawy', 'exemptshenawy');
+    const nS2 = await doWithdraw(APP_A, EX2, 'ExemptShenawy', 'exemptshenawy');
+    check('second exempt id also withdrew back-to-back', nS2 === nS1 + 1, { nS1, nS2 });
+    const NE = '700011008';
+    await seedPlayer(NE, { name: 'Normal Ned', username: 'normalned', mined: 20000, walletAddr: RAW('d'), userNo: 23 });
+    await doWithdraw(APP_A, NE, 'NormalNed', 'normalned');
+    const rSecond = await apiOn(APP_A, userInit(NE, 'NormalNed', 'normalned'), 'withdraw', { amount: 5000 });
+    check('non-exempt second withdraw inside 24 h -> 429 once-every-24-hours', rSecond.status === 429 && /once every 24 hours/.test((rSecond.body && rSecond.body.error) || ''), rSecond);
   } catch (e) {
     failed++;
     console.log('  ERROR', e && e.stack || e);
