@@ -8,16 +8,19 @@
  *       mined, by the exact credited amounts (collect 250, daily 10,
  *       channel task 50, bio task 50, refCollect 70, refAch 50).
  *   (a) withdraw() creates a 'Pending ⏳' record, performs NO
- *       transfer, and DMs the owner a review card with the full
+ *       transfer and sends the owner NOTHING (round 2, owner order
+ *       2026-11-14 ~07:54: NO instant card any more — review cards
+ *       exist only inside a /withdrawals walk).
+ *   (b) /withdrawals from a non-owner does nothing at all; from the
+ *       owner it starts a session and presents the FIRST pending
+ *       card with position text («— سحب 1 من 1») and the full
  *       picture (amounts + fee + net, FULL friendly wallet,
  *       verification verdict + date, wallet age, balance after the
  *       deduction, join age, inviter, referral totals with the
  *       state() active-referral rule, the LIVE on-chain hold, the
- *       multi-account cluster, earnings sources, previous
- *       withdrawals) and the 4 decision buttons.
- *   (b) /withdrawals from a non-owner does nothing at all; from the
- *       owner it starts a session and presents the FIRST pending
- *       card with position text («— سحب 1 من 1»).
+ *       multi-account verdict + count ONLY — no linked accounts
+ *       named, earnings sources, previous withdrawals) and the 4
+ *       decision buttons.
  *   (c) ✅ approve (wdok callback) fires the EXISTING attemptPayout:
  *       exactly one transfer (comment VIKING-<n>, net in base
  *       units), record Paid ✅, owner follow-up with the tonviewer
@@ -36,6 +39,13 @@
  *       decisions made (متخطى / مرفوض / مدفوع / محظور).
  *   (k) Approve on a server WITHOUT PAYOUT_MNEMONIC answers the
  *       «مش مفعّل» alert and leaves the record Pending.
+ *   (m) Round 2: a shared IP is NEVER a multi-account link — two
+ *       players sharing ONLY an ip: sig -> riskOf().linked excludes
+ *       the other, level stays low, and the card verdict is
+ *       «مش عامل تعدد» with the other account nowhere on the card;
+ *       an all-zero earnings history renders as ONE honest line
+ *       («مفيش أرباح متسجلة بالمصدر لحد دلوقتي») instead of the
+ *       sources grid (the grid itself is asserted in (b)).
  *
  * Harness mirrors test_local8.js: two spawned children (functions-
  * framework) sharing one RTDB namespace on the 127.0.0.1:9000
@@ -372,17 +382,30 @@ async function botCallback(port, data, fromId, card) {
     check('mined = 20,480 after all credits', ep.mined === 20480, ep.mined);
     check('refCommissionEarned still tracked separately = 70', ep.refCommissionEarned === 70, ep.refCommissionEarned);
 
-    /* ---------- (a) withdraw -> instant review card, NO transfer ---------- */
-    console.log('\n[(a): withdraw sends the owner a full review card and pays NOTHING yet]');
+    /* ---------- (a) withdraw -> NO card, NO transfer ---------- */
+    console.log('\n[(a): withdraw pays NOTHING and sends the owner NO card (round 2)]');
+    const ownerTotalBeforeA = msgsTo(OWNER_ID).length + photosTo(OWNER_ID).length;
     const nE = await doWithdraw(APP_A, E, 'Earner', 'earner1');
     const wdE0 = await dbGet('withdrawals/wd_' + nE);
     check('record is Pending with NO payoutState (nothing attempted)', wdE0.status === 'Pending ⏳' && !('payoutState' in wdE0), wdE0);
     check('NO transfer was broadcast', sendsFor('VIKING-' + nE).length === 0, sendsFor('VIKING-' + nE));
-    await waitFor(() => ownerCardsFor(nE).length >= 1, 15000, 'owner review card for wd ' + nE);
-    const cardE = ownerCardsFor(nE)[0];
+    await sleep(800); // give a (non-existent) instant card time to betray itself
+    check('NO review card was DM\u2019d on withdraw — cards exist only inside /withdrawals', ownerCardsFor(nE).length === 0, ownerCardsFor(nE).length);
+    check('the owner received NOTHING at all from the withdraw', msgsTo(OWNER_ID).length + photosTo(OWNER_ID).length === ownerTotalBeforeA, msgsTo(OWNER_ID).length);
+
+    /* ---------- (b) /withdrawals gating + session start + the card itself ---------- */
+    console.log('\n[(b): /withdrawals — non-owner ignored, owner gets the first pending card with position]');
+    const ownerMsgsBefore = msgsTo(OWNER_ID).length;
+    await botMessage(APP_A, '700011555', '/withdrawals');
+    await sleep(500);
+    check('non-owner /withdrawals produces nothing at all', msgsTo(OWNER_ID).length === ownerMsgsBefore && msgsTo('700011555').length === 0, msgsTo('700011555').length);
+    await botMessage(APP_A, OWNER_ID, '/withdrawals');
+    await waitFor(() => ownerCardsFor(nE).some((c) => String(c.text || '').includes('— سحب 1 من 1')), 15000, 'session card with position 1 of 1');
+    const sessionCardE = ownerCardsFor(nE).filter((c) => String(c.text || '').includes('— سحب 1 من 1')).pop();
+    check('owner session card carries the position text', !!sessionCardE, ownerCardsFor(nE).length);
+    const cardE = sessionCardE;
     const t = String(cardE.text || '');
     console.log('\n----- SAMPLE REVIEW CARD (as delivered to the owner) -----\n' + t + '\n-----------------------------------------------------------\n');
-    check('card: no position suffix on the instant card', !/— سحب \d+ من \d+/.test(t), t.slice(0, 90));
     check('card: identity (name, @username, uid, player number)', t.includes('Earner Eve') && t.includes('earner1') && t.includes(E) && t.includes('رقم اللاعب: 7'), t);
     check('card: amounts 5,000 gross / 250 fee / 4,750 net', t.includes('5,000') && t.includes('250') && t.includes('4,750'), t);
     check('card: FULL friendly wallet address', t.includes(srv.toFriendlyAddress(RAW('a'))), srv.toFriendlyAddress(RAW('a')));
@@ -393,22 +416,11 @@ async function botCallback(port, data, fromId, card) {
     check('card: inviter resolved (name + uid)', t.includes('Inviter Ivan') && t.includes(INV), t);
     check('card: referrals total 2 / active 1 (state() rule)', t.includes('2 · النشطة: 1'), t);
     check('card: live on-chain hold 10,000', t.includes('الهولد على الشبكة الآن') && t.includes('10,000'), t);
-    check('card: multi cluster (1 account, Multi Pete, same-device reason)', t.includes('مرتبط بـ 1 حساب') && t.includes('Multi Pete') && t.includes('نفس الجهاز'), t);
-    check('card: earnings sources 250 / 10 / 100 / 120 + commissions 70', t.includes('التعدين: 250') && t.includes('الدخول اليومي: 10') && t.includes('المهام: 100') && t.includes('الإحالات: 120') && t.includes('عمولات محصّلة: 70'), t);
-    check('card: previous withdrawals 0', t.includes('سحوبات سابقة:</b> 0'), t);
+    check('card: multi is the 🔴 verdict + count ONLY (linked account never named)', t.includes('🔴') && t.includes('عامل تعدد — مرتبط بـ 1 حساب') && !t.includes('Multi Pete') && !t.includes(MP) && !t.includes('نفس الجهاز'), t);
+    check('card: earnings sources grid 250 / 10 / 100 / 120 + commissions 70 (non-zero -> grid, no zero-line)', t.includes('التعدين: 250') && t.includes('الدخول اليومي: 10') && t.includes('المهام: 100') && t.includes('الإحالات: 120') && t.includes('عمولات محصّلة: 70') && !t.includes('مفيش أرباح متسجلة'), t);
+    check('card: previous withdrawals 0', t.includes('سحوبات سابقة: 0'), t);
     check('card: exactly the 4 decision callbacks in order', JSON.stringify(cardButtons(cardE)) === JSON.stringify(['wdok:' + nE, 'wdno:' + nE, 'wdban:' + nE, 'wdskip:' + nE]), cardButtons(cardE));
     check('card: fits the Telegram 4096 cap', t.length <= 4096, t.length);
-
-    /* ---------- (b) /withdrawals gating + session start ---------- */
-    console.log('\n[(b): /withdrawals — non-owner ignored, owner gets the first pending card with position]');
-    const ownerMsgsBefore = msgsTo(OWNER_ID).length;
-    await botMessage(APP_A, '700011555', '/withdrawals');
-    await sleep(500);
-    check('non-owner /withdrawals produces nothing at all', msgsTo(OWNER_ID).length === ownerMsgsBefore && msgsTo('700011555').length === 0, msgsTo('700011555').length);
-    await botMessage(APP_A, OWNER_ID, '/withdrawals');
-    await waitFor(() => ownerCardsFor(nE).some((c) => String(c.text || '').includes('— سحب 1 من 1')), 15000, 'session card with position 1 of 1');
-    const sessionCardE = ownerCardsFor(nE).filter((c) => String(c.text || '').includes('— سحب 1 من 1')).pop();
-    check('owner session card carries the position text', !!sessionCardE, ownerCardsFor(nE).length);
 
     /* ---------- (c) approve pays through the existing machine ---------- */
     console.log('\n[(c): wdok — one transfer, Paid ✅, tx-link follow-up, summary, celebration]');
@@ -430,6 +442,7 @@ async function botCallback(port, data, fromId, card) {
     const RJ = '700011002';
     await seedPlayer(RJ, { name: 'Reject Rita', username: 'ritarej', mined: 20000, walletAddr: RAW('b'), userNo: 11 });
     const nR = await doWithdraw(APP_A, RJ, 'Reject', 'ritarej');
+    await botMessage(APP_A, OWNER_ID, '/withdrawals'); // round 2: cards come only from the queue walk
     await waitFor(() => ownerCardsFor(nR).length >= 1, 15000, 'card for wd ' + nR);
     const cardR = ownerCardsFor(nR)[0];
     await botCallback(APP_A, 'wdno:' + nR, OWNER_ID, cardR);
@@ -451,6 +464,7 @@ async function botCallback(port, data, fromId, card) {
     const BN = '700011003';
     await seedPlayer(BN, { name: 'Ban Bob', username: 'banbob', mined: 20000, walletAddr: RAW('c'), userNo: 12 });
     const nB = await doWithdraw(APP_A, BN, 'Ban', 'banbob');
+    await botMessage(APP_A, OWNER_ID, '/withdrawals');
     await waitFor(() => ownerCardsFor(nB).length >= 1, 15000, 'card for wd ' + nB);
     await botCallback(APP_A, 'wdban:' + nB, OWNER_ID, ownerCardsFor(nB)[0]);
     await waitFor(async () => { const w = await dbGet('withdrawals/wd_' + nB); return w && w.status === 'Rejected ❌'; }, 15000, 'wd ' + nB + ' rejected');
@@ -465,6 +479,7 @@ async function botCallback(port, data, fromId, card) {
     const ST = '700011004';
     await seedPlayer(ST, { name: 'Stranger Sam', username: 'samsafe', mined: 20000, walletAddr: RAW('d'), userNo: 13 });
     const nS = await doWithdraw(APP_A, ST, 'Stranger', 'samsafe');
+    await botMessage(APP_A, OWNER_ID, '/withdrawals');
     await waitFor(() => ownerCardsFor(nS).length >= 1, 15000, 'card for wd ' + nS);
     const ansBefore = answers.length;
     await botCallback(APP_A, 'wdok:' + nS, '700011555', ownerCardsFor(nS)[0]);
@@ -511,7 +526,22 @@ async function botCallback(port, data, fromId, card) {
     const DS = '700011007';
     await seedPlayer(DS, { name: 'Disabled Dan', username: 'dandan', mined: 20000, walletAddr: RAW('9'), userNo: 16 });
     const nD = await doWithdraw(APP_B, DS, 'Disabled', 'dandan');
-    await waitFor(() => ownerCardsFor(nD).length >= 1, 15000, 'card for wd ' + nD);
+    const walkBase = msgsTo(OWNER_ID).length; // captured BEFORE the command: the first card can land while the webhook call is still in flight
+    await botMessage(APP_B, OWNER_ID, '/withdrawals');
+    // The walk starts at the OLDEST pending card — an earlier
+    // section's skipped withdrawal is still pending — so skip
+    // forward (records stay untouched) until THIS card is presented.
+    let cursor = walkBase;
+    for (let hop = 0; hop < 8 && ownerCardsFor(nD).length < 1; hop++) {
+      await waitFor(() => msgsTo(OWNER_ID).slice(cursor).some((c) => /طلب سحب #\d+/.test(String(c.text || ''))), 15000, 'walk hop ' + hop + ' towards wd ' + nD);
+      const presented = msgsTo(OWNER_ID).slice(cursor).filter((c) => /طلب سحب #\d+/.test(String(c.text || ''))).pop();
+      cursor = msgsTo(OWNER_ID).length;
+      if (String(presented.text || '').includes('طلب سحب #' + nD)) break;
+      const pm = /طلب سحب #(\d+)/.exec(String(presented.text || ''));
+      if (!pm) break;
+      await botCallback(APP_B, 'wdskip:' + pm[1], OWNER_ID, presented);
+    }
+    check('the /withdrawals walk reached the card for wd ' + nD, ownerCardsFor(nD).length >= 1, ownerCardsFor(nD).length);
     const ansBefore4 = answers.length;
     await botCallback(APP_B, 'wdok:' + nD, OWNER_ID, ownerCardsFor(nD)[0]);
     await waitFor(() => answers.length > ansBefore4, 15000, 'disabled approve answer');
@@ -542,6 +572,24 @@ async function botCallback(port, data, fromId, card) {
     await doWithdraw(APP_A, NE, 'NormalNed', 'normalned');
     const rSecond = await apiOn(APP_A, userInit(NE, 'NormalNed', 'normalned'), 'withdraw', { amount: 5000 });
     check('non-exempt second withdraw inside 24 h -> 429 once-every-24-hours', rSecond.status === 429 && /once every 24 hours/.test((rSecond.body && rSecond.body.error) || ''), rSecond);
+
+    /* ---------- (m) shared IP is never a link + all-zero sources line ---------- */
+    console.log('\n[(m): IP-only pair — riskOf excludes it, card verdict مش عامل تعدد, zero-earnings single line]');
+    const IPA = '700011020', IPB = '700011021';
+    await seedPlayer(IPA, { name: 'Ip Only One', username: 'iponly1', mined: 20000, walletAddr: RAW('1'), userNo: 31, sigs: ['ip:iponly000001'] });
+    await seedPlayer(IPB, { name: 'Ip Only Two', username: 'iponly2', mined: 0, walletAddr: RAW('2'), userNo: 32, sigs: ['ip:iponly000001'] });
+    await dbPut('sigs/ip:iponly000001', { users: [IPA, IPB] }); // the ONLY thing the pair shares
+    const rkIp = await srv.riskOf(IPA);
+    check('riskOf: the IP-only twin is NOT in linked', !(rkIp.linked || []).some((row) => String(row.id) === IPB), rkIp.linked);
+    check('riskOf: level stays low for an IP-only share', rkIp.level === 'low', rkIp.level);
+    const nIP = await doWithdraw(APP_A, IPA, 'IpOnly', 'iponly1');
+    const wdIP = await dbGet('withdrawals/wd_' + nIP);
+    const cardIP = await srv.buildWdReviewCard(wdIP); // the exact builder sendWdReviewCard ships
+    const tIP = String(cardIP.text || '');
+    console.log('\n----- SAMPLE CLEAN CARD (IP-only pair, zero earnings) -----\n' + tIP + '\n-----------------------------------------------------------\n');
+    check('card: verdict is «مش عامل تعدد» for the IP-only pair', tIP.includes('مش عامل تعدد') && !tIP.includes('مرتبط بـ'), tIP);
+    check('card: the IP twin appears nowhere on the card', !tIP.includes('Ip Only Two') && !tIP.includes(IPB), tIP);
+    check('card: all-zero earnings render as the single honest line (no grid)', tIP.includes('مفيش أرباح متسجلة بالمصدر لحد دلوقتي') && !tIP.includes('⛏ التعدين'), tIP);
   } catch (e) {
     failed++;
     console.log('  ERROR', e && e.stack || e);

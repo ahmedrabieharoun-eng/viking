@@ -274,7 +274,7 @@ const publicPlayer = (d) => {
   o.verifiedAt = Number(o.verifiedAt) || 0;
   return o;
 };
-const WHY = { cid: 'نفس نسخة التطبيق', dev: 'نفس الجهاز', ip: 'نفس الـ IP' };
+const WHY = { cid: 'نفس نسخة التطبيق', dev: 'نفس الجهاز' }; // no 'ip' label: a shared IP never explains a link (owner order 2026-11-14, round 2)
 const LIMIT = { cid: 50, dev: 6, ip: 5 }; // signals shared by more accounts than this are treated as common (CGNAT, same phone model)
 async function riskOf(uid) {
   const me = (await getVal(P(uid))) || {};
@@ -287,6 +287,13 @@ async function riskOf(uid) {
     const kind = keys[i].split(':')[0];
     const users = (data.users || []).filter((x) => x !== String(uid));
     users.forEach((u) => { (any[u] = any[u] || new Set()).add(kind); }); // also counts common signals, used only for referral relations
+    // A shared IP is NEVER a link (owner order 2026-11-14, round 2):
+    // carrier NAT / shared Wi-Fi put strangers behind one address.
+    // ip: keys are still recorded and still feed the player's OWN
+    // «used N different IPs» reason further down — they just never
+    // put another account into `linked`, at any level (and so never
+    // into strong/rank/level, which all derive from `linked`).
+    if (kind === 'ip') return;
     if (!users.length || users.length > (LIMIT[kind] || 0)) return;
     users.forEach((u) => { (linked[u] = linked[u] || new Set()).add(kind); });
   });
@@ -542,14 +549,17 @@ async function updateMultiLinks(uid, body) {
    its link to the account it was reached through (the queried
    account for direct links), read off the two stored records:
    same deviceHash > shared dev: signal > shared cid: signal >
-   shared ip: signal > a recorded link the stored signals no longer
-   explain. Nothing here writes anything — it is a pure read. */
+   a recorded link the stored signals no longer explain. A shared
+   ip: signal NEVER explains a link (owner order 2026-11-14,
+   round 2) — it falls through to «رابط مسجل» like any other
+   unexplained stored link. Nothing here writes anything — it is
+   a pure read. */
 const MULTI_LIST_CAP = 40;
 const sigSetOf = (p, prefix) => new Set((Array.isArray(p && p.sigs) ? p.sigs : []).filter((s) => typeof s === 'string' && s.startsWith(prefix)));
 function linkReason(a, b) {
   const dhA = String((a && a.deviceHash) || ''), dhB = String((b && b.deviceHash) || '');
   if (dhA && dhB && dhA === dhB) return 'نفس الجهاز';
-  for (const [prefix, label] of [['dev:', 'نفس بصمة الجهاز'], ['cid:', 'نفس تثبيت تيليجرام'], ['ip:', 'نفس الشبكة']]) {
+  for (const [prefix, label] of [['dev:', 'نفس بصمة الجهاز'], ['cid:', 'نفس تثبيت تيليجرام']]) {
     const mine = sigSetOf(a, prefix);
     if (!mine.size) continue;
     for (const s of sigSetOf(b, prefix)) if (mine.has(s)) return label;
@@ -2213,9 +2223,11 @@ async function withdraw(c) {
   const wd = { wdNum: num, userId: String(c.user.id), userName: clean(me.name, 64), walletAddr: addr, amt, net, fee, status: 'Pending ⏳', timestamp: Date.now() };
   await rtdb().ref('withdrawals/wd_' + num).set(wd);
   // NO automatic payout any more (owner order 2026-11-14 ~07:29):
-  // withdrawals wait for the owner's manual decision on the bot
-  // review card sent at the end of this function (approve there
-  // fires attemptPayout — see the withdrawal-review section below).
+  // withdrawals wait for the owner's manual decision. NO review
+  // card is sent from here (owner order 2026-11-14, round 2):
+  // cards are presented ONLY when the owner pulls the queue with
+  // /withdrawals — approve there fires attemptPayout (see the
+  // withdrawal-review section below).
   let rk = null;
   try { rk = await riskOf(c.user.id); } catch (e) { console.error('risk', e.message); }
   if (cfg.adminChatId) {
@@ -2224,13 +2236,6 @@ async function withdraw(c) {
       text: `🔔 <b>New withdrawal #${wd.wdNum}</b>\n👤 ${esc(wd.userName)} (<code>${esc(wd.userId)}</code>)\n💰 ${wd.amt} ${esc(cfg.coinSym)}\n💎 Net: ${wd.net}\n👛 <code>${esc(wd.walletAddr)}</code>${rk && rk.level !== 'low' ? '\n⚠️ تعدد حسابات: ' + (rk.level === 'high' ? 'عالي' : 'متوسط') : ''}`
     });
   }
-  // Owner review card (manual-review flow, owner order 2026-11-14):
-  // the withdrawal is decided by the owner in the bot chat — approve
-  // pays via attemptPayout, reject/ban via the callback handlers in
-  // the withdrawal-review section. Best-effort: a failed card DM
-  // never fails the player's withdrawal (he can still be reviewed
-  // later via /withdrawals).
-  try { await sendWdReviewCard(wd.wdNum); } catch (e) { console.error('wd review card', wd.wdNum, e.message); }
   return { success: true, wdNum: wd.wdNum };
 }
 
@@ -2645,12 +2650,14 @@ async function sendPayoutSuccess(wd, player, cfg) {
 
 /* ---------- withdrawal review: the owner's bot panel (owner order 2026-11-14 ~07:29) ----------
    Automatic payout-on-request is REPLACED by manual review in the
-   bot chat, modelled on the owner's AdVOLT messages bot: every new
-   withdrawal DMs the owner a review card carrying the full picture
+   bot chat, modelled on the owner's AdVOLT messages bot: the owner
+   pulls the pending queue with /withdrawals (round 2: NO card is
+   sent when a withdrawal is created) and each withdrawal is
+   presented as a review card carrying the full picture
    (identity + player number, wallet + verification + wallet age,
    current in-bot balance, join date, who referred him, his referral
-   counts, the LIVE on-chain hold, the multi-account tree, where his
-   coins came from, his previous withdrawals) and four decision
+   counts, the LIVE on-chain hold, the multi-account verdict +
+   count, where his coins came from, his previous withdrawals) and four decision
    buttons — ✅ approve (fires the EXISTING attemptPayout state
    machine, unchanged), ❌ reject (NO refund: the deducted coins stay
    deducted — the owner's explicit order, deliberately unlike the
@@ -2714,32 +2721,23 @@ async function buildWdReviewCard(wd, position) {
   const allPlayers = players || {};
   const name = esc(p.name || wd.userName || '—');
   const uname = p.username ? ' (@' + esc(p.username) + ')' : '';
-  /* multi-account picture: the stored-link cluster (both-directions
-     BFS, as /multi) unioned with riskOf()'s live sig-registry links,
-     so the card shows the whole tree either source knows about. */
-  const linked = new Map(); // uid -> { name, username, reason }
-  const { order, parent } = multiClusterOf(allPlayers, uid);
-  for (const id of order.slice(1)) {
-    const lp = allPlayers[id] || {};
-    linked.set(id, { name: lp.name || '', username: lp.username || '', reason: linkReason(allPlayers[id], allPlayers[parent.get(id)] || {}) });
-  }
+  /* multi-account verdict (owner order 2026-11-14, round 2): the
+     card shows ONLY the verdict + the cluster size, on its own
+     line — never the linked accounts themselves (the full tree
+     stays in /multi). The cluster is the stored-link cluster
+     (both-directions BFS, as /multi) unioned with riskOf()'s live
+     sig-registry links; after the round-2 rule a shared IP
+     contributes to NEITHER source. */
+  const linked = new Set();
+  const { order } = multiClusterOf(allPlayers, uid);
+  for (const id of order.slice(1)) linked.add(id);
   try {
     const rk = await riskOf(uid);
-    for (const row of (rk && rk.linked) || []) {
-      if (!linked.has(String(row.id))) linked.set(String(row.id), { name: row.name || '', username: '', reason: (row.via || []).join('، ') || 'رابط مسجل' });
-    }
+    for (const row of (rk && rk.linked) || []) linked.add(String(row.id));
   } catch (e) { /* the stored cluster alone is a complete picture */ }
-  const linkedIds = [...linked.keys()];
-  const multiSection = (showCount) => {
-    if (!linkedIds.length) return '⚠️ <b>التعدد:</b> مش مرتبط بحسابات تانية ✅';
-    const lines = [`⚠️ <b>التعدد:</b> عامل تعدد — مرتبط بـ ${linkedIds.length} حساب`];
-    for (const id of linkedIds.slice(0, showCount)) {
-      const l = linked.get(id);
-      lines.push(`• <b>${esc(l.name || '—')}</b>${l.username ? ' (@' + esc(l.username) + ')' : ''} — <code>${esc(id)}</code> — ${esc(l.reason)}`);
-    }
-    if (linkedIds.length > showCount) lines.push(`…و ${linkedIds.length - showCount} كمان`);
-    return lines.join('\n');
-  };
+  const multiLine = linked.size
+    ? `🔴 <b>عامل تعدد — مرتبط بـ ${linked.size} حساب</b>`
+    : '✅ <b>مش عامل تعدد</b>';
   /* live on-chain hold; a chain hiccup falls back to the player's
      last synced hold, labelled as such */
   let holdTxt;
@@ -2757,31 +2755,49 @@ async function buildWdReviewCard(wd, position) {
     ? '✅ موثّقة' + (Number(p.verifiedAt) > 0 ? ` (${fmtDayMonYear(p.verifiedAt)})` : '')
     : '❌ غير موثّقة';
   const ageLine = (p.walletAgeDays !== undefined && p.walletAgeDays !== null && Number.isFinite(Number(p.walletAgeDays)))
-    ? `\n🕰 <b>عمر المحفظة:</b> ${Number(p.walletAgeDays)} يوم` : '';
+    ? `\n🕰 عمر المحفظة: ${Number(p.walletAgeDays)} يوم` : '';
   const joinLine = Number(p.createdAt) > 0
     ? `${fmtDayMonYear(p.createdAt)} (منذ ${Math.max(0, Math.floor((Date.now() - Number(p.createdAt)) / 86400000))} يوم)`
     : '—';
-  const build = (showCount) => [
+  /* earnings sources (owner order 2026-11-14, round 2): the
+     earn* counters only started counting when they shipped, so a
+     pre-existing player reads all zeros and the grid looks broken.
+     When EVERY source is zero, say so in one honest line instead —
+     presentation only, the counters themselves are never invented. */
+  const sourcesAllZero = !(Number(p.earnMining) || 0) && !(Number(p.earnDaily) || 0) && !(Number(p.earnTasks) || 0) && !(Number(p.earnRef) || 0) && !(Number(p.refCommissionEarned) || 0);
+  const sourcesBlock = sourcesAllZero
+    ? '📊 <b>مصادر أرباحه:</b> مفيش أرباح متسجلة بالمصدر لحد دلوقتي'
+    : `📊 <b>مصادر أرباحه:</b>\n⛏ التعدين: ${fmtAmt(p.earnMining)} · 📅 الدخول اليومي: ${fmtAmt(p.earnDaily)}\n✅ المهام: ${fmtAmt(p.earnTasks)} · 👥 الإحالات: ${fmtAmt(p.earnRef)} · 💸 عمولات محصّلة: ${fmtAmt(p.refCommissionEarned)}`;
+  /* Layout (owner order 2026-11-14, round 2): one fact per line,
+     a blank line between sections. With the multi section reduced
+     to a single verdict line the card stays far under Telegram's
+     4096 cap by construction — no shedding pass any more. */
+  const text = [
     `🔍 <b>طلب سحب #${num}</b>${position ? ` — سحب ${position.index} من ${position.total}` : ''}`,
-    `👤 <b>${name}</b>${uname} — <code>${esc(uid)}</code> · رقم اللاعب: ${Number(p.userNo) || '—'}`,
-    `💰 <b>مبلغ السحب:</b> ${fmtCoins(wd.amt)} ${sym} · الرسوم: ${fmtCoins(wd.fee)} · <b>الصافي: ${fmtCoins(wd.net)} ${sym}</b>`,
+    '',
+    `👤 <b>${name}</b>${uname}`,
+    `🆔 <code>${esc(uid)}</code> · رقم اللاعب: ${Number(p.userNo) || '—'}`,
+    '',
+    `💰 <b>مبلغ السحب:</b> ${fmtCoins(wd.amt)} ${sym}`,
+    `🧾 الرسوم: ${fmtCoins(wd.fee)} · الصافي: <b>${fmtCoins(wd.net)} ${sym}</b>`,
+    '',
     `👛 <b>المحفظة:</b> <code>${esc(toFriendlyAddress(wd.walletAddr || p.walletAddr || ''))}</code>`,
-    `🛡 <b>التوثيق:</b> ${verifiedLine}${ageLine}`,
+    `🛡 التوثيق: ${verifiedLine}${ageLine}`,
+    '',
     `💎 <b>رصيده في البوت الآن:</b> ${fmtAmt(p.mined)} ${sym} (بعد خصم السحب)`,
-    `🗓 <b>في البوت من:</b> ${joinLine}`,
-    `🔗 <b>أحاله:</b> ${invLine}`,
-    `👥 <b>إحالاته:</b> ${refTotal} · النشطة: ${refActive}`,
-    `🪙 <b>الهولد على الشبكة الآن:</b> ${holdTxt} ${sym}`,
-    multiSection(showCount),
-    `📊 <b>مصادر أرباحه:</b>\n⛏ التعدين: ${fmtAmt(p.earnMining)} · 📅 الدخول اليومي: ${fmtAmt(p.earnDaily)}\n✅ المهام: ${fmtAmt(p.earnTasks)} · 👥 الإحالات: ${fmtAmt(p.earnRef)} · 💸 عمولات محصّلة: ${fmtAmt(p.refCommissionEarned)}`,
-    `🕐 <b>سحوبات سابقة:</b> ${prev.length} (إجمالي ${fmtCoins(prevSum)} ${sym})`,
-    `⏱ <b>وقت الطلب:</b> ${fmtDateTime(wd.timestamp)}`
+    `🪙 الهولد على الشبكة الآن: ${holdTxt} ${sym}`,
+    '',
+    `🗓 في البوت من: ${joinLine}`,
+    `🔗 أحاله: ${invLine}`,
+    `👥 إحالاته: ${refTotal} · النشطة: ${refActive}`,
+    '',
+    multiLine,
+    '',
+    sourcesBlock,
+    '',
+    `⌛ سحوبات سابقة: ${prev.length} (إجمالي ${fmtCoins(prevSum)} ${sym})`,
+    `⏱ وقت الطلب: ${fmtDateTime(wd.timestamp)}`
   ].join('\n');
-  // Telegram's 4096-char cap: shed linked-account lines (the count
-  // line always survives) until the card fits.
-  let show = Math.min(8, linkedIds.length);
-  let text = build(show);
-  while (text.length > 3900 && show > 0) { show--; text = build(show); }
   const keyboard = {
     inline_keyboard: [
       [{ text: '✅ موافقة', callback_data: 'wdok:' + num }, { text: '❌ رفض', callback_data: 'wdno:' + num }],

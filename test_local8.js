@@ -290,11 +290,14 @@ async function doWithdraw(port, id, name, username) {
   return r.body.wdNum;
 }
 
-/* Manual-review drive (owner order 2026-11-14 ~07:29): withdraw()
-   no longer pays on its own — it DMs the owner a review card and
-   the payout fires only when the owner taps «موافقة», which
-   Telegram delivers as a wdok:<n> callback_query webhook update.
-   The payout scenarios below approve through that real path. */
+/* Manual-review drive (owner order 2026-11-14 ~07:29; round 2
+   ~07:54): withdraw() no longer pays on its own and sends the
+   owner NOTHING — review cards are presented only when the owner
+   pulls the queue with /withdrawals. approveWd() therefore sends
+   /withdrawals first, waits for the presented card, then taps
+   «موافقة», which Telegram delivers as a wdok:<n> callback_query
+   webhook update. The payout scenarios below approve through that
+   real path. */
 const WEBHOOK_SECRET = crypto
   .createHash('sha256')
   .update(BOT_TOKEN)
@@ -318,8 +321,41 @@ async function botCallback(port, data, fromId) {
   });
   return r.status;
 }
+async function botMessage(port, fromId, text) {
+  const upd = {
+    update_id: ++updSeq,
+    message: {
+      message_id: ++updSeq, date: Math.floor(Date.now() / 1000),
+      from: { id: Number(fromId), first_name: 'Owner' },
+      chat: { id: Number(fromId), type: 'private' },
+      text,
+      entities: text.startsWith('/') ? [{ type: 'bot_command', offset: 0, length: text.split(' ')[0].length }] : undefined
+    }
+  };
+  const r = await fetch(`http://127.0.0.1:${port}/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-telegram-bot-api-secret-token': WEBHOOK_SECRET },
+    body: JSON.stringify(upd)
+  });
+  return r.status;
+}
 const ownerCardsFor = (n) => msgsTo(OWNER_ID).filter((mm) => String(mm.text || '').includes('طلب سحب #' + n));
 async function approveWd(port, n) {
+  const walkBase = msgsTo(OWNER_ID).length; // captured BEFORE the command: the first card can land while the webhook call is still in flight
+  await botMessage(port, OWNER_ID, '/withdrawals'); // round 2: no instant card — the owner pulls the queue
+  // The walk starts at the OLDEST pending card — earlier scenarios
+  // deliberately leave failed payouts Pending — so skip forward
+  // (skips never touch the records) until THIS card is presented.
+  let cursor = walkBase;
+  for (let hop = 0; hop < 10 && ownerCardsFor(n).length < 1; hop++) {
+    await waitFor(() => msgsTo(OWNER_ID).slice(cursor).some((mm) => /طلب سحب #\d+/.test(String(mm.text || ''))), 15000, 'review walk hop ' + hop + ' towards wd ' + n);
+    const presented = msgsTo(OWNER_ID).slice(cursor).filter((mm) => /طلب سحب #\d+/.test(String(mm.text || ''))).pop();
+    cursor = msgsTo(OWNER_ID).length;
+    if (String(presented.text || '').includes('طلب سحب #' + n)) break;
+    const pm = /طلب سحب #(\d+)/.exec(String(presented.text || ''));
+    if (!pm) break;
+    await botCallback(port, 'wdskip:' + pm[1]);
+  }
   await waitFor(async () => ownerCardsFor(n).length >= 1, 15000, 'owner review card for wd ' + n);
   const st = await botCallback(port, 'wdok:' + n);
   check('owner approve callback accepted for wd ' + n + ' (webhook 200)', st === 200, st);
@@ -373,7 +409,7 @@ async function approveWd(port, n) {
     const U1 = '700009001', W1 = RAW('1');
     await seedPlayer(U1, 'Zayd Rich', 'zaydrich', 20000, W1);
     const n1 = await doWithdraw(APP_A, U1, 'Zayd', 'zaydrich');
-    check('manual review: the owner got a review card for the withdrawal', ownerCardsFor(n1).length === 1, ownerCardsFor(n1).length);
+    check('manual review: withdraw sent the owner NO card (cards come only via /withdrawals)', ownerCardsFor(n1).length === 0, ownerCardsFor(n1).length);
     check('manual review: NO transfer before the owner approves', sendsFor('VIKING-' + n1).length === 0, sendsFor('VIKING-' + n1));
     await approveWd(APP_A, n1);
     await waitFor(async () => { const w = await dbGet('withdrawals/wd_' + n1); return w && w.payoutState === 'paid'; }, 20000, 'wd ' + n1 + ' paid');
