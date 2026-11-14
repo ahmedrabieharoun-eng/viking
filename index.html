@@ -215,7 +215,7 @@
 
       <div class="card-3d">
         <div style="display:flex;justify-content:space-between;margin-bottom:8px;">
-          <h4 data-i18n="ch1_title">📢 Official Telegram Channel</h4>
+          <h4 id="ch-1-title" data-i18n="ch1_title">📢 Official Telegram Channel</h4>
           <strong style="color:var(--gb);">+<span class="ui-task-rew">50</span> <span class="coin-sym">$VIKING</span></strong>
         </div>
         <div class="grid-2">
@@ -226,13 +226,30 @@
 
       <div class="card-3d">
         <div style="display:flex;justify-content:space-between;margin-bottom:8px;">
-          <h4 data-i18n="ch2_title">💬 Payouts & Community Channel</h4>
+          <h4 id="ch-2-title" data-i18n="ch2_title">💬 Payouts & Community Channel</h4>
           <strong style="color:var(--gb);">+<span class="ui-task-rew">50</span> <span class="coin-sym">$VIKING</span></strong>
         </div>
         <div class="grid-2">
           <button class="btn-3d-dark" id="btn-open-ch2" data-i18n="open_grp">1. Open Group</button>
           <button class="btn-3d-gold" id="ch-task-2-btn" data-i18n="verify_btn">2. Verify ✅</button>
         </div>
+      </div>
+
+      <div class="card-3d" id="bio-task-card">
+        <div style="display:flex;justify-content:space-between;margin-bottom:8px;">
+          <h4>📝 Bio Task</h4>
+          <strong style="color:var(--gb);">+<span id="ui-bio-rew">50</span> <span class="coin-sym">$VIKING</span></strong>
+        </div>
+        <p style="font-size:12px;color:var(--gb);margin:4px 0 10px;">Add <strong id="bio-bot-username" style="color:#fff;">@BOT</strong> to your Telegram bio, then claim your reward.</p>
+        <button class="btn-3d-gold" id="btn-bio-task">Claim Bio Reward</button>
+      </div>
+
+      <div class="card-3d">
+        <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+          <h4>🏆 Referral Milestones</h4>
+        </div>
+        <p style="font-size:11px;color:var(--m);margin:0 0 6px;">Only verified (active) referrals count — a friend becomes active after syncing a wallet with the required hold. Pending friends don't count.</p>
+        <div id="ref-ach-list"></div>
       </div>
     </div>
 
@@ -405,6 +422,16 @@
             <div><label style="color:#38bdf8;">Ad Reward:</label><input type="number" id="adm-ad-rew" class="input-3d"></div>
             <div><label style="color:#38bdf8;">Max Ads/Day:</label><input type="number" id="adm-ad-max" class="input-3d"></div>
             <div><label style="color:#38bdf8;">Task Reward:</label><input type="number" id="adm-task-rew" class="input-3d"></div>
+          </div>
+          <div class="grid-3">
+            <div><label style="color:#38bdf8;">Bio Task Reward:</label><input type="number" id="adm-bio-rew" class="input-3d"></div>
+            <div><label style="color:#38bdf8;">Ref Milestone: 1 Active:</label><input type="number" id="adm-refach1" class="input-3d"></div>
+            <div><label style="color:#38bdf8;">Ref Milestone: 10 Active:</label><input type="number" id="adm-refach10" class="input-3d"></div>
+          </div>
+          <div class="grid-3">
+            <div><label style="color:#38bdf8;">Ref Milestone: 25 Active:</label><input type="number" id="adm-refach25" class="input-3d"></div>
+            <div><label style="color:#38bdf8;">Ref Milestone: 50 Active:</label><input type="number" id="adm-refach50" class="input-3d"></div>
+            <div><label style="color:#38bdf8;">Ref Milestone: 100 Active:</label><input type="number" id="adm-refach100" class="input-3d"></div>
           </div>
           <div class="grid-2">
             <div><label>Referral Mining %:</label><input type="number" id="adm-ref-pct" class="input-3d"></div>
@@ -635,6 +662,7 @@
       brandTitle: "$VIKING MINER", coinSym: "$VIKING",
       lvl1PerDay: 250,
       adReward: 5, maxAdsPerDay: 10, taskReward: 50,
+      bioReward: 50, refAchReward1: 50, refAchReward10: 100, refAchReward25: 250, refAchReward50: 500, refAchReward100: 1000,
       refClaimPercent: 5, refMinHold: 200,
       minWithdraw: 5000, holdPercentReq: 25, withdrawFeePercent: 5,
       payoutWallet: "", adsgramBlockId: "", botToken: "", payoutChannel: "@YGRAM1",
@@ -654,6 +682,8 @@
     let adsWatched = 0;
     let lastAdUtcDay = 0;
     let task1Done = false, task2Done = false;
+    let bioTaskDone = false, refAchClaimed = {}, activeRefs = 0;
+    const REF_MILESTONES = [1, 10, 25, 50, 100];
     let linkedWalletAddr = localStorage.getItem('vksec_wallet_addr') || "";
     let refCommissionEarned = 0;
     let invitedById = null, refBonusPaid = false;
@@ -832,6 +862,9 @@
       myReferrals = d.referrals || [];
       task1Done = !!d.task1Done;
       task2Done = !!d.task2Done;
+      bioTaskDone = !!d.bioTaskDone;
+      refAchClaimed = d.refAchClaimed || {};
+      activeRefs = Number(d.activeRefs) || 0;
       adsWatched = d.lastAdUtcDay === getUtcDay(Date.now()) ? (d.adsWatched || 0) : 0;
       wdHistory = (j.withdrawals || []).sort((a, b) => (b.wdNum || 0) - (a.wdNum || 0));
       renderWithdrawHistory();
@@ -942,6 +975,68 @@
       }).join('');
     }
 
+    // Display name for a channel card, derived from the configured channel
+    // value: "@name" from a t.me/<name> link (or a bare @handle). Returns ""
+    // when nothing can be derived — the caller keeps the fallback label.
+    function channelDisplayName(url) {
+      const s = String(url || '').trim();
+      const m = /(?:t\.me|telegram\.me)\/(?:s\/)?([A-Za-z][A-Za-z0-9_]{3,})/.exec(s) || /^@([A-Za-z][A-Za-z0-9_]{3,})/.exec(s);
+      return m ? '@' + m[1] : '';
+    }
+
+    function renderTasksExtras() {
+      // channel card titles: prefer the configured channel's own @handle
+      const dict = I18N[currentLang] || I18N.en;
+      const cn1 = channelDisplayName(config.channel1);
+      const cn2 = channelDisplayName(config.channel2);
+      const t1 = document.getElementById('ch-1-title');
+      const t2 = document.getElementById('ch-2-title');
+      if (t1) t1.innerText = cn1 ? `📢 ${cn1}` : dict.ch1_title;
+      if (t2) t2.innerText = cn2 ? `💬 ${cn2}` : dict.ch2_title;
+
+      // bio task card (hidden gracefully until the bot username is known)
+      const bioCard = document.getElementById('bio-task-card');
+      if (bioCard) {
+        const uname = String(config.botUsername || '').replace(/^@/, '').trim();
+        bioCard.style.display = uname ? '' : 'none';
+        if (uname) {
+          document.getElementById('bio-bot-username').innerText = '@' + uname;
+          document.getElementById('ui-bio-rew').innerText = config.bioReward;
+          document.getElementById('btn-bio-task').innerText = bioTaskDone ? "✓ Done" : "Claim Bio Reward";
+        }
+      }
+
+      // referral milestones: only ACTIVE (verified) referrals count —
+      // activeRefs comes from the server; pending friends never count.
+      const box = document.getElementById('ref-ach-list');
+      if (!box) return;
+      box.innerHTML = REF_MILESTONES.map(n => {
+        const claimed = !!refAchClaimed[n];
+        const reached = activeRefs >= n;
+        const reward = config['refAchReward' + n] || 0;
+        const pct = Math.min(100, Math.floor((activeRefs / n) * 100));
+        return `
+          <div style="padding:8px 4px;border-bottom:1px solid rgba(255,255,255,0.06);">
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+              <div>
+                <strong style="color:#fff;">Invite ${n} active friend${n > 1 ? 's' : ''}</strong>
+                <div style="font-size:11px;color:var(--m);">${Math.min(activeRefs, n)}/${n} active · <span style="color:var(--gb);">+${reward} ${esc(config.coinSym)}</span></div>
+              </div>
+              ${claimed
+                ? `<span style="color:#22c55e;font-weight:800;font-size:12px;white-space:nowrap;">✓ Claimed</span>`
+                : `<button class="btn-3d-gold ref-ach-claim" data-n="${n}" style="width:auto;padding:8px 16px;white-space:nowrap;${reached ? '' : 'opacity:0.45;'}" ${reached ? '' : 'disabled'}>Claim</button>`}
+            </div>
+            <div class="prog-bg-3d" style="margin-top:6px;"><div class="prog-fill-3d" style="width:${pct}%;"></div></div>
+          </div>`;
+      }).join('');
+      box.querySelectorAll('.ref-ach-claim').forEach(b => b.addEventListener('click', async e => {
+        if (!isHumanClick(e)) return;
+        const n = Number(b.getAttribute('data-n'));
+        try { const r = await api("refAch", { n }); SoundFX.buySuccess(); showToast(`🏆 +${r.reward} ${config.coinSym}!`); await refreshState(); }
+        catch (err) { showToast("❌ " + err.message, "#ef4444"); }
+      }));
+    }
+
     function applyUI() {
       applyTranslations();
       const { cur, next } = getCurrentLevelObj();
@@ -963,6 +1058,7 @@
       document.getElementById('ads-prog-bar').style.width = Math.min(100, (adsWatched / Math.max(1, config.maxAdsPerDay)) * 100) + "%";
       if (task1Done || localStorage.getItem('vksec_task1')) document.getElementById('ch-task-1-btn').innerText = "✓ Done";
       if (task2Done || localStorage.getItem('vksec_task2')) document.getElementById('ch-task-2-btn').innerText = "✓ Done";
+      renderTasksExtras();
 
       document.getElementById('boost-lvl-header').innerText = "Level " + cur.level;
       document.getElementById('boost-rank-badge').innerText = cur.groupName + "s";
@@ -1198,7 +1294,7 @@
       }));
     }
 
-    const ADMIN_FIELDS = { 'adm-title':'brandTitle','adm-sym':'coinSym','adm-lvl1-day':'lvl1PerDay','adm-ad-rew':'adReward','adm-ad-max':'maxAdsPerDay','adm-task-rew':'taskReward','adm-ref-pct':'refClaimPercent','adm-ref-minhold':'refMinHold','adm-minwd':'minWithdraw','adm-holdpct':'holdPercentReq','adm-wdfee-pct':'withdrawFeePercent','adm-payout-wallet':'payoutWallet','adm-adsgram-id':'adsgramBlockId','adm-payout-ch':'payoutChannel','adm-admin-chat':'adminChatId','adm-ch1':'channel1','adm-ch2':'channel2','adm-botuser':'botUsername' };
+    const ADMIN_FIELDS = { 'adm-title':'brandTitle','adm-sym':'coinSym','adm-lvl1-day':'lvl1PerDay','adm-ad-rew':'adReward','adm-ad-max':'maxAdsPerDay','adm-task-rew':'taskReward','adm-bio-rew':'bioReward','adm-refach1':'refAchReward1','adm-refach10':'refAchReward10','adm-refach25':'refAchReward25','adm-refach50':'refAchReward50','adm-refach100':'refAchReward100','adm-ref-pct':'refClaimPercent','adm-ref-minhold':'refMinHold','adm-minwd':'minWithdraw','adm-holdpct':'holdPercentReq','adm-wdfee-pct':'withdrawFeePercent','adm-payout-wallet':'payoutWallet','adm-adsgram-id':'adsgramBlockId','adm-payout-ch':'payoutChannel','adm-admin-chat':'adminChatId','adm-ch1':'channel1','adm-ch2':'channel2','adm-botuser':'botUsername' };
     async function openOwnerDashboard() {
       if (CURRENT_UID !== OWNER_UID) return showToast("❌ Access Denied! (Owner Only)", "#ef4444");
       try { await loadAdminData(); } catch (err) { return showToast("❌ " + err.message, "#ef4444"); }
@@ -1274,6 +1370,13 @@
       try { const r = await api("task", { n }); SoundFX.buySuccess(); showToast(`🎉 +${r.reward} ${config.coinSym}!`); await refreshState(); }
       catch (err) { showToast("❌ " + err.message, "#ef4444"); }
     }));
+
+    document.getElementById('btn-bio-task').addEventListener('click', async e => {
+      if (!isHumanClick(e)) return;
+      if (bioTaskDone) return showToast("Already claimed!", "#f59e0b");
+      try { const r = await api("bioTask"); SoundFX.buySuccess(); showToast(`🎉 +${r.reward} ${config.coinSym}!`); await refreshState(); }
+      catch (err) { showToast("❌ " + err.message, "#ef4444"); }
+    });
 
     document.getElementById('tier-btn-1').addEventListener('click', () => { currentLevelPage = 1; setActiveTierBtn(1); renderLevelsGrid(); });
     document.getElementById('tier-btn-2').addEventListener('click', () => { currentLevelPage = 4; setActiveTierBtn(2); renderLevelsGrid(); });
