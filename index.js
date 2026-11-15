@@ -55,7 +55,7 @@ const MIN_COLLECT_SEC = 10;
 const DAILY = [10, 20, 30, 50, 70, 100, 200];
 const DEFAULTS = {
   brandTitle: '$VIKING MINER', coinSym: '$VIKING', taskReward: 50,
-  bioReward: 50, refAchReward1: 50, refAchReward10: 100, refAchReward25: 250, refAchReward50: 500, refAchReward100: 1000,
+  bioReward: 50, refAchReward1: 125, refAchReward10: 250, refAchReward25: 625, refAchReward50: 1250, refAchReward100: 2500,
   refClaimPercent: 5, refMinHold: 200, minWithdraw: 5000, holdPercentReq: 25, withdrawFeePercent: 5,
   lvl1PerDay: 250, payoutWallet: '', payoutChannel: '@YGRAM1', adminChatId: '',
   // Withdrawal-cooldown exemption (owner order 2026-11-14): these
