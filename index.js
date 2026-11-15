@@ -83,14 +83,14 @@ const DEFAULTS = {
   // deposits, payout failures). settings/global can override the list.
   adminUsers: [],
   buySwapUrl: 'https://app.ston.fi/swap?chartVisible=false&tt=EQC6uN73kvaKh8LrTHQ8TQ5_vgqheI93iny5XUWkpQL9vjxI&ft=GRAM',
-  channel1: 'https://t.me/YGRAM1', channel2: 'https://t.me/telegram', botUsername: 'VIKING_MINER_BOT',
+  channel1: 'https://t.me/YGRAM1', channel2: 'https://t.me/telegram', channel3: 'https://t.me/VikingMiner_Community', botUsername: 'VIKING_MINER_BOT',
   // Wallet verification (owner order 2026-11-14): the fee is paid to
   // verifyDepositWallet with the comment VIKING-<userNo>; a wallet must
   // be at least verifyMinAgeDays old to be verified.
   verifyDepositWallet: 'UQBCoy7KjhL9VnKA_YOp4_hxmYKAQ8P8mIfx5FdIdSA6qvxE', verifyFeeTon: 0.05, verifyMinAgeDays: 7
 };
 const NUM_KEYS = ['lvl1PerDay', 'taskReward', 'bioReward', 'refAchReward1', 'refAchReward10', 'refAchReward25', 'refAchReward50', 'refAchReward100', 'refClaimPercent', 'refMinHold', 'minWithdraw', 'holdPercentReq', 'withdrawFeePercent', 'verifyFeeTon', 'verifyMinAgeDays'];
-const STR_KEYS = ['brandTitle', 'coinSym', 'payoutWallet', 'payoutChannel', 'adminChatId', 'channel1', 'channel2', 'botUsername', 'buySwapUrl', 'verifyDepositWallet'];
+const STR_KEYS = ['brandTitle', 'coinSym', 'payoutWallet', 'payoutChannel', 'adminChatId', 'channel1', 'channel2', 'channel3', 'botUsername', 'buySwapUrl', 'verifyDepositWallet'];
 
 /* ---------- helpers ---------- */
 class Fail extends Error { constructor(status, msg) { super(msg); this.status = status; } }
@@ -679,7 +679,7 @@ async function getConfig() {
   await loadHarvestedEmoji(); // the harvested premium-emoji map rides the same refresh cycle
   return v;
 }
-const PUBLIC_KEYS = ['brandTitle', 'coinSym', 'taskReward', 'bioReward', 'refAchReward1', 'refAchReward10', 'refAchReward25', 'refAchReward50', 'refAchReward100', 'refClaimPercent', 'refMinHold', 'minWithdraw', 'holdPercentReq', 'withdrawFeePercent', 'lvl1PerDay', 'buySwapUrl', 'channel1', 'channel2', 'botUsername'];
+const PUBLIC_KEYS = ['brandTitle', 'coinSym', 'taskReward', 'bioReward', 'refAchReward1', 'refAchReward10', 'refAchReward25', 'refAchReward50', 'refAchReward100', 'refClaimPercent', 'refMinHold', 'minWithdraw', 'holdPercentReq', 'withdrawFeePercent', 'lvl1PerDay', 'buySwapUrl', 'channel1', 'channel2', 'channel3', 'botUsername'];
 const publicConfig = (c) => Object.fromEntries(PUBLIC_KEYS.map((k) => [k, c[k]]));
 
 // simple in-memory rate limiter (per server instance)
@@ -1245,7 +1245,7 @@ const newPlayer = (user, extra) => ({
   deviceHash: '', mined: 0, hold: 0, lastCollectTime: Date.now(), walletAddr: '', banned: false, invitedBy: null,
   refBonusPaid: false, refCommissionEarned: 0, pendingRefComm: 0, lastWithdrawTime: 0, adsWatched: 0,
   earnMining: 0, earnDaily: 0, earnTasks: 0, earnRef: 0, // lifetime earnings by source (owner review card, 2026-11-14); pre-existing players read as 0 until they earn again
-  lastAdUtcDay: dayOf(Date.now()), task1Done: false, task2Done: false, bioTaskDone: false, dailyStreak: 0, lastDailyCheckIn: 0,
+  lastAdUtcDay: dayOf(Date.now()), task1Done: false, task2Done: false, task3Done: false, bioTaskDone: false, dailyStreak: 0, lastDailyCheckIn: 0,
   lastSeen: Date.now(), referrals: [], createdAt: Date.now(), avatar: 0, ...extra
 });
 
@@ -1482,7 +1482,7 @@ async function daily(c) {
 
 async function task(c) {
   const n = Number(c.body.n);
-  if (n !== 1 && n !== 2) fail(400, 'Bad task');
+  if (n !== 1 && n !== 2 && n !== 3) fail(400, 'Bad task');
   const ref = await ensurePlayer(c);
   // REAL membership verification through the bot (getChatMember) before any
   // reward: not a member -> 403; the check itself unavailable (bot not in
