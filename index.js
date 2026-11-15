@@ -36,6 +36,27 @@ const TONAPI_KEY = process.env.TONAPI_KEY || '';               // optional
 // an env override for local testing, mirroring TG_API_BASE below.
 const TON_API_KEY = process.env.TON_API_KEY || '';
 const TON_API_BASE = (process.env.TON_API_BASE || 'https://toncenter.com/api/v3').replace(/\/+$/, '');
+/* Toncenter key pool (owner order 2026-11-15): the owner supplied
+   several toncenter API keys so chain reads stop depending on one
+   key's rate limit — with thousands of players, a single throttled
+   key was slowing wallet binds, hold syncs and verification checks.
+   TONCENTER_KEYS env = comma-separated list; the legacy TON_API_KEY
+   joins the pool too. tonc() walks the pool round-robin, and a 429
+   from one key moves straight to the next: one throttled key must
+   never fail a read while other keys are fresh. Keys live ONLY in
+   the server env — never in code, never in any response. */
+const TONCENTER_KEYS = (() => {
+  const list = String(process.env.TONCENTER_KEYS || '').split(',').map((s) => s.trim()).filter(Boolean);
+  if (TON_API_KEY && !list.includes(TON_API_KEY)) list.push(TON_API_KEY);
+  return list;
+})();
+let toncKeyIdx = 0;
+function nextToncKey() {
+  if (!TONCENTER_KEYS.length) return '';
+  const k = TONCENTER_KEYS[toncKeyIdx % TONCENTER_KEYS.length];
+  toncKeyIdx = (toncKeyIdx + 1) % TONCENTER_KEYS.length;
+  return k;
+}
 
 const JETTON = 'EQC6uN73kvaKh8LrTHQ8TQ5_vgqheI93iny5XUWkpQL9vjxI';
 /* Automatic $VIKING payouts (owner order 2026-11-14): when the
@@ -1214,10 +1235,21 @@ function fmtDayMonYear(ts) {
   return d.getDate() + ' ' + MONTHS_EN[d.getMonth()] + ' ' + d.getFullYear();
 }
 async function tonc(path) {
-  const r = await fetch(TON_API_BASE + path, { headers: TON_API_KEY ? { 'X-API-Key': TON_API_KEY } : {}, signal: AbortSignal.timeout(10000) });
-  if (r.status === 404 || r.status === 400) return null;
-  if (!r.ok) fail(502, 'TON network is busy, try again');
-  return r.json();
+  // Key pool: start at the round-robin key; a 429 (that key's own
+  // rate limit) retries with the NEXT key, up to one full pass over
+  // the pool. 404/400 keep their "no data" meaning on any key; any
+  // other failure still fails the read, exactly as before — a pool
+  // must never turn a failed read into a fake answer.
+  const attempts = Math.max(1, TONCENTER_KEYS.length);
+  for (let i = 0; i < attempts; i++) {
+    const key = nextToncKey();
+    const r = await fetch(TON_API_BASE + path, { headers: key ? { 'X-API-Key': key } : {}, signal: AbortSignal.timeout(10000) });
+    if (r.status === 404 || r.status === 400) return null;
+    if (r.status === 429 && i < attempts - 1) continue;
+    if (!r.ok) fail(502, 'TON network is busy, try again');
+    return r.json();
+  }
+  fail(502, 'TON network is busy, try again');
 }
 /* Transactions of one account, newest (desc) or oldest (asc) first.
    TON_API_BASE is toncenter v3, whose ordering parameter is
@@ -2571,6 +2603,7 @@ async function verifyCheck(c) {
    with pending players is one chain scan, so the API load stays
    flat regardless of the interval. */
 const VERIFY_WATCH_MS = (() => { const v = Number(process.env.VERIFY_WATCH_MS); return Number.isFinite(v) && v >= 0 ? Math.floor(v) : 20000; })(); // default 20 s (was 10 s — owner load-reduction order 2026-11-15; the tick is indexed now, and verification completing a few seconds later is invisible next to the ~90 s the app itself polls)
+const VERIFY_WATCH_AGE_BATCH = (() => { const v = Number(process.env.VERIFY_WATCH_AGE_BATCH); return Number.isFinite(v) && v > 0 ? Math.floor(v) : 60; })(); // fresh wallet-age determinations per tick (see verifyWatchTick)
 let verifyWatchRunning = false;
 async function verifyWatchTick() {
   if (verifyWatchRunning) return; // ticks never overlap
@@ -2598,6 +2631,7 @@ async function verifyWatchTick() {
       const feeTon = Number(cfg.verifyFeeTon) || 0;
       const minNano = BigInt(Math.floor(feeTon * 1e9 * 0.99));
       const byComment = new Map(); // exact payment comment -> { uid, wallet }
+      let ageReads = 0; // fresh (uncached) wallet-age determinations spent this tick
       for (const [uid, p] of pending) {
         if (p.banned === true) { notes.push(uid + ': banned'); continue; } // stays pending; an unban restores the flow
         if (p.walletVerified === true || !(p.walletAddr || '')) {
@@ -2609,8 +2643,21 @@ async function verifyWatchTick() {
         }
         const userNo = await ensureUserNo(uid);
         if (!userNo) { notes.push(uid + ': no-userNo'); continue; }
+        // Age determinations are this tick's only per-player chain
+        // cost, and a known age is cached for 3 h — but after a
+        // signup flood hundreds of pendings can be uncached at once
+        // (762 on 2026-11-15), and determining all of them every
+        // 20 s would keep the chain layer saturated on retries.
+        // Cached ages are free and always evaluated; FRESH reads
+        // are budgeted per tick and the rest defer to the next one.
+        // A player paying right now still confirms instantly via
+        // the in-app verifyCheck, so the budget costs nobody a
+        // confirmation — it only paces the background catch-up.
+        const ageCached = p.walletAgeV === WALLET_AGE_CACHE_V && p.walletAgeFor === p.walletAddr && p.walletAgeAt && (Date.now() - p.walletAgeAt) < WALLET_AGE_CACHE_MS && Number(p.walletAgeDays) >= 0;
+        if (!ageCached && ageReads >= VERIFY_WATCH_AGE_BATCH) { notes.push(uid + ': age-deferred'); continue; }
         let age = null;
         try { age = await walletAgeDays(P(uid), p, p.walletAddr); } catch (e) { /* treated as not-yet-eligible below */ }
+        if (!ageCached) ageReads++;
         if (age === null || age < minAge) { notes.push(uid + ': age ' + (age === null ? '?' : age) + '<' + minAge); continue; } // the age rule applies here too — retried as the wallet ages
         byComment.set(verifyComment(userNo), { uid, wallet: p.walletAddr });
       }
@@ -2671,6 +2718,7 @@ function startVerifyWatcher() {
    read skips the player: a network hiccup must never deactivate
    anyone — only a successful read may move a hold. */
 const REF_HOLD_WATCH_MS = (() => { const v = Number(process.env.REF_HOLD_WATCH_MS); return Number.isFinite(v) && v >= 0 ? Math.floor(v) : 180000; })(); // default 3 min (was 1 min — the sweep was the single biggest tonapi consumer under the signup flood; env still overrides)
+const REF_HOLD_WATCH_BATCH = (() => { const v = Number(process.env.REF_HOLD_WATCH_BATCH); return Number.isFinite(v) && v > 0 ? Math.floor(v) : 90; })(); // candidates re-read per tick, stalest first (see refHoldWatchTick)
 const MULTI_CHECK_MS = (() => { const v = Number(process.env.MULTI_CHECK_MS); return Number.isFinite(v) && v >= 0 ? Math.floor(v) : 600000; })(); // per-player multi-link recompute cadence in state() (owner load-reduction order 2026-11-15); default 10 min, env overrides, 0 = recompute on every state call
 let refHoldWatchRunning = false;
 async function refHoldWatchTick() {
@@ -2682,9 +2730,18 @@ async function refHoldWatchTick() {
     if (!players) return;
     const cands = Object.entries(players).filter(([, p]) => p && p.invitedBy && p.walletVerified === true && (p.walletAddr || '') && p.banned !== true);
     if (!cands.length) return;
+    // Batch cap (incident 2026-11-15): the candidate set grows with
+    // the verified population (447 during the flood) and re-reading
+    // ALL of them every tick keeps the chain layer busy around the
+    // clock, starving player-facing reads. Stalest-first ordering
+    // rotates coverage — every candidate is re-read within a few
+    // ticks — and an in-app sync still refreshes a hold the moment
+    // it matters to the player himself.
+    cands.sort((a, b) => (Number(a[1].lastSyncAt) || 0) - (Number(b[1].lastSyncAt) || 0));
+    const batch = cands.slice(0, REF_HOLD_WATCH_BATCH);
     const cfg = await getConfig();
     const notes = [];
-    for (const [uid, p] of cands) {
+    for (const [uid, p] of batch) {
       try {
         const hold = await jettonHold(p.walletAddr);
         if (!Number.isFinite(hold)) continue;
@@ -2950,8 +3007,8 @@ async function createRealPayoutClient() {
   const { Address, beginCell, toNano } = core;
   const words = PAYOUT_MNEMONIC.split(/\s+/).filter(Boolean);
   const keyPair = await tcrypto.mnemonicToPrivateKey(words);
-  // toncenter v2 JSON-RPC with the SAME key the v3 reads use.
-  const client = new ton.TonClient({ endpoint: 'https://toncenter.com/api/v2/jsonRPC', apiKey: TON_API_KEY || undefined });
+  // toncenter v2 JSON-RPC with a key from the same pool the v3 reads use.
+  const client = new ton.TonClient({ endpoint: 'https://toncenter.com/api/v2/jsonRPC', apiKey: nextToncKey() || undefined });
   const ownerAddr = await derivePayoutAddress(words, PAYOUT_WALLET_VERSION);
   const Contract = PAYOUT_WALLET_VERSION === 'v4' ? ton.WalletContractV4 : ton.WalletContractV5R1;
   const contract = Contract.create({ workchain: 0, publicKey: keyPair.publicKey });
