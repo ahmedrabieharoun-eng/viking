@@ -193,6 +193,11 @@
     .mn-collect img{width:43px;height:43px}
     .mn-collect span{font-size:12.5px;font-weight:900;color:#241a05;letter-spacing:1px}
     .mn-collect:active{transform:scale(.95)}
+    /* Locked collect (unverified): grey coin, lock + "Verify First". */
+    .mn-collect.locked{background:radial-gradient(circle at 35% 28%,#aeb6bf,#7c8590 46%,#59616b 76%,#3d434b);border-color:#22262c;box-shadow:0 10px 24px rgba(0,0,0,.6),inset 0 2px 6px rgba(255,255,255,.35)}
+    .mn-collect .lk-wrap{display:none;flex-direction:column;align-items:center;justify-content:center;gap:1px}
+    .mn-collect.locked .lk-ic{font-size:23px;line-height:1}
+    .mn-collect.locked .lk-txt{font-size:10px;font-weight:900;color:#eef1f4;letter-spacing:.6px;text-align:center;line-height:1.25;padding:0 8px}
     #page-tasks .daily-grid{margin:10px 2px 2px}
     #page-tasks .daily-box{background:linear-gradient(180deg,#24334f,#131f36);border-color:rgba(212,175,55,.5);color:#d8c491}
     #page-tasks .daily-box.active{border-color:#8a6d35;background:linear-gradient(180deg,#f7dc6f,#c39a2e);color:#23160a}
@@ -222,16 +227,16 @@
     #avatar-picker .ap-sub{color:#cdbd93;font-size:12.5px;margin-bottom:46px;max-width:320px}
     /* Wallet-verification gate (owner order 2026-11-15): stands between
        the avatar pick and the app until the wallet is verified. */
-    #wallet-gate{position:fixed;inset:0;z-index:100000;background:linear-gradient(180deg, rgba(3,5,9,.55), rgba(3,5,9,.86)),url('assets/picker_bg.webp') center/cover no-repeat #04060a;display:none;flex-direction:column;align-items:center;justify-content:center;padding:22px;overflow-y:auto}
-    #wallet-gate.show{display:flex}
-    #wallet-gate .wg-panel{width:100%;max-width:400px;text-align:center}
-    #wallet-gate .wg-title{font-family:Georgia,serif;color:var(--gold2);font-size:23px;font-weight:900;letter-spacing:.5px;margin-bottom:8px;text-shadow:0 2px 10px rgba(212,175,55,.4)}
-    #wallet-gate .wg-sub{color:#cdbd93;font-size:12.5px;line-height:1.55;margin-bottom:16px}
-    #gate-connect-btn{margin:0 auto 12px}
-    #wallet-gate .wg-addr{color:#e2e8f0;font-size:12px;margin-bottom:12px;direction:ltr}
-    #gate-verify-card{background:url('assets/ref_stone_plain.webp') center/cover;border:1px solid rgba(212,175,55,.55);border-radius:12px;padding:16px 14px;text-align:left;box-shadow:0 8px 18px rgba(0,0,0,.55)}
-    body.rtl-mode #gate-verify-card{text-align:right}
-    #wallet-gate .wg-note{color:#e8a13a;font-size:11.5px;margin-top:14px}
+    /* Unverified Mine state (owner order 2026-11-15, replaces the old
+       full-screen wallet gate): the two balance cards collapse into
+       ONE wide verify card; tapping it opens Profile to verify. */
+    .mn-verify-wide{flex:1;display:flex;align-items:center;gap:11px;background-image:url('assets/ref_stone_plain.webp');background-size:cover;border:1px solid rgba(212,175,55,.55);border-radius:13px;padding:15px 14px;box-shadow:0 6px 14px rgba(0,0,0,.55);cursor:pointer;text-align:left}
+    body.rtl-mode .mn-verify-wide{text-align:right}
+    .mn-verify-wide .mv-ic{font-size:21px;flex:none}
+    .mn-verify-wide .mv-txt{flex:1;color:#f3d27a;font-size:14.5px;font-weight:800;line-height:1.45}
+    .mn-verify-wide .mv-arrow{color:var(--gold2);font-size:24px;font-weight:900;flex:none}
+    body.rtl-mode .mn-verify-wide .mv-arrow{transform:scaleX(-1)}
+    .mn-verify-wide:active{transform:scale(.985)}
     #avatar-picker .ap-hero{position:relative;width:172px;height:172px;margin-bottom:14px;flex:none}
     #avatar-picker .ap-hero #ap-hero-img{width:100%;height:100%;border-radius:50%;object-fit:cover;display:block;background:#131f36;box-shadow:0 10px 26px rgba(0,0,0,.7)}
     #avatar-picker .ap-hero .ap-ring{position:absolute;left:50%;top:50%;width:258px;height:258px;transform:translate(-50%,-50%);pointer-events:none}
@@ -531,29 +536,6 @@
     <div class="ap-warn" data-i18n="avatar_warn">⚠ Once confirmed, your warrior cannot be changed</div>
   </div>
 
-  <!-- Wallet-verification gate (owner order 2026-11-15): after the
-       avatar is chosen, the app stays locked behind this page until
-       the wallet is VERIFIED — mining only starts after verification.
-       The verify card mirrors the Profile one and is rendered by the
-       same renderVerifyCard() (gate- prefixed ids). -->
-  <div id="wallet-gate">
-    <div class="wg-panel">
-      <div class="wg-title" data-i18n="gate_title">🔐 Verify Your Wallet</div>
-      <div class="wg-sub" data-i18n="gate_desc">To unlock VIKING MINER, connect your TON wallet and verify it with a one-time 0.05 TON payment.</div>
-      <button class="btn-3d-gold" id="gate-connect-btn">👛 <span data-i18n="connect_wallet_btn">Connect TON Wallet</span></button>
-      <div class="wg-addr" id="gate-wallet-addr" style="display:none;"></div>
-      <div class="card-3d" id="gate-verify-card">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-          <h4>🛡️ <span data-i18n="verify_title">Wallet Verification</span></h4>
-          <span class="badge-tag" id="gate-verify-status-badge" style="background:#64748b;">—</span>
-        </div>
-        <div id="gate-verify-rows" style="font-size:12px;line-height:1.5;"></div>
-        <div id="gate-verify-actions"></div>
-      </div>
-      <div class="wg-note" data-i18n="gate_note">⛏️ Mining unlocks the moment your verification completes.</div>
-    </div>
-  </div>
-
   <div id="toast">Notification</div>
 
   <div class="app-shell" id="main-app-shell">
@@ -577,15 +559,22 @@
       </div>
 
         <div class="mn-stage-stats">
-          <div class="mn-stat">
+          <div class="mn-stat" id="mine-stat-hold">
             <div class="mn-stat-tab"><svg viewBox="0 0 24 24" fill="none" stroke="#e8c766" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h13a1 1 0 0 1 1 1v1"/><path d="M3 7v10a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-8a1 1 0 0 0-1-1H5a2 2 0 0 1-2-2z"/><circle cx="16.6" cy="14" r="1.2" fill="#e8c766" stroke="none"/></svg></div>
             <div class="mn-stat-lbl" data-i18n="hold_wallet_lbl">Wallet Hold (On-Chain)</div>
             <div class="mn-stat-num"><span id="mine-hold-bal">0</span> <img src="assets/coin_icon.webp" alt=""></div>
           </div>
-          <div class="mn-stat">
+          <div class="mn-stat" id="mine-stat-app">
             <div class="mn-stat-tab"><svg viewBox="0 0 24 24" fill="none" stroke="#e8c766" stroke-width="1.9" stroke-linecap="round"><path d="M5.5 18.5L14.5 9.5"/><path d="M7.5 5C11 3.6 16.5 4.2 20.5 8.2 17 6.8 13 6.6 9.5 7.6"/></svg></div>
             <div class="mn-stat-lbl" data-i18n="mine_wallet_lbl">Mined Balance</div>
             <div class="mn-stat-num"><span id="mine-app-bal">0</span> <img src="assets/coin_icon.webp" alt=""></div>
+          </div>
+          <!-- Unverified only (owner order 2026-11-15): replaces the two
+               balance cards with ONE wide card — tap opens Profile. -->
+          <div class="mn-verify-wide" id="mine-verify-card" style="display:none;">
+            <span class="mv-ic">🔒</span>
+            <span class="mv-txt" data-i18n="mine_verify_card">Verify your wallet to start mining</span>
+            <span class="mv-arrow">›</span>
           </div>
         </div>
 
@@ -607,7 +596,7 @@
 
       <div class="mn-actions">
         <button class="btn-3d-dark btn-stonfi-buy mn-side"><span data-i18n="buy_btn">Buy</span></button>
-        <button class="mn-collect" id="btn-collect-main"><img src="assets/coin_icon.webp" alt=""><span data-i18n="collect_lbl">COLLECT</span></button>
+        <button class="mn-collect" id="btn-collect-main"><img src="assets/coin_icon.webp" alt=""><span data-i18n="collect_lbl">COLLECT</span><span class="lk-wrap" id="collect-lock-wrap"><span class="lk-ic">🔒</span><span class="lk-txt" data-i18n="collect_verify_first">VERIFY FIRST</span></span></button>
         <button class="btn-3d-dark mn-side" id="btn-goto-boost"><span data-i18n="levels_btn">Levels (1–100)</span></button>
       </div>
 
@@ -1435,7 +1424,7 @@
         verify_sent_toast:"Confirm the payment in your wallet…",
         verify_notfound_toast:"Payment not found yet — don't worry, the app keeps checking automatically.",
         verify_success_toast:"Wallet verified!", verify_too_new:"Wallet too new: %D% days, needs %N%",
-        gate_title:"🔐 Verify Your Wallet", gate_desc:"To unlock VIKING MINER, connect your TON wallet and verify it with a one-time 0.05 TON payment. Verification protects your account and unlocks mining, withdrawals and referrals.", gate_note:"⛏️ Mining unlocks the moment your verification completes.",
+        gate_title:"🔐 Verify Your Wallet", gate_desc:"To unlock VIKING MINER, connect your TON wallet and verify it with a one-time 0.05 TON payment. Verification protects your account and unlocks mining, withdrawals and referrals.", gate_note:"⛏️ Mining unlocks the moment your verification completes.", collect_verify_first:"VERIFY FIRST", mine_verify_card:"Verify your wallet to start mining",
         verify_confirming:"Payment sent — confirming on-chain, this can take a minute…", verify_not_completed:"Payment not completed — nothing was sent from your wallet. Tap Verify and approve the payment in your wallet app.",
         verify_manual_hint:"Send the exact amount with the exact comment using the details below.",
         verify_rate_toast:"Too many checks — wait a few seconds and try again.",
@@ -1485,7 +1474,7 @@
         verify_sent_toast:"أكّد الدفع في محفظتك…",
         verify_notfound_toast:"الدفع لسه موصلش — متقلقش، التطبيق بيراجع تلقائيًا.",
         verify_success_toast:"المحفظة اتوثّقت!", verify_too_new:"المحفظة جديدة: %D% يوم، محتاجة %N% يوم",
-        gate_title:"🔐 وثّق محفظتك", gate_desc:"علشان يفتح VIKING MINER، اربط محفظة TON ووثّقها بدفع 0.05 TON مرة واحدة بس. التوثيق بيحمي حسابك وبيفتح التعدين والسحب والإحالات.", gate_note:"⛏️ التعدين هيفتح فور ما التوثيق يكتمل.",
+        gate_title:"🔐 وثّق محفظتك", gate_desc:"علشان يفتح VIKING MINER، اربط محفظة TON ووثّقها بدفع 0.05 TON مرة واحدة بس. التوثيق بيحمي حسابك وبيفتح التعدين والسحب والإحالات.", gate_note:"⛏️ التعدين هيفتح فور ما التوثيق يكتمل.", collect_verify_first:"وثّق أولاً", mine_verify_card:"وثّق محفظتك لتشغيل التعدين",
         verify_confirming:"الدفع اتبعت — بنأكّد على الشبكة، ممكن ياخد دقيقة…", verify_not_completed:"الدفع مكملش — مفيش حاجة اتبعتت من محفظتك. دوس توثيق ووافق على الدفع جوه تطبيق المحفظة.",
         verify_manual_hint:"ابعت المبلغ بالظبط بالتعليق بالظبط باستخدام البيانات اللي تحت.",
         verify_rate_toast:"محاولات تحقق كتير — استنى ثواني وجرّب تاني.",
@@ -1535,7 +1524,7 @@
         verify_sent_toast:"Подтвердите платёж в кошельке…",
         verify_notfound_toast:"Платёж пока не найден — не волнуйтесь, приложение продолжит проверку автоматически.",
         verify_success_toast:"Кошелёк подтверждён!", verify_too_new:"Кошелёк слишком новый: %D% дн., нужно %N%",
-        gate_title:"🔐 Подтвердите кошелёк", gate_desc:"Чтобы открыть VIKING MINER, подключите кошелёк TON и подтвердите его разовым платежом 0.05 TON. Подтверждение защищает аккаунт и открывает майнинг, вывод и рефералов.", gate_note:"⛏️ Майнинг откроется сразу после подтверждения.",
+        gate_title:"🔐 Подтвердите кошелёк", gate_desc:"Чтобы открыть VIKING MINER, подключите кошелёк TON и подтвердите его разовым платежом 0.05 TON. Подтверждение защищает аккаунт и открывает майнинг, вывод и рефералов.", gate_note:"⛏️ Майнинг откроется сразу после подтверждения.", collect_verify_first:"СНАЧАЛА ПОДТВЕРДИТЕ", mine_verify_card:"Подтвердите кошелёк, чтобы начать майнинг",
         verify_confirming:"Платёж отправлен — подтверждаем в сети, это может занять минуту…", verify_not_completed:"Платёж не завершён — из кошелька ничего не отправлено. Нажмите «Подтвердить» и одобрите платёж в приложении кошелька.",
         verify_manual_hint:"Отправьте точную сумму с точным комментарием по реквизитам ниже.",
         verify_rate_toast:"Слишком много проверок — подождите несколько секунд и попробуйте снова.",
@@ -1661,12 +1650,7 @@
         // user who already chose never sees it (maybeShowAvatarPicker
         // hides it whenever the saved avatar is present).
         try { maybeShowAvatarPicker(); } catch (e) {}
-        // The wallet gate must be evaluated HERE too, the moment the
-        // loader lifts (owner report 2026-11-15: a returning
-        // unverified player could browse the app until the first
-        // 10-second refresh raised the gate — finishBoot only
-        // re-checked the picker, so the gate lagged one cycle).
-        try { maybeShowWalletGate(); } catch (e) {}
+        try { applyMineVerifyUI(); } catch (e) {}
       }, 300);
     }
 
@@ -2112,22 +2096,30 @@
       if (savedPick >= 1 && savedPick <= 8) { myAvatar = savedPick; pk.classList.remove('show'); return; }
       pk.classList.add('show');
     }
-    /* Wallet-verification gate (owner order 2026-11-15): once the
-       warrior is chosen, the app stays locked behind the gate page
-       until the wallet is VERIFIED — only then does the app (and
-       mining) open. Re-evaluated on every applyUI, so a verification
-       completed by the background watcher opens the app by itself,
-       and a voided verification (wallet changed / unlinked) locks
-       it again. */
-    function maybeShowWalletGate() {
-      const g = document.getElementById('wallet-gate'); if (!g) return;
-      const show = initialLoadDone && !!myUserNo && myAvatar >= 1 && myAvatar <= 8 && !myWalletVerified;
-      g.classList.toggle('show', !!show);
-      if (show) {
-        const isConn = linkedWalletAddr && linkedWalletAddr.length > 8;
-        const cb = document.getElementById('gate-connect-btn'); if (cb) cb.style.display = isConn ? 'none' : 'flex';
-        const ga = document.getElementById('gate-wallet-addr');
-        if (ga) { ga.style.display = isConn ? 'block' : 'none'; if (isConn) ga.innerText = '👛 ' + shortAddr(linkedWalletAddr); }
+    /* Unverified Mine state (owner order 2026-11-15, REPLACES the
+       full-screen wallet gate): the app opens for everyone — no gate
+       page at all. While the wallet is unverified, the Mine page
+       swaps its two balance cards for ONE wide verify card (tap →
+       Profile) and the collect coin turns into a locked grey
+       "Verify First" button. Re-evaluated on every applyUI, so a
+       verification landing (or being voided) flips the Mine page
+       by itself. Mining itself stays server-gated (collect 403). */
+    function applyMineVerifyUI() {
+      // No initialLoadDone condition: myUserNo + walletVerified come
+      // from the same state payload, and the boot loader covers the
+      // screen until then — gating on initialLoadDone made the first
+      // applyUI a no-op and the flip lagged to the next refresh (the
+      // same timing hole the old gate had, fixed at finishBoot too).
+      const unv = !!myUserNo && !myWalletVerified;
+      const vc = document.getElementById('mine-verify-card'); if (vc) vc.style.display = unv ? 'flex' : 'none';
+      const sh = document.getElementById('mine-stat-hold'); if (sh) sh.style.display = unv ? 'none' : '';
+      const sa = document.getElementById('mine-stat-app'); if (sa) sa.style.display = unv ? 'none' : '';
+      const btn = document.getElementById('btn-collect-main');
+      if (btn) {
+        btn.classList.toggle('locked', !!unv);
+        const img = btn.querySelector('img'); if (img) img.style.display = unv ? 'none' : '';
+        const cl = btn.querySelector('[data-i18n="collect_lbl"]'); if (cl) cl.style.display = unv ? 'none' : '';
+        const lk = document.getElementById('collect-lock-wrap'); if (lk) lk.style.display = unv ? 'flex' : 'none';
       }
     }
     // Dedicated warrior page (owner pick: showcase example 1, 2026-11-14):
@@ -2154,9 +2146,9 @@
         storeSavedPick();
         const pav = document.getElementById('prof-avatar'); if (pav) pav.src = `assets/avatar_${myAvatar}.webp`;
         SoundFX.buySuccess();
-        setTimeout(() => { const pk = document.getElementById('avatar-picker'); if (pk) pk.classList.remove('show'); try { maybeShowWalletGate(); } catch (e) {} }, 500);
+        setTimeout(() => { const pk = document.getElementById('avatar-picker'); if (pk) pk.classList.remove('show'); }, 500);
       } catch (err) {
-        if (String(err && err.message || '').includes('already chosen')) { const pk = document.getElementById('avatar-picker'); if (pk) pk.classList.remove('show'); try { maybeShowWalletGate(); } catch (e) {} }
+        if (String(err && err.message || '').includes('already chosen')) { const pk = document.getElementById('avatar-picker'); if (pk) pk.classList.remove('show'); }
         else { SoundFX.error(); showToast("❌ " + err.message, "#ef4444"); }
       }
       finally { avatarPickBusy = false; }
@@ -2407,14 +2399,11 @@
       return `<div style="display:flex;gap:8px;align-items:flex-start;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.06);">${mark}<div style="flex:1;">${labelHtml}${subHtml ? `<div style="font-size:10.5px;color:var(--m);">${subHtml}</div>` : ''}</div></div>`;
     }
     function renderVerifyCard() {
-      // The same card renders in Profile AND in the wallet gate
-      // (owner order 2026-11-15) — identical content, gate- prefixed ids.
       renderVerifyCardInto('');
-      renderVerifyCardInto('gate-');
-      // Wallet events re-render this card — re-assert the gate too,
-      // so a verification landing (or being voided) opens/locks the
-      // app immediately, not at the next state refresh.
-      try { maybeShowWalletGate(); } catch (e) {}
+      // Wallet events re-render this card — refresh the Mine page's
+      // unverified state too, so a verification landing (or being
+      // voided) flips the balance cards / collect button at once.
+      try { applyMineVerifyUI(); } catch (e) {}
     }
     function renderVerifyCardInto(prefix) {
       const rows = document.getElementById(prefix + 'verify-rows');
@@ -2729,7 +2718,7 @@
       const plg = document.getElementById('prof-lvl-group'); if (plg) plg.innerText = String(cur.name || '').replace(/\s+\d+\s*$/, '').toUpperCase();
       const pvi = document.getElementById('pf-verified-ic'); if (pvi) pvi.style.display = myWalletVerified ? 'block' : 'none';
       maybeShowAvatarPicker();
-      try { maybeShowWalletGate(); } catch (e) {}
+      try { applyMineVerifyUI(); } catch (e) {}
 
       const isConn = linkedWalletAddr && linkedWalletAddr.length > 8;
       document.getElementById('prof-wallet-addr-display').innerText = isConn ? shortAddr(linkedWalletAddr) : "Not connected";
@@ -2852,6 +2841,9 @@
     }
 
     async function collectMining(e) {
+      // Unverified (owner order 2026-11-15): mining never starts —
+      // the locked button / stage tap routes to Profile to verify.
+      if (myUserNo && !myWalletVerified) { SoundFX.click(); switchTab('profile'); return; }
       if (isCollecting || !isHumanClick(e)) return;
       isCollecting = true;
       try {
@@ -2962,7 +2954,7 @@
     document.querySelectorAll('.btn-stonfi-buy').forEach(b => b.addEventListener('click', openStonfiSwap));
     document.querySelectorAll('.btn-tonkeeper-buy').forEach(b => b.addEventListener('click', openTonkeeperSwap));
     document.getElementById('btn-connect-wallet').addEventListener('click', connectTonWallet);
-    const gateConnectBtn = document.getElementById('gate-connect-btn'); if (gateConnectBtn) gateConnectBtn.addEventListener('click', connectTonWallet);
+    const mineVerifyCard = document.getElementById('mine-verify-card'); if (mineVerifyCard) mineVerifyCard.addEventListener('click', () => { SoundFX.click(); switchTab('profile'); });
     // Official-contract copy: copies the address exactly as rendered
     // (the card shows it in monospace so I / l / 1 stay distinct).
     document.getElementById('btn-copy-contract').addEventListener('click', () => {
