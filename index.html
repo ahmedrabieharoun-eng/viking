@@ -1436,6 +1436,7 @@
         verify_notfound_toast:"Payment not found yet — don't worry, the app keeps checking automatically.",
         verify_success_toast:"Wallet verified!", verify_too_new:"Wallet too new: %D% days, needs %N%",
         gate_title:"🔐 Verify Your Wallet", gate_desc:"To unlock VIKING MINER, connect your TON wallet and verify it with a one-time 0.05 TON payment. Verification protects your account and unlocks mining, withdrawals and referrals.", gate_note:"⛏️ Mining unlocks the moment your verification completes.",
+        verify_confirming:"Payment sent — confirming on-chain, this can take a minute…", verify_not_completed:"Payment not completed — nothing was sent from your wallet. Tap Verify and approve the payment in your wallet app.",
         verify_manual_hint:"Send the exact amount with the exact comment using the details below.",
         verify_rate_toast:"Too many checks — wait a few seconds and try again.",
         verify_checking_auto:"Checking for your payment automatically…",
@@ -1485,6 +1486,7 @@
         verify_notfound_toast:"الدفع لسه موصلش — متقلقش، التطبيق بيراجع تلقائيًا.",
         verify_success_toast:"المحفظة اتوثّقت!", verify_too_new:"المحفظة جديدة: %D% يوم، محتاجة %N% يوم",
         gate_title:"🔐 وثّق محفظتك", gate_desc:"علشان يفتح VIKING MINER، اربط محفظة TON ووثّقها بدفع 0.05 TON مرة واحدة بس. التوثيق بيحمي حسابك وبيفتح التعدين والسحب والإحالات.", gate_note:"⛏️ التعدين هيفتح فور ما التوثيق يكتمل.",
+        verify_confirming:"الدفع اتبعت — بنأكّد على الشبكة، ممكن ياخد دقيقة…", verify_not_completed:"الدفع مكملش — مفيش حاجة اتبعتت من محفظتك. دوس توثيق ووافق على الدفع جوه تطبيق المحفظة.",
         verify_manual_hint:"ابعت المبلغ بالظبط بالتعليق بالظبط باستخدام البيانات اللي تحت.",
         verify_rate_toast:"محاولات تحقق كتير — استنى ثواني وجرّب تاني.",
         verify_checking_auto:"بنراجع دفعك تلقائيًا…",
@@ -1534,6 +1536,7 @@
         verify_notfound_toast:"Платёж пока не найден — не волнуйтесь, приложение продолжит проверку автоматически.",
         verify_success_toast:"Кошелёк подтверждён!", verify_too_new:"Кошелёк слишком новый: %D% дн., нужно %N%",
         gate_title:"🔐 Подтвердите кошелёк", gate_desc:"Чтобы открыть VIKING MINER, подключите кошелёк TON и подтвердите его разовым платежом 0.05 TON. Подтверждение защищает аккаунт и открывает майнинг, вывод и рефералов.", gate_note:"⛏️ Майнинг откроется сразу после подтверждения.",
+        verify_confirming:"Платёж отправлен — подтверждаем в сети, это может занять минуту…", verify_not_completed:"Платёж не завершён — из кошелька ничего не отправлено. Нажмите «Подтвердить» и одобрите платёж в приложении кошелька.",
         verify_manual_hint:"Отправьте точную сумму с точным комментарием по реквизитам ниже.",
         verify_rate_toast:"Слишком много проверок — подождите несколько секунд и попробуйте снова.",
         verify_checking_auto:"Проверяем ваш платёж автоматически…",
@@ -1658,6 +1661,12 @@
         // user who already chose never sees it (maybeShowAvatarPicker
         // hides it whenever the saved avatar is present).
         try { maybeShowAvatarPicker(); } catch (e) {}
+        // The wallet gate must be evaluated HERE too, the moment the
+        // loader lifts (owner report 2026-11-15: a returning
+        // unverified player could browse the app until the first
+        // 10-second refresh raised the gate — finishBoot only
+        // re-checked the picker, so the gate lagged one cycle).
+        try { maybeShowWalletGate(); } catch (e) {}
       }, 300);
     }
 
@@ -2402,6 +2411,10 @@
       // (owner order 2026-11-15) — identical content, gate- prefixed ids.
       renderVerifyCardInto('');
       renderVerifyCardInto('gate-');
+      // Wallet events re-render this card — re-assert the gate too,
+      // so a verification landing (or being voided) opens/locks the
+      // app immediately, not at the next state refresh.
+      try { maybeShowWalletGate(); } catch (e) {}
     }
     function renderVerifyCardInto(prefix) {
       const rows = document.getElementById(prefix + 'verify-rows');
@@ -2496,13 +2509,18 @@
         }
         verifyBusy = true;
         try {
-          showToast("💸 " + dict.verify_sent_toast);
+          // NO "sent" toast before this await: the wallet app has not
+          // even opened yet, and telling the player the payment is
+          // sent when he may still cancel in the wallet app made
+          // players believe they had verified when nothing was ever
+          // sent (owner report 2026-11-15).
           await tonConnectUI.sendTransaction({
             validUntil: Math.floor(Date.now() / 1000) + 600,
             messages: [{ address: info.depositWallet, amount: String(Math.round(Number(info.feeTon || 0) * 1e9)), payload: buildCommentPayloadBoc(info.comment) }]
           });
+          showToast("💸 " + dict.verify_confirming, "#0284c7");
           await pollVerifyCheck();
-        } catch (err) { showToast("❌ " + (err && err.message ? err.message : "Payment cancelled"), "#ef4444"); }
+        } catch (err) { showToast("❌ " + dict.verify_not_completed, "#ef4444"); }
         finally { verifyBusy = false; }
       });
     }
@@ -2510,7 +2528,11 @@
     const sleepMs = (ms) => new Promise(r => setTimeout(r, ms));
     async function pollVerifyCheck() {
       const dict = I18N[currentLang] || I18N.en;
-      for (let i = 0; i < 6; i++) {
+      // Up to ~90 seconds: chain confirmation + indexer lag can take
+      // well over the old 30-second window, and giving up early left
+      // players staring at a card that looked stuck (owner report
+      // 2026-11-15). 5s spacing stays under the verifyCheck rate cap.
+      for (let i = 0; i < 18; i++) {
         await sleepMs(5000);
         try {
           const r = await api("verifyCheck");
