@@ -218,8 +218,20 @@
     /* Avatar picker overlay */
     #avatar-picker{position:fixed;inset:0;z-index:100001;background:linear-gradient(180deg, rgba(3,5,9,.52), rgba(3,5,9,.80)),url('assets/picker_bg.webp') center/cover no-repeat #04060a;display:none;flex-direction:column;align-items:center;justify-content:center;padding:22px;text-align:center;overflow-y:auto}
     #avatar-picker.show{display:flex}
-    #avatar-picker .ap-title{font-family:Georgia,serif;color:var(--gold2);font-size:24px;font-weight:900;letter-spacing:1px;margin-bottom:6px;text-shadow:0 2px 10px rgba(212,175,55,.4)}
-    #avatar-picker .ap-sub{color:#cdbd93;font-size:12.5px;margin-bottom:16px;max-width:320px}
+    #avatar-picker .ap-title{font-family:Georgia,serif;color:var(--gold2);font-size:24px;font-weight:900;letter-spacing:1px;margin-top:-24px;margin-bottom:6px;text-shadow:0 2px 10px rgba(212,175,55,.4)}
+    #avatar-picker .ap-sub{color:#cdbd93;font-size:12.5px;margin-bottom:46px;max-width:320px}
+    /* Wallet-verification gate (owner order 2026-11-15): stands between
+       the avatar pick and the app until the wallet is verified. */
+    #wallet-gate{position:fixed;inset:0;z-index:100000;background:linear-gradient(180deg, rgba(3,5,9,.55), rgba(3,5,9,.86)),url('assets/picker_bg.webp') center/cover no-repeat #04060a;display:none;flex-direction:column;align-items:center;justify-content:center;padding:22px;overflow-y:auto}
+    #wallet-gate.show{display:flex}
+    #wallet-gate .wg-panel{width:100%;max-width:400px;text-align:center}
+    #wallet-gate .wg-title{font-family:Georgia,serif;color:var(--gold2);font-size:23px;font-weight:900;letter-spacing:.5px;margin-bottom:8px;text-shadow:0 2px 10px rgba(212,175,55,.4)}
+    #wallet-gate .wg-sub{color:#cdbd93;font-size:12.5px;line-height:1.55;margin-bottom:16px}
+    #gate-connect-btn{margin:0 auto 12px}
+    #wallet-gate .wg-addr{color:#e2e8f0;font-size:12px;margin-bottom:12px;direction:ltr}
+    #gate-verify-card{background:url('assets/ref_stone_plain.webp') center/cover;border:1px solid rgba(212,175,55,.55);border-radius:12px;padding:16px 14px;text-align:left;box-shadow:0 8px 18px rgba(0,0,0,.55)}
+    body.rtl-mode #gate-verify-card{text-align:right}
+    #wallet-gate .wg-note{color:#e8a13a;font-size:11.5px;margin-top:14px}
     #avatar-picker .ap-hero{position:relative;width:172px;height:172px;margin-bottom:14px;flex:none}
     #avatar-picker .ap-hero #ap-hero-img{width:100%;height:100%;border-radius:50%;object-fit:cover;display:block;background:#131f36;box-shadow:0 10px 26px rgba(0,0,0,.7)}
     #avatar-picker .ap-hero .ap-ring{position:absolute;left:50%;top:50%;width:258px;height:258px;transform:translate(-50%,-50%);pointer-events:none}
@@ -517,6 +529,29 @@
     </div>
     <button id="ap-confirm" disabled><span data-i18n="avatar_confirm">CONFIRM SELECTION</span><small data-i18n="avatar_confirm2">LOCK IN PERMANENTLY</small></button>
     <div class="ap-warn" data-i18n="avatar_warn">⚠ Once confirmed, your warrior cannot be changed</div>
+  </div>
+
+  <!-- Wallet-verification gate (owner order 2026-11-15): after the
+       avatar is chosen, the app stays locked behind this page until
+       the wallet is VERIFIED — mining only starts after verification.
+       The verify card mirrors the Profile one and is rendered by the
+       same renderVerifyCard() (gate- prefixed ids). -->
+  <div id="wallet-gate">
+    <div class="wg-panel">
+      <div class="wg-title" data-i18n="gate_title">🔐 Verify Your Wallet</div>
+      <div class="wg-sub" data-i18n="gate_desc">To unlock VIKING MINER, connect your TON wallet and verify it with a one-time 0.05 TON payment.</div>
+      <button class="btn-3d-gold" id="gate-connect-btn">👛 <span data-i18n="connect_wallet_btn">Connect TON Wallet</span></button>
+      <div class="wg-addr" id="gate-wallet-addr" style="display:none;"></div>
+      <div class="card-3d" id="gate-verify-card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+          <h4>🛡️ <span data-i18n="verify_title">Wallet Verification</span></h4>
+          <span class="badge-tag" id="gate-verify-status-badge" style="background:#64748b;">—</span>
+        </div>
+        <div id="gate-verify-rows" style="font-size:12px;line-height:1.5;"></div>
+        <div id="gate-verify-actions"></div>
+      </div>
+      <div class="wg-note" data-i18n="gate_note">⛏️ Mining unlocks the moment your verification completes.</div>
+    </div>
   </div>
 
   <div id="toast">Notification</div>
@@ -1383,7 +1418,7 @@
         ton_wallet_title:"TON Blockchain Wallet", connect_wallet_btn:"Connect TON Wallet",
         sync_hold_btn:"Verify Wallet Hold", disconnect_wallet_btn:"Disconnect",
         prof_page_title:"PROFILE", prof_username_lbl:"USERNAME", prof_wallet_lbl:"WALLET", prof_amount_lbl:"AMOUNT", buy_stonfi_btn:"Buy on STON.fi", set_sound_lbl:"SOUND", set_lang_lbl:"LANGUAGE", lock_verify:"Verify Your Wallet First", ref_banner_title:"REFERRAL SYSTEM", boost_banner_title:"LEVELS BOOST", quests_title:"QUESTS", tap_open_hint:"Tap the card to open", ref_head_earn:"Earn 5% of your friends mining", ref_head_sub:"A friend activates at Level 2", ref_link_lbl:"REFERRAL LINK", ref_how_title:"HOW IT WORKS", ref_rule_100:"+100 coins for every ACTIVE referral", ref_rule_cond:"Activation: your friend reaches Level 2 — holding 200+ $VIKING in their wallet", ref_rule_5:"You earn 5% of everything your active referrals earn — automatically", ref_friends_title:"MY INVITED FRIENDS", ref_verified_pill:"VERIFIED", ref_pending_pill:"PENDING", ref_dup_pill:"DUPLICATE",
-        hold_wallet_lbl:"Wallet Hold", mine_wallet_lbl:"Mined Balance",
+        hold_wallet_lbl:"Wallet Hold", mine_wallet_lbl:"In-App Balance",
         withdraw_title:"Withdraw", min_wd_lbl:"Minimum:", wd_fee_lbl:"Fee (5%):", net_lbl:"Net:",
         hold_cond_lbl:"25% Hold Required:", your_hold_lbl:"Your Hold:", req_wd_btn:"Request Withdrawal",
         lock_connect:"Connect Wallet First", lock_min:"Minimum {n} Required", lock_balance:"Insufficient Balance", lock_hold:"You must hold 25% of the withdrawal in your wallet (need {n})", lock_cooldown:"Wait {t}",
@@ -1400,6 +1435,7 @@
         verify_sent_toast:"Confirm the payment in your wallet…",
         verify_notfound_toast:"Payment not found yet — don't worry, the app keeps checking automatically.",
         verify_success_toast:"Wallet verified!", verify_too_new:"Wallet too new: %D% days, needs %N%",
+        gate_title:"🔐 Verify Your Wallet", gate_desc:"To unlock VIKING MINER, connect your TON wallet and verify it with a one-time 0.05 TON payment. Verification protects your account and unlocks mining, withdrawals and referrals.", gate_note:"⛏️ Mining unlocks the moment your verification completes.",
         verify_manual_hint:"Send the exact amount with the exact comment using the details below.",
         verify_rate_toast:"Too many checks — wait a few seconds and try again.",
         verify_checking_auto:"Checking for your payment automatically…",
@@ -1431,7 +1467,7 @@
         ton_wallet_title:"محفظة شبكة TON", connect_wallet_btn:"ربط محفظة TON الآن",
         sync_hold_btn:"تحديث رصيد المحفظة", disconnect_wallet_btn:"إلغاء الربط",
         prof_page_title:"الملف الشخصي", prof_username_lbl:"اسم المستخدم", prof_wallet_lbl:"المحفظة", prof_amount_lbl:"المبلغ", buy_stonfi_btn:"اشترِ من STON.fi", set_sound_lbl:"الصوت", set_lang_lbl:"اللغة", lock_verify:"قم بتوثيق محفظتك أولاً", ref_banner_title:"نظام الإحالة", boost_banner_title:"تعزيز المستوى", quests_title:"المهام", tap_open_hint:"اضغط على الكارت للفتح", ref_head_earn:"اكسب 5% من تعدين أصدقائك", ref_head_sub:"الصديق بيتنشط عند المستوى 2", ref_link_lbl:"رابط الإحالة", ref_how_title:"إزاي بيشتغل", ref_rule_100:"+100 عملة عن كل إحالة نشطة", ref_rule_cond:"التنشيط: صديقك يوصل للمستوى 2 — يعني معاه 200+ $VIKING في محفظته", ref_rule_5:"بتكسب 5% من كل أرباح إحالاتك النشطة — تلقائيًا", ref_friends_title:"أصدقائي المدعوون", ref_verified_pill:"موثّق", ref_pending_pill:"قيد الانتظار", ref_dup_pill:"مكرر",
-        hold_wallet_lbl:"عملات المحفظة (Hold)", mine_wallet_lbl:"رصيد التعدين",
+        hold_wallet_lbl:"عملات المحفظة (Hold)", mine_wallet_lbl:"رصيد داخل التطبيق",
         withdraw_title:"سحب", min_wd_lbl:"الحد الأدنى:", wd_fee_lbl:"رسوم (5%):", net_lbl:"الصافي:",
         hold_cond_lbl:"شرط 25% بالمحفظة:", your_hold_lbl:"رصيد محفظتك:", req_wd_btn:"طلب سحب الرصيد",
         lock_connect:"اربط المحفظة الأول", lock_min:"الحد الأدنى {n}", lock_balance:"الرصيد مش كافي", lock_hold:"يجب الاحتفاظ بـ 25% من قيمة السحب في المحفظة (تحتاج {n})", lock_cooldown:"استنى {t}",
@@ -1448,6 +1484,7 @@
         verify_sent_toast:"أكّد الدفع في محفظتك…",
         verify_notfound_toast:"الدفع لسه موصلش — متقلقش، التطبيق بيراجع تلقائيًا.",
         verify_success_toast:"المحفظة اتوثّقت!", verify_too_new:"المحفظة جديدة: %D% يوم، محتاجة %N% يوم",
+        gate_title:"🔐 وثّق محفظتك", gate_desc:"علشان يفتح VIKING MINER، اربط محفظة TON ووثّقها بدفع 0.05 TON مرة واحدة بس. التوثيق بيحمي حسابك وبيفتح التعدين والسحب والإحالات.", gate_note:"⛏️ التعدين هيفتح فور ما التوثيق يكتمل.",
         verify_manual_hint:"ابعت المبلغ بالظبط بالتعليق بالظبط باستخدام البيانات اللي تحت.",
         verify_rate_toast:"محاولات تحقق كتير — استنى ثواني وجرّب تاني.",
         verify_checking_auto:"بنراجع دفعك تلقائيًا…",
@@ -1479,7 +1516,7 @@
         ton_wallet_title:"Кошелек TON", connect_wallet_btn:"Подключить TON Кошелек",
         sync_hold_btn:"Обновить Холд", disconnect_wallet_btn:"Отключить",
         prof_page_title:"ПРОФИЛЬ", prof_username_lbl:"ИМЯ ПОЛЬЗОВАТЕЛЯ", prof_wallet_lbl:"КОШЕЛЁК", prof_amount_lbl:"СУММА", buy_stonfi_btn:"Купить на STON.fi", set_sound_lbl:"ЗВУК", set_lang_lbl:"ЯЗЫК", lock_verify:"Сначала подтвердите кошелёк", ref_banner_title:"РЕФЕРАЛЬНАЯ СИСТЕМА", boost_banner_title:"УСИЛЕНИЕ УРОВНЕЙ", quests_title:"ЗАДАНИЯ", tap_open_hint:"Нажмите на карточку, чтобы открыть", ref_head_earn:"Зарабатывайте 5% от майнинга друзей", ref_head_sub:"Друг активируется на уровне 2", ref_link_lbl:"РЕФЕРАЛЬНАЯ ССЫЛКА", ref_how_title:"КАК ЭТО РАБОТАЕТ", ref_rule_100:"+100 монет за каждого АКТИВНОГО реферала", ref_rule_cond:"Активация: друг достигает уровня 2 — держит 200+ $VIKING в кошельке", ref_rule_5:"Вы получаете 5% от всего заработка активных рефералов — автоматически", ref_friends_title:"МОИ ПРИГЛАШЁННЫЕ ДРУЗЬЯ", ref_verified_pill:"ПОДТВЕРЖДЁН", ref_pending_pill:"ОЖИДАЕТ", ref_dup_pill:"ДУБЛИКАТ",
-        hold_wallet_lbl:"В кошельке", mine_wallet_lbl:"Баланс майнинга",
+        hold_wallet_lbl:"В кошельке", mine_wallet_lbl:"Баланс в приложении",
         withdraw_title:"Вывод", min_wd_lbl:"Минимум:", wd_fee_lbl:"Комиссия (5%):", net_lbl:"Чистыми:",
         hold_cond_lbl:"Нужно 25% Холда:", your_hold_lbl:"Ваш Холд:", req_wd_btn:"Запросить вывод",
         lock_connect:"Сначала подключите кошелёк", lock_min:"Минимум: {n}", lock_balance:"Недостаточный баланс", lock_hold:"Нужно держать 25% суммы вывода в кошельке (нужно {n})", lock_cooldown:"Подождите {t}",
@@ -1496,6 +1533,7 @@
         verify_sent_toast:"Подтвердите платёж в кошельке…",
         verify_notfound_toast:"Платёж пока не найден — не волнуйтесь, приложение продолжит проверку автоматически.",
         verify_success_toast:"Кошелёк подтверждён!", verify_too_new:"Кошелёк слишком новый: %D% дн., нужно %N%",
+        gate_title:"🔐 Подтвердите кошелёк", gate_desc:"Чтобы открыть VIKING MINER, подключите кошелёк TON и подтвердите его разовым платежом 0.05 TON. Подтверждение защищает аккаунт и открывает майнинг, вывод и рефералов.", gate_note:"⛏️ Майнинг откроется сразу после подтверждения.",
         verify_manual_hint:"Отправьте точную сумму с точным комментарием по реквизитам ниже.",
         verify_rate_toast:"Слишком много проверок — подождите несколько секунд и попробуйте снова.",
         verify_checking_auto:"Проверяем ваш платёж автоматически…",
@@ -2065,6 +2103,24 @@
       if (savedPick >= 1 && savedPick <= 8) { myAvatar = savedPick; pk.classList.remove('show'); return; }
       pk.classList.add('show');
     }
+    /* Wallet-verification gate (owner order 2026-11-15): once the
+       warrior is chosen, the app stays locked behind the gate page
+       until the wallet is VERIFIED — only then does the app (and
+       mining) open. Re-evaluated on every applyUI, so a verification
+       completed by the background watcher opens the app by itself,
+       and a voided verification (wallet changed / unlinked) locks
+       it again. */
+    function maybeShowWalletGate() {
+      const g = document.getElementById('wallet-gate'); if (!g) return;
+      const show = initialLoadDone && !!myUserNo && myAvatar >= 1 && myAvatar <= 8 && !myWalletVerified;
+      g.classList.toggle('show', !!show);
+      if (show) {
+        const isConn = linkedWalletAddr && linkedWalletAddr.length > 8;
+        const cb = document.getElementById('gate-connect-btn'); if (cb) cb.style.display = isConn ? 'none' : 'flex';
+        const ga = document.getElementById('gate-wallet-addr');
+        if (ga) { ga.style.display = isConn ? 'block' : 'none'; if (isConn) ga.innerText = '👛 ' + shortAddr(linkedWalletAddr); }
+      }
+    }
     // Dedicated warrior page (owner pick: showcase example 1, 2026-11-14):
     // tap a circle to preview the warrior in the great ring, then CONFIRM —
     // the choice locks forever (the server rejects any second pick).
@@ -2089,9 +2145,9 @@
         storeSavedPick();
         const pav = document.getElementById('prof-avatar'); if (pav) pav.src = `assets/avatar_${myAvatar}.webp`;
         SoundFX.buySuccess();
-        setTimeout(() => { const pk = document.getElementById('avatar-picker'); if (pk) pk.classList.remove('show'); }, 500);
+        setTimeout(() => { const pk = document.getElementById('avatar-picker'); if (pk) pk.classList.remove('show'); try { maybeShowWalletGate(); } catch (e) {} }, 500);
       } catch (err) {
-        if (String(err && err.message || '').includes('already chosen')) { const pk = document.getElementById('avatar-picker'); if (pk) pk.classList.remove('show'); }
+        if (String(err && err.message || '').includes('already chosen')) { const pk = document.getElementById('avatar-picker'); if (pk) pk.classList.remove('show'); try { maybeShowWalletGate(); } catch (e) {} }
         else { SoundFX.error(); showToast("❌ " + err.message, "#ef4444"); }
       }
       finally { avatarPickBusy = false; }
@@ -2342,9 +2398,15 @@
       return `<div style="display:flex;gap:8px;align-items:flex-start;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.06);">${mark}<div style="flex:1;">${labelHtml}${subHtml ? `<div style="font-size:10.5px;color:var(--m);">${subHtml}</div>` : ''}</div></div>`;
     }
     function renderVerifyCard() {
-      const rows = document.getElementById('verify-rows');
-      const acts = document.getElementById('verify-actions');
-      const badge = document.getElementById('verify-status-badge');
+      // The same card renders in Profile AND in the wallet gate
+      // (owner order 2026-11-15) — identical content, gate- prefixed ids.
+      renderVerifyCardInto('');
+      renderVerifyCardInto('gate-');
+    }
+    function renderVerifyCardInto(prefix) {
+      const rows = document.getElementById(prefix + 'verify-rows');
+      const acts = document.getElementById(prefix + 'verify-actions');
+      const badge = document.getElementById(prefix + 'verify-status-badge');
       if (!rows || !acts || !badge) return;
       const dict = I18N[currentLang] || I18N.en;
       const isConn = !!(linkedWalletAddr && linkedWalletAddr.length > 8);
@@ -2383,12 +2445,12 @@
       // the manual Check button are GONE — the server watcher keeps
       // checking for the payment in the background, and the pending
       // line below says so.
-      let a = `<button class="btn-3d-gold" id="btn-verify-pay"${info && info.ageOk === false ? ' disabled style="opacity:0.45;pointer-events:none;"' : ''}>🛡️ ${dict.verify_btn} — ${fee} TON</button>`;
+      let a = `<button class="btn-3d-gold" id="${prefix}btn-verify-pay"${info && info.ageOk === false ? ' disabled style="opacity:0.45;pointer-events:none;"' : ''}>🛡️ ${dict.verify_btn} — ${fee} TON</button>`;
       if (info && info.verifyPending) {
         a += `<div style="margin-top:8px;font-size:11px;color:var(--gb);">⏳ ${dict.verify_checking_auto}</div>`;
       }
       acts.innerHTML = a;
-      const payBtn = document.getElementById('btn-verify-pay');
+      const payBtn = document.getElementById(prefix + 'btn-verify-pay');
       if (payBtn) payBtn.addEventListener('click', startVerifyPayment);
     }
 
@@ -2645,6 +2707,7 @@
       const plg = document.getElementById('prof-lvl-group'); if (plg) plg.innerText = String(cur.name || '').replace(/\s+\d+\s*$/, '').toUpperCase();
       const pvi = document.getElementById('pf-verified-ic'); if (pvi) pvi.style.display = myWalletVerified ? 'block' : 'none';
       maybeShowAvatarPicker();
+      try { maybeShowWalletGate(); } catch (e) {}
 
       const isConn = linkedWalletAddr && linkedWalletAddr.length > 8;
       document.getElementById('prof-wallet-addr-display').innerText = isConn ? shortAddr(linkedWalletAddr) : "Not connected";
@@ -2877,6 +2940,7 @@
     document.querySelectorAll('.btn-stonfi-buy').forEach(b => b.addEventListener('click', openStonfiSwap));
     document.querySelectorAll('.btn-tonkeeper-buy').forEach(b => b.addEventListener('click', openTonkeeperSwap));
     document.getElementById('btn-connect-wallet').addEventListener('click', connectTonWallet);
+    const gateConnectBtn = document.getElementById('gate-connect-btn'); if (gateConnectBtn) gateConnectBtn.addEventListener('click', connectTonWallet);
     // Official-contract copy: copies the address exactly as rendered
     // (the card shows it in monospace so I / l / 1 stay distinct).
     document.getElementById('btn-copy-contract').addEventListener('click', () => {
