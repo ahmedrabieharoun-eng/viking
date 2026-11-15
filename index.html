@@ -2033,10 +2033,13 @@
         // of those waits is capped on its own, yet their worst cases
         // STACK past a minute on a slow connection — the state was
         // ready and the app still looked bricked. The whole cosmetic
-        // sequence is therefore raced against ONE 12 s deadline: if
-        // the deadline wins, the loader lifts with the state already
-        // applied and the sequence finishes in the background (its
-        // completions re-render idempotently, and
+        // sequence is therefore raced against ONE generous deadline:
+        // the owner's standing rule is that the loader waits for
+        // EVERYTHING (files, pictures, video, user data, wallet), so
+        // the deadline exists only as insurance against a connection
+        // that died outright — at 45 s the loader lifts with the
+        // state already applied and the sequence finishes in the
+        // background (its completions re-render idempotently, and
         // bootSettleInProgress keeps it single-flight).
         await Promise.race([
           (async () => {
@@ -2044,7 +2047,7 @@
             await preloadPlayerAssets();
             await settleWalletAtBoot();
           })(),
-          new Promise((r) => setTimeout(r, 12000))
+          new Promise((r) => setTimeout(r, 45000))
         ]);
         bootStateReady = true;
       }
@@ -2087,12 +2090,13 @@
     }
     // Boot watchdog (owner report 2026-11-15): if the state was
     // fetched and applied but the gate still has not released after
-    // 30 s — a cosmetic wait somewhere outlived every cap — lift the
-    // loader anyway. A ready app must never stay behind the loading
-    // page because of a picture or a wallet settle.
+    // 75 s — a cosmetic wait somewhere outlived every cap — lift the
+    // loader anyway. The delay is deliberately generous (the loader
+    // is supposed to wait for everything); this is only the final
+    // insurance against a connection that died outright.
     setTimeout(() => {
       if (!initialLoadDone && bootStateApplied) { bootStateReady = true; bootAssetsReady = true; finishBoot(); }
-    }, 30000);
+    }, 75000);
     // Redesign avatar picker (owner pick 3): shown once, right after
     // the first state load, while the player has no avatar yet.
     let avatarPickBusy = false;
