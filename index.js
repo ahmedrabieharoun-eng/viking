@@ -76,6 +76,12 @@ const DEFAULTS = {
   // settings/global can override the list. Admin tools (/withdrawals,
   // /multi, …) stay strictly OWNER_ID — testers are players.
   testUsers: [],
+  // Full admins (owner order 2026-11-15): these Telegram ids are
+  // admins alongside the owner — bot admin tools (/withdrawals,
+  // /multi, /emojihunt), the withdrawal decision buttons, the in-app
+  // admin actions, and every admin notification (verification
+  // deposits, payout failures). settings/global can override the list.
+  adminUsers: [],
   buySwapUrl: 'https://app.ston.fi/swap?chartVisible=false&tt=EQC6uN73kvaKh8LrTHQ8TQ5_vgqheI93iny5XUWkpQL9vjxI&ft=GRAM',
   channel1: 'https://t.me/YGRAM1', channel2: 'https://t.me/telegram', botUsername: 'VIKING_MINER_BOT',
   // Wallet verification (owner order 2026-11-14): the fee is paid to
@@ -549,8 +555,8 @@ async function updateMultiLinks(uid, body) {
 
 /* ---------- owner-only /multi <telegramId>: the link tree, on demand ----
    (Owner order 2026-11-14; replaces the proactive new-link alerts.)
-   Dispatched from handleOwnerTools under the same STRICT OWNER_ID
-   gate as /emojihunt; anyone else's /multi falls through untouched
+   Dispatched from handleOwnerTools under the same admin gate
+   (isAdminUid: owner + settings/global.adminUsers) as /emojihunt; anyone else's /multi falls through untouched
    and is silently ignored by the normal message handling.
 
    The stored multiLinks lists are ASYMMETRIC: a later account lists
@@ -642,7 +648,26 @@ let cfgCache = null;
 function isTesterUid(uid, cfg) {
   if (OWNER_ID && String(uid) === OWNER_ID) return true;
   const list = (cfg && Array.isArray(cfg.testUsers)) ? cfg.testUsers : [];
+  if (list.map(String).includes(String(uid))) return true;
+  return isAdminUid(uid); // admins always pass the maintenance gate too
+}
+
+// Full admins (owner order 2026-11-15): the owner plus any Telegram id
+// on settings/global.adminUsers. Reads the cached config — async
+// callers refresh it first via getConfig().
+function isAdminUid(uid) {
+  if (OWNER_ID && String(uid) === OWNER_ID) return true;
+  const list = (cfgCache && cfgCache.v && Array.isArray(cfgCache.v.adminUsers)) ? cfgCache.v.adminUsers : [];
   return list.map(String).includes(String(uid));
+}
+
+// Everyone who receives admin notifications, owner first, deduped.
+function adminChatIds() {
+  const ids = [];
+  if (OWNER_ID) ids.push(String(OWNER_ID));
+  const list = (cfgCache && cfgCache.v && Array.isArray(cfgCache.v.adminUsers)) ? cfgCache.v.adminUsers : [];
+  for (const x of list) { const s = String(x); if (!ids.includes(s)) ids.push(s); }
+  return ids;
 }
 
 async function getConfig() {
@@ -1715,7 +1740,7 @@ async function emojiHunt(chatId) {
 }
 
 /* Returns true when a tool consumed the message. Runs BEFORE the
-   /start handling. Also dispatched here, under the same OWNER_ID
+   /start handling. Also dispatched here, under the same admin
    gate: /multi <telegramId> — the on-demand multi-account link tree
    (see multiTree; owner order 2026-11-14) — and /withdrawals, the
    pending-withdrawal review walk (see the withdrawal-review
@@ -1724,7 +1749,9 @@ async function emojiHunt(chatId) {
    swallow the owner's /start, /emojipack, /emojihunt or /multi
    messages. */
 async function handleOwnerTools(msg, text) {
-  if (!OWNER_ID || !msg.from || String(msg.from.id) !== OWNER_ID) return false;
+  if (!msg.from) return false;
+  await getConfig();
+  if (!isAdminUid(msg.from.id)) return false;
   const chatId = msg.chat.id;
   if (/^\/emojihunt(@\w+)?(\s|$)/.test(text)) { await emojiHunt(chatId); return true; }
   const pm = /^\/emojipack(@\w+)?(?:\s+(\S+))?/.exec(text);
@@ -2070,9 +2097,9 @@ async function sendVerificationMessages(uid, p, cfg, hash, ageDays) {
     if (!photoRes || !photoRes.ok) await tg('sendMessage', { chat_id: uid, text: caption }); // same fallback as the welcome: never lose the message over the photo
   } catch (e) { console.error('verify user message', uid, e.message); }
   try {
-    if (OWNER_ID) {
+    for (const adminId of adminChatIds()) {
       await tg('sendMessage', {
-        chat_id: OWNER_ID, parse_mode: 'HTML',
+        chat_id: adminId, parse_mode: 'HTML',
         text: `💰 <b>New wallet verification deposit</b>\n👤 <b>User:</b> ${esc(p.name || '')} (<code>${esc(uid)}</code>) · VIKING-${userNo}\n👛 <b>Wallet:</b> <code>${esc(toFriendlyAddress(p.walletAddr || ''))}</code>\n💵 <b>Amount:</b> ${Number(cfg.verifyFeeTon) || 0} TON\n🛡️ <b>Status:</b> wallet VERIFIED ✅\n🔗 <a href="https://tonviewer.com/transaction/${hash}">View transaction</a>`
       });
     }
@@ -2623,13 +2650,14 @@ function getPayoutClient() {
    tg() like the other owner DMs). Best-effort: a failed alert must
    never mask the payout failure handling itself. */
 async function payoutAlert(wd, reason) {
-  if (!OWNER_ID || !wd) return;
-  try {
-    await tg('sendMessage', {
-      chat_id: OWNER_ID, parse_mode: 'HTML',
-      text: `🚨 <b>فشل الدفع التلقائي لسحب #${wd.wdNum}</b>\n👤 ${esc(wd.userName || '')} (<code>${esc(String(wd.userId || ''))}</code>)\n💎 <b>الصافي:</b> ${wd.net} $VIKING\n❌ <b>السبب:</b> ${esc(reason)}\nالسحب لسه «Pending» ورصيد اللاعب اتخصم خلاص — ادفع يدويًا أو ارفضه من لوحة التحكم.`
-    });
-  } catch (e) { console.error('payout alert', e.message); }
+  if (!wd) return;
+  await getConfig();
+  const text = `🚨 <b>فشل الدفع التلقائي لسحب #${wd.wdNum}</b>\n👤 ${esc(wd.userName || '')} (<code>${esc(String(wd.userId || ''))}</code>)\n💎 <b>الصافي:</b> ${wd.net} $VIKING\n❌ <b>السبب:</b> ${esc(reason)}\nالسحب لسه «Pending» ورصيد اللاعب اتخصم خلاص — ادفع يدويًا أو ارفضه من لوحة التحكم.`;
+  for (const adminId of adminChatIds()) {
+    try {
+      await tg('sendMessage', { chat_id: adminId, parse_mode: 'HTML', text });
+    } catch (e) { console.error('payout alert', e.message); }
+  }
 }
 
 async function attemptPayout(wdNum) {
@@ -3039,7 +3067,8 @@ async function handleBotCallback(cq) {
   };
   try {
     const fromId = cq && cq.from ? String(cq.from.id) : '';
-    if (!OWNER_ID || fromId !== OWNER_ID) { await answer('⛔ للمالك فقط', true); return; }
+    await getConfig();
+    if (!isAdminUid(fromId)) { await answer('⛔ للمالك فقط', true); return; }
     const m = /^wd(ok|no|ban|skip):(\d+)$/.exec(String((cq && cq.data) || ''));
     if (!m) { await answer(''); return; }
     const op = m[1], num = Number(m[2]);
@@ -3158,7 +3187,7 @@ async function initPayout() {
 
 /* ---------- owner-only actions ---------- */
 function owner(c) {
-  if (!OWNER_ID || String(c.user.id) !== OWNER_ID) fail(403, 'Forbidden');
+  if (!isAdminUid(c.user.id)) fail(403, 'Forbidden');
   if (Date.now() / 1000 - (c.authDate || 0) > 3600) fail(401, 'Reopen the app to use the admin tools');
 }
 
