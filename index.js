@@ -104,6 +104,25 @@ const walletDoc = (raw) => rtdb().ref('wallets/' + String(raw).replace(':', '_')
 const sigDoc = (k) => rtdb().ref('sigs/' + String(k).replace(/\//g, '_'));
 const getVal = async (ref) => (await ref.once('value')).val();
 
+/* Indexed candidate reads for the background watchers (owner
+   load-reduction order 2026-11-15): the verify watcher used to
+   download the ENTIRE players node every 10 s and the hold watcher
+   on every sweep, just to find a handful of candidates. With
+   .indexOn on verifyPendingAt / walletVerified in the RTDB rules,
+   these queries are answered server-side and return only the
+   candidate records. If a query ever fails (e.g. the index is
+   removed from the rules), this returns null and the caller falls
+   back to the full read — the watchers keep working either way,
+   just heavier. */
+async function queryPlayersByChild(child, mode, value) {
+  try {
+    let q = rtdb().ref('players').orderByChild(child);
+    q = mode === 'startAt' ? q.startAt(value) : q.equalTo(value);
+    const v = (await q.once('value')).val();
+    return v || {};
+  } catch (e) { console.error('queryPlayersByChild', child, e.message); return null; }
+}
+
 /* RTDB transaction helper replacing db.runTransaction for a single node.
    fn(cur) returns one of:
      { value, out }  -> commit `value` as the node's new content; txUpdate returns `out`
@@ -676,8 +695,9 @@ function adminChatIds() {
   return ids;
 }
 
+const CONFIG_CACHE_MS = (() => { const v = Number(process.env.CONFIG_CACHE_MS); return Number.isFinite(v) && v >= 0 ? Math.floor(v) : 60000; })(); // config cache TTL (owner load-reduction order 2026-11-15): settings change rarely; a Firebase-side edit applies within this window. Money values are NEVER cached — this covers config only.
 async function getConfig() {
-  if (cfgCache && Date.now() - cfgCache.t < 20000) return cfgCache.v;
+  if (cfgCache && Date.now() - cfgCache.t < CONFIG_CACHE_MS) return cfgCache.v;
   const s = await getVal(rtdb().ref('settings/global'));
   const v = { ...DEFAULTS, ...(s || {}) };
   delete v.botToken;
@@ -954,7 +974,34 @@ function stripPremiumIcons(rm) {
 }
 
 const TG_API_BASE = (process.env.TG_API_BASE || 'https://api.telegram.org').replace(/\/+$/, ''); // env override exists for local testing (stub Telegram API)
+
+/* Outbound send pacing (owner load-reduction order 2026-11-15):
+   sendMessage / sendPhoto are funnelled through one paced chain —
+   never two sends in flight, at least TG_SEND_GAP_MS between them —
+   so a burst (a hundred referral DMs inside a minute) can no longer
+   trip Telegram's own rate limits and silently drop messages. The
+   call still resolves with the send's real result; only its timing
+   is smoothed. Reads (getChatMember, getMe) and interactive answers
+   are NOT paced — they must stay instant. Payouts never pass through
+   here at all: they are chain operations, not messages. */
+const TG_SEND_GAP_MS = 50;
+let tgSendChain = Promise.resolve();
+let tgLastSendAt = 0;
+function tgPaced(fn) {
+  const run = async () => {
+    const wait = TG_SEND_GAP_MS - (Date.now() - tgLastSendAt);
+    if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+    try { return await fn(); } finally { tgLastSendAt = Date.now(); }
+  };
+  const p = tgSendChain.then(run, run);
+  tgSendChain = p.then(() => {}, () => {});
+  return p;
+}
 async function tg(method, body) {
+  if (method === 'sendMessage' || method === 'sendPhoto') return tgPaced(() => tgSend(method, body));
+  return tgSend(method, body);
+}
+async function tgSend(method, body) {
   if (!BOT_TOKEN) return null;
   let payload = body;
   if ((method === 'sendMessage' || method === 'sendPhoto') && body && typeof body === 'object') {
@@ -1260,11 +1307,10 @@ async function syncRefVerifiedFlag(uid, verified) {
     const me = await getVal(P(uid));
     const inv = me && me.invitedBy;
     if (!inv) return;
-    await txUpdate(P(inv), (d) => {
-      if (d === null) return { skip: true };
-      const refs = d.referrals || [];
+    await txUpdate(P(inv).child('referrals'), (cur) => {
+      const refs = asRefArray(cur);
       if (!refs.some((r) => String(r.id) === String(uid))) return { skip: true };
-      return { value: { ...d, referrals: refs.map((r) => (String(r.id) === String(uid) ? { ...r, verified: !!verified } : r)) } };
+      return { value: refs.map((r) => (String(r.id) === String(uid) ? { ...r, verified: !!verified } : r)) };
     });
   } catch (e) { console.error('refVerifiedFlag', e.message); }
 }
@@ -1278,11 +1324,10 @@ async function syncRefAvatar(uid, n) {
     const me = await getVal(P(uid));
     const inv = me && me.invitedBy;
     if (!inv) return;
-    await txUpdate(P(inv), (d) => {
-      if (d === null) return { skip: true };
-      const refs = d.referrals || [];
+    await txUpdate(P(inv).child('referrals'), (cur) => {
+      const refs = asRefArray(cur);
       if (!refs.some((r) => String(r.id) === String(uid))) return { skip: true };
-      return { value: { ...d, referrals: refs.map((r) => (String(r.id) === String(uid) ? { ...r, avatar: n } : r)) } };
+      return { value: refs.map((r) => (String(r.id) === String(uid) ? { ...r, avatar: n } : r)) };
     });
   } catch (e) { console.error('refAvatar', e.message); }
 }
@@ -1314,24 +1359,65 @@ async function sendRefActiveDM(inviterId, inviteeName, cfg) {
    and send the inviter the new-referral DM. Used by state() at
    signup, by state()'s late-attribution path and by the bot /start
    ref_ param. Returns true when the entry was actually appended. */
+/* Referral-list writes transact on the referrals CHILD, never on
+   the whole inviter record (owner order 2026-11-15: a referral must
+   be recorded immediately, not in a later repair cycle). A
+   whole-record transaction aborts whenever ANY field of the hot
+   inviter record changes mid-flight — his own activity, commission
+   accruals, other joins — and under a signup burst that contention
+   is exactly what silently ate appends (Hisham: 25 of 26). On the
+   child path only actual referral-list writes contend with each
+   other. RTDB arrays can read back as objects when sparse, so
+   normalize defensively. */
+const asRefArray = (v) => (Array.isArray(v) ? v : (v && typeof v === 'object' ? Object.values(v) : []));
+async function appendRefEntry(inviterId, entry) {
+  return txUpdate(P(inviterId).child('referrals'), (cur) => {
+    const refs = asRefArray(cur);
+    if (refs.length >= 3000) return { skip: true, out: false }; // cap re-checked on the freshest value
+    if (refs.some((r) => String(r.id) === String(entry.id))) return { skip: true, out: 'exists' };
+    return { value: [...refs, entry], out: true };
+  });
+}
+/* Last-resort in-process ladder for an append that still lost its
+   contention war twice in a row: retry over the next ~15 s in the
+   background (the caller's action is already complete), and let
+   the 10-minute repair sweep be the final net after that. */
+function retryRefAppendLater(inviterId, entry, user, silent) {
+  // Record the handoff in the repair queue FIRST (owner load order
+  // 2026-11-15): if this process dies before the ladder finishes,
+  // the repair tick picks the entry up from the queue instead of the
+  // loss waiting for the daily full reconciliation. The queue entry
+  // is removed the moment the append lands, by whichever path lands it.
+  rtdb().ref('refRepairQueue/' + entry.id).set({ inv: String(inviterId), at: Date.now() }).catch(() => {});
+  (async () => {
+    for (const wait of [1500, 4000, 10000]) {
+      await new Promise((r) => setTimeout(r, wait));
+      const ok = await appendRefEntry(inviterId, entry).catch(() => false);
+      if (ok) {
+        rtdb().ref('refRepairQueue/' + entry.id).remove().catch(() => {});
+        if (!silent) sendRefJoinDM(inviterId, user).catch(() => {});
+        return;
+      }
+    }
+    console.error('refAppend deferred to repair sweep', inviterId, entry.id);
+  })().catch(() => {});
+}
 async function attributeReferral(user, inviterId, deviceHash, opts) {
   const silent = !!(opts && opts.silent); // repair-sweep appends: no join DM (it is not a live join)
   const atTs = (opts && Number(opts.at)) || Date.now(); // the sweep backfills the real join time
   try {
-    const invRef = P(inviterId);
-    const inv = await getVal(invRef);
+    const inv = await getVal(P(inviterId));
     if (!inv) return false;
     const dup = !!(inv.deviceHash && deviceHash && inv.deviceHash === deviceHash);
     const entry = { id: String(user.id), name: clean(user.first_name || 'Warrior', 64), deviceHash: deviceHash || '', status: dup ? '⚠️ Duplicate' : 'Pending ⏳', profit: 0, at: atTs, avatar: 0 };
-    const appended = await txUpdate(invRef, (cur) => {
-      if (cur === null) return { skip: true, out: false };
-      const refs = cur.referrals || [];
-      if (refs.length >= 3000) return { skip: true, out: false }; // cap re-checked on the freshest value
-      if (refs.some((r) => String(r.id) === String(user.id))) return { skip: true, out: false };
-      return { value: { ...cur, referrals: [...refs, entry] }, out: true };
-    });
-    if (appended) { if (!silent) sendRefJoinDM(inviterId, user).catch(() => {}); return true; }
-    return false;
+    let appended = await appendRefEntry(inviterId, entry).catch(() => false);
+    if (!appended) { // the burst outlasted the tx retries: one quick inline retry before handing off
+      await new Promise((r) => setTimeout(r, 400));
+      appended = await appendRefEntry(inviterId, entry).catch(() => false);
+    }
+    if (!appended) { retryRefAppendLater(inviterId, entry, user, silent); return false; }
+    if (!silent) sendRefJoinDM(inviterId, user).catch(() => {});
+    return true;
   } catch (e) { console.error('attributeReferral', e.message); return false; }
 }
 
@@ -1361,10 +1447,9 @@ async function syncReferralActive(uid, cfg) {
       });
     }
     const invId = String(me.invitedBy);
-    const res = await txUpdate(P(invId), (inv) => {
-      if (inv === null) return { skip: true, out: null };
+    const res = await txUpdate(P(invId).child('referrals'), (cur) => {
       let changed = false, dm = false;
-      const refs = (inv.referrals || []).map((r) => {
+      const refs = asRefArray(cur).map((r) => {
         if (String(r.id) !== uid) return r;
         if (r.status === '⚠️ Duplicate') return r;
         const want = active ? 'Verified ✅' : 'Pending ⏳';
@@ -1375,7 +1460,7 @@ async function syncReferralActive(uid, cfg) {
         return nr;
       });
       if (!changed) return { skip: true, out: null };
-      return { value: { ...inv, referrals: refs }, out: { dm } };
+      return { value: refs, out: { dm } };
     });
     if (res && res.dm) await sendRefActiveDM(invId, me.name, cfg || await getConfig());
   } catch (e) { console.error('refActiveSync', e.message); }
@@ -1508,7 +1593,18 @@ async function state(c) {
   // accounts. The links accumulate silently — no alert is sent (owner
   // order 2026-11-14; the owner reads them via /multi). Strictly
   // best-effort — wrapped so it can never fail, block or delay state.
-  try { await updateMultiLinks(String(c.user.id), c.body); } catch (e) { console.error('multiLinks', e.message); }
+  // Load diet (owner order 2026-11-15): the recompute reads the whole
+  // device/fingerprint registries, so it runs at most once per
+  // MULTI_CHECK_MS per player — or immediately when the presented
+  // device changed — instead of on every single state call. The
+  // stored links a /multi report or a withdrawal card reads can
+  // therefore lag a few minutes behind a brand-new link.
+  const devKey = clean(c.body._deviceId, 128) || dev; // the device identity the link detection actually keys on (the AntiFraud deviceId, legacy deviceHash as fallback)
+  const multiDue = !existing || !!(devKey && devKey !== (existing.multiDeviceKey || '')) || Date.now() - (Number(existing.multiCheckedAt) || 0) > MULTI_CHECK_MS;
+  if (multiDue) {
+    try { await updateMultiLinks(String(c.user.id), c.body); } catch (e) { console.error('multiLinks', e.message); }
+    ref.update({ multiCheckedAt: Date.now(), ...(devKey ? { multiDeviceKey: devKey } : {}) }).catch(() => {});
+  }
   const [player, wds] = await Promise.all([getVal(ref), withdrawalsOfUser(c.user.id)]);
   // Lazy userNo heal for pre-feature (legacy) records: assignUserNo
   // only runs at record creation and ensureUserNo only inside the
@@ -2025,7 +2121,8 @@ async function handleBotMessage(msg) {
   // notice instead of the welcome / bio flow. Owner unaffected.
   {
     const cfgM = await getConfig();
-    if (cfgM.ownerOnly === true && !isTesterUid(String(from.id), cfgM)) {
+    const ownerOnlyLiveM = await getVal(rtdb().ref('settings/global/ownerOnly')); // fresh, like the API gate — the emergency brake never waits for the config cache
+    if (ownerOnlyLiveM === true && !isTesterUid(String(from.id), cfgM)) {
       try { await tg('sendMessage', { chat_id: chatId, text: '🔧 Update in progress — VIKING MINER is being updated right now. Please check back soon!' }); } catch (e) { /* the notice is best-effort */ }
       return;
     }
@@ -2473,13 +2570,14 @@ async function verifyCheck(c) {
    at 10 s a tick with nobody pending is one RTDB read, and a tick
    with pending players is one chain scan, so the API load stays
    flat regardless of the interval. */
-const VERIFY_WATCH_MS = (() => { const v = Number(process.env.VERIFY_WATCH_MS); return Number.isFinite(v) && v >= 0 ? Math.floor(v) : 10000; })();
+const VERIFY_WATCH_MS = (() => { const v = Number(process.env.VERIFY_WATCH_MS); return Number.isFinite(v) && v >= 0 ? Math.floor(v) : 20000; })(); // default 20 s (was 10 s — owner load-reduction order 2026-11-15; the tick is indexed now, and verification completing a few seconds later is invisible next to the ~90 s the app itself polls)
 let verifyWatchRunning = false;
 async function verifyWatchTick() {
   if (verifyWatchRunning) return; // ticks never overlap
   verifyWatchRunning = true;
   try {
-    const players = await getVal(rtdb().ref('players'));
+    const queried = await queryPlayersByChild('verifyPendingAt', 'startAt', 1);
+    const players = queried || await getVal(rtdb().ref('players'));
     if (!players) return;
     const pending = Object.entries(players).filter(([, p]) => p && Number(p.verifyPendingAt) > 0);
     if (!pending.length) return; // nobody waiting: zero chain calls this tick
@@ -2573,12 +2671,14 @@ function startVerifyWatcher() {
    read skips the player: a network hiccup must never deactivate
    anyone — only a successful read may move a hold. */
 const REF_HOLD_WATCH_MS = (() => { const v = Number(process.env.REF_HOLD_WATCH_MS); return Number.isFinite(v) && v >= 0 ? Math.floor(v) : 180000; })(); // default 3 min (was 1 min — the sweep was the single biggest tonapi consumer under the signup flood; env still overrides)
+const MULTI_CHECK_MS = (() => { const v = Number(process.env.MULTI_CHECK_MS); return Number.isFinite(v) && v >= 0 ? Math.floor(v) : 600000; })(); // per-player multi-link recompute cadence in state() (owner load-reduction order 2026-11-15); default 10 min, env overrides, 0 = recompute on every state call
 let refHoldWatchRunning = false;
 async function refHoldWatchTick() {
   if (refHoldWatchRunning) return; // ticks never overlap
   refHoldWatchRunning = true;
   try {
-    const players = await getVal(rtdb().ref('players'));
+    const queried = await queryPlayersByChild('walletVerified', 'equalTo', true);
+    const players = queried || await getVal(rtdb().ref('players'));
     if (!players) return;
     const cands = Object.entries(players).filter(([, p]) => p && p.invitedBy && p.walletVerified === true && (p.walletAddr || '') && p.banned !== true);
     if (!cands.length) return;
@@ -2632,12 +2732,50 @@ async function refRepairTick() {
   if (refRepairRunning) return; // ticks never overlap
   refRepairRunning = true;
   try {
+    const cfg = await getConfig();
+    /* Queue first (owner load order 2026-11-15): appends that lost
+       their contention war AND exhausted the in-process retry ladder
+       leave an entry in refRepairQueue (written at handoff time, so
+       even a process restart cannot lose it). Processing the queue
+       costs one small read instead of downloading every player. */
+    const queue = await getVal(rtdb().ref('refRepairQueue'));
+    if (queue) {
+      let qFixed = 0;
+      for (const [inviteeId, ent] of Object.entries(queue)) {
+        if (qFixed >= 200) break; // per-tick cap; the next tick continues
+        const p = await getVal(P(inviteeId));
+        if (!p || !p.invitedBy || String(p.invitedBy) !== String(ent && ent.inv)) {
+          await rtdb().ref('refRepairQueue/' + inviteeId).remove().catch(() => {}); // stale entry (record gone / inviter changed)
+          continue;
+        }
+        const inv = await getVal(P(String(p.invitedBy)));
+        if (inv && (inv.referrals || []).some((r) => String(r.id) === String(inviteeId))) {
+          await rtdb().ref('refRepairQueue/' + inviteeId).remove().catch(() => {}); // already landed via another path
+          continue;
+        }
+        const ok = await attributeReferral({ id: inviteeId, first_name: p.name || 'Warrior' }, String(p.invitedBy), p.deviceHash || '', { silent: true, at: Number(p.createdAt) || Date.now() });
+        if (ok) {
+          qFixed++;
+          await syncReferralActive(inviteeId, cfg);
+          await rtdb().ref('refRepairQueue/' + inviteeId).remove().catch(() => {});
+        }
+      }
+      if (qFixed) console.log('[refRepair] restored ' + qFixed + ' queued referral entries');
+    }
+    /* Full reconciliation at most once a day: it downloads the whole
+       players node, which grows with every signup — as the standing
+       sweep it was the priciest background read in the system. It
+       remains as the final safety net for any loss class the queue
+       cannot know about. The stamp is written BEFORE the pass so a
+       crash mid-pass cannot hot-loop it. */
+    const meta = await getVal(rtdb().ref('meta/refRepair'));
+    if (Date.now() - (Number(meta && meta.fullAt) || 0) < 86400000) return;
+    await rtdb().ref('meta/refRepair').update({ fullAt: Date.now() }).catch(() => {});
     const players = await getVal(rtdb().ref('players'));
     if (!players) return;
-    const cfg = await getConfig();
     let repaired = 0;
     for (const [uid, p] of Object.entries(players)) {
-      if (repaired >= 200) break; // per-tick cap; the next tick continues
+      if (repaired >= 200) break; // per-pass cap; the next pass continues
       if (!p || !p.invitedBy) continue;
       const inv = players[String(p.invitedBy)];
       if (!inv) continue;
@@ -3701,7 +3839,13 @@ functions.http('collectMining', async (req, res) => {
     const cfg = await getConfig();
     // Owner-only maintenance gate (owner order 2026-11-14): the app
     // renders its «update in progress» screen off the maintenance flag.
-    if (cfg.ownerOnly === true && !isTesterUid(uid, cfg)) return res.status(403).json({ error: 'Update in progress', maintenance: true });
+    // The switch itself is an emergency brake, so it is read FRESH on
+    // every request (a single-value read — the cheapest there is)
+    // instead of from the 60 s config cache: flipping ownerOnly in
+    // Firebase must bite immediately, in both directions. Every other
+    // setting may lag by the cache TTL; this one may not.
+    const ownerOnlyLive = await getVal(rtdb().ref('settings/global/ownerOnly'));
+    if (ownerOnlyLive === true && !isTesterUid(uid, cfg)) return res.status(403).json({ error: 'Update in progress', maintenance: true });
     const actx = { user: auth.user, startParam: auth.startParam, authDate: auth.authDate, body, cfg, ip };
     let result;
     try {
