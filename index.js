@@ -1314,13 +1314,15 @@ async function sendRefActiveDM(inviterId, inviteeName, cfg) {
    and send the inviter the new-referral DM. Used by state() at
    signup, by state()'s late-attribution path and by the bot /start
    ref_ param. Returns true when the entry was actually appended. */
-async function attributeReferral(user, inviterId, deviceHash) {
+async function attributeReferral(user, inviterId, deviceHash, opts) {
+  const silent = !!(opts && opts.silent); // repair-sweep appends: no join DM (it is not a live join)
+  const atTs = (opts && Number(opts.at)) || Date.now(); // the sweep backfills the real join time
   try {
     const invRef = P(inviterId);
     const inv = await getVal(invRef);
     if (!inv) return false;
     const dup = !!(inv.deviceHash && deviceHash && inv.deviceHash === deviceHash);
-    const entry = { id: String(user.id), name: clean(user.first_name || 'Warrior', 64), deviceHash: deviceHash || '', status: dup ? '⚠️ Duplicate' : 'Pending ⏳', profit: 0, at: Date.now(), avatar: 0 };
+    const entry = { id: String(user.id), name: clean(user.first_name || 'Warrior', 64), deviceHash: deviceHash || '', status: dup ? '⚠️ Duplicate' : 'Pending ⏳', profit: 0, at: atTs, avatar: 0 };
     const appended = await txUpdate(invRef, (cur) => {
       if (cur === null) return { skip: true, out: false };
       const refs = cur.referrals || [];
@@ -1328,7 +1330,7 @@ async function attributeReferral(user, inviterId, deviceHash) {
       if (refs.some((r) => String(r.id) === String(user.id))) return { skip: true, out: false };
       return { value: { ...cur, referrals: [...refs, entry] }, out: true };
     });
-    if (appended) { sendRefJoinDM(inviterId, user).catch(() => {}); return true; }
+    if (appended) { if (!silent) sendRefJoinDM(inviterId, user).catch(() => {}); return true; }
     return false;
   } catch (e) { console.error('attributeReferral', e.message); return false; }
 }
@@ -2610,6 +2612,57 @@ function startRefHoldWatcher() {
   if (iv.unref) iv.unref();
 }
 
+/* ---------- referral repair sweep (owner case 2026-11-15, Hisham) ----
+   Attribution writes the invitee's invitedBy on the invitee's own
+   (cold) record and appends the entry to the INVITER's (hot) record
+   in a second step. Under the signup flood that append could lose
+   its transaction-retry war on the hot record and fail — silently
+   and permanently: the invitee kept his inviter, the inviter never
+   saw him (25 of one player's 26 referrals vanished this way;
+   50 entries across 15 inviters in one evening). No code path ever
+   retried the append. This sweep is the retry, forever: every
+   REF_REPAIR_MS it reconciles the two sides — any player whose
+   invitedBy points at an inviter whose list lacks his entry gets
+   the entry restored (silently, with his real join time), and his
+   activation state is re-synced. Idempotent: the append dedupes by
+   id inside its transaction, so a healthy list is never touched. */
+const REF_REPAIR_MS = (() => { const v = Number(process.env.REF_REPAIR_MS); return Number.isFinite(v) && v >= 0 ? Math.floor(v) : 600000; })(); // default 10 min; env overrides, 0 disables
+let refRepairRunning = false;
+async function refRepairTick() {
+  if (refRepairRunning) return; // ticks never overlap
+  refRepairRunning = true;
+  try {
+    const players = await getVal(rtdb().ref('players'));
+    if (!players) return;
+    const cfg = await getConfig();
+    let repaired = 0;
+    for (const [uid, p] of Object.entries(players)) {
+      if (repaired >= 200) break; // per-tick cap; the next tick continues
+      if (!p || !p.invitedBy) continue;
+      const inv = players[String(p.invitedBy)];
+      if (!inv) continue;
+      if ((inv.referrals || []).some((r) => String(r.id) === String(uid))) continue;
+      const ok = await attributeReferral({ id: uid, first_name: p.name || 'Warrior' }, String(p.invitedBy), p.deviceHash || '', { silent: true, at: Number(p.createdAt) || Date.now() });
+      if (ok) { repaired++; await syncReferralActive(uid, cfg); }
+    }
+    if (repaired) console.log('[refRepair] restored ' + repaired + ' missing referral entries');
+  } catch (e) {
+    console.error('refRepair tick', e.message);
+  } finally {
+    refRepairRunning = false;
+  }
+}
+let refRepairStarted = false;
+function startRefRepairWatcher() {
+  if (refRepairStarted) return;
+  refRepairStarted = true;
+  if (!(REF_REPAIR_MS > 0)) return; // 0 = disabled
+  const bootTick = setTimeout(() => { refRepairTick(); }, 45000); // first sweep ~45 s after boot
+  if (bootTick.unref) bootTick.unref();
+  const iv = setInterval(() => { refRepairTick(); }, REF_REPAIR_MS);
+  if (iv.unref) iv.unref();
+}
+
 async function refCollect(c) {
   const ref = await ensurePlayer(c);
   return txUpdate(ref, (d) => {
@@ -3599,6 +3652,7 @@ const ACTIONS = { state, collect, daily, task, bioTask, refAch, wallet, unlink, 
 ensureWebhook(); // self-register the Telegram webhook once per process (never blocks boot)
 startVerifyWatcher(); // background deposit watcher (see verifyWatchTick; no-op when VERIFY_WATCH_MS=0)
 startRefHoldWatcher(); // background referral-hold watcher (see refHoldWatchTick; no-op when REF_HOLD_WATCH_MS=0)
+startRefRepairWatcher(); // background referral repair sweep (see refRepairTick; no-op when REF_REPAIR_MS=0)
 initPayout(); // automatic-payout boot line (disabled line, or wallet + balances when PAYOUT_MNEMONIC is set)
 
 functions.http('collectMining', async (req, res) => {
@@ -3671,4 +3725,4 @@ functions.http('collectMining', async (req, res) => {
   }
 });
 
-module.exports = { verifyInitData, clientKeys, riskOf, noteSignals, hit, publicConfig, chatIdOf, memberStatus, updateMultiLinks, completeVerification, verifyWatchTick, toFriendlyAddress, fmtDayMonYear, txUpdate, attemptPayout, derivePayoutAddress, payoutEnabled, sendPayoutSuccess, buildWdReviewCard, sendWdReviewCard, handleBotCallback, attributeReferral, syncReferralActive, refHoldWatchTick };
+module.exports = { verifyInitData, clientKeys, riskOf, noteSignals, hit, publicConfig, chatIdOf, memberStatus, updateMultiLinks, completeVerification, verifyWatchTick, toFriendlyAddress, fmtDayMonYear, txUpdate, attemptPayout, derivePayoutAddress, payoutEnabled, sendPayoutSuccess, buildWdReviewCard, sendWdReviewCard, handleBotCallback, attributeReferral, syncReferralActive, refHoldWatchTick, refRepairTick };
