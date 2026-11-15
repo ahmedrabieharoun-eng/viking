@@ -331,7 +331,7 @@
        the approved reference pictures — carved frame on all screens,
        boot from the approved loading art, scroll tasks, medallion
        levels header, Mine ribbon + arch. Visual layer only. */
-    body{background-image:linear-gradient(rgba(4,6,10,.90),rgba(4,6,10,.94)),url('assets/bg_wood.webp')!important;background-size:auto,340px!important}
+    body{background-image:linear-gradient(rgba(4,6,10,.38),rgba(4,6,10,.55)),url('assets/bg_fjord.webp')!important;background-size:cover!important;background-position:center top!important}
     #epic-frame{position:fixed;inset:0;z-index:100001;pointer-events:none;border-style:solid;border-width:24px;border-image-source:url('assets/frame.webp');border-image-slice:150;border-image-repeat:stretch}
     .app-shell{padding-left:27px;padding-right:27px;padding-bottom:102px}
     .bottom-nav-3d{bottom:20px}
@@ -374,7 +374,7 @@
        painted treatment from the reference pictures — real stone
        texture, knotwork corner frames cut from the mockup cards,
        big gold serif numbers, carved serif buttons, torch glow. */
-    body{background-image:linear-gradient(rgba(4,6,10,.86),rgba(4,6,10,.91)),radial-gradient(ellipse 130px 320px at 0% 55%, rgba(255,120,30,.13), transparent 70%),radial-gradient(ellipse 130px 320px at 100% 55%, rgba(255,120,30,.13), transparent 70%),url('assets/bg_wood.webp')!important}
+    body{background-image:linear-gradient(rgba(4,6,10,.38),rgba(4,6,10,.55)),url('assets/bg_fjord.webp')!important}
     .card-3d,.miner-card-3d{border:13px solid transparent;border-image-source:url('assets/cardframe.webp');border-image-slice:150;border-image-repeat:stretch;background-image:radial-gradient(ellipse 120% 90% at 50% 0%, rgba(64,84,128,.20), rgba(0,0,0,0) 55%),linear-gradient(180deg,#131e33,#0a111f)}
     .sub-3d{background-image:radial-gradient(ellipse 120% 100% at 50% 0%, rgba(64,84,128,.16), rgba(0,0,0,0) 60%),linear-gradient(180deg,#101a2d,#0a1120)}
     #page-tasks .card-3d{border:1px solid #8a6d35;border-bottom:4px solid #5d4517;border-image:none}
@@ -1556,24 +1556,61 @@
     let bootAssetsReady = false;
     const BOOT_IMAGES = [
       'assets/boot_scene.webp?v=4', 'assets/boot_plaque.webp', 'assets/boot_panel.webp',
-      'assets/bg_wood.webp', 'assets/ref_stone_plain.webp', 'assets/coin_icon.webp',
+      'assets/bg_fjord.webp', 'assets/ref_stone_plain.webp', 'assets/coin_icon.webp',
       'assets/hero_forge.webp',
       'assets/nav_mine.webp', 'assets/nav_tasks.webp', 'assets/nav_boost.webp', 'assets/nav_friends.webp', 'assets/nav_profile.webp',
       'assets/icon_shield.webp', 'assets/icon_verified.webp', 'assets/icon_chest.webp',
       'assets/quest_scroll.webp', 'assets/icon_q_sun.webp', 'assets/icon_q_flag.webp', 'assets/icon_q_feather.webp', 'assets/icon_q_chest.webp',
+      'assets/icon_q_warriors.webp', 'assets/icon_q_skull.webp', 'assets/icon_q_banner.webp', 'assets/icon_q_crown.webp', 'assets/icon_q_coins.webp',
+      'assets/hero_tier1.webp', 'assets/hero_tier2.webp', 'assets/hero_tier3.webp',
+      'assets/frame.webp', 'assets/cardframe.webp',
       'assets/picker_bg.webp', 'assets/avatar_ring.webp',
       'assets/avatar_1.webp', 'assets/avatar_2.webp', 'assets/avatar_3.webp', 'assets/avatar_4.webp',
       'assets/avatar_5.webp', 'assets/avatar_6.webp', 'assets/avatar_7.webp', 'assets/avatar_8.webp'
     ];
     (function preloadBootImages() {
       let settled = 0;
-      const total = BOOT_IMAGES.length;
+      const total = BOOT_IMAGES.length + 2; // + the hero video + the webfonts
       const one = () => { settled++; if (settled >= total) { bootAssetsReady = true; finishBoot(); } };
       BOOT_IMAGES.forEach((u) => { const im = new Image(); im.onload = one; im.onerror = one; im.src = u; });
+      // The Mine stage is a video now (owner order 2026-11-15): the
+      // loader also waits until it can actually play — capped at
+      // 12 s so a slow network cannot hold the app hostage (the
+      // poster still above is already counted in BOOT_IMAGES).
+      const hv = document.getElementById('hero-video');
+      if (hv && hv.readyState < 3) {
+        let vDone = false;
+        const vFin = () => { if (!vDone) { vDone = true; one(); } };
+        hv.addEventListener('canplay', vFin, { once: true });
+        hv.addEventListener('error', vFin, { once: true });
+        setTimeout(vFin, 12000);
+      } else one();
+      // Section titles render in the Norse webfont — pages are only
+      // «ready» once the fonts have landed too.
+      if (document.fonts && document.fonts.ready) document.fonts.ready.then(one, one); else one();
       // Safety: one broken asset must never brick the app — after
       // 45 s the gate opens anyway (state is still required).
       setTimeout(() => { if (!bootAssetsReady) { bootAssetsReady = true; finishBoot(); } }, 45000);
     })();
+    // The player's own pictures depend on the state payload: all ten
+    // evolution tiers of HIS avatar feed the level cards, the Boost
+    // banner and the Profile portrait. They are preloaded once the
+    // state is known (see refreshState), so every page is complete
+    // before the loader lifts (owner order 2026-11-15).
+    let playerAssetsStarted = false;
+    function preloadPlayerAssets() {
+      if (playerAssetsStarted) return Promise.resolve();
+      playerAssetsStarted = true;
+      const urls = [];
+      if (myAvatar >= 1 && myAvatar <= 8) for (let t = 1; t <= 10; t++) urls.push(`assets/evo_a${myAvatar}_t${t}.webp`);
+      if (!urls.length) return Promise.resolve();
+      return new Promise((res) => {
+        let n = 0;
+        const one = () => { n++; if (n >= urls.length) res(); };
+        urls.forEach((u) => { const im = new Image(); im.onload = one; im.onerror = one; im.src = u; });
+        setTimeout(res, 20000);
+      });
+    }
     function waitForImgEl(img, timeoutMs) {
       return new Promise((res) => {
         if (!img) return res();
@@ -1846,6 +1883,10 @@
         // (The same URL feeds Profile and Boost, so those are ready
         // too.) Only then is the boot allowed to finish.
         await waitForImgEl(document.getElementById('hero-img'), 20000);
+        // …and the player's own evolution set (all ten tiers of his
+        // avatar) must be in too — only then is the boot allowed to
+        // finish, with every page complete.
+        await preloadPlayerAssets();
         bootStateReady = true;
       }
       finishBoot();
