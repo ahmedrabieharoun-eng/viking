@@ -331,7 +331,7 @@
        the approved reference pictures — carved frame on all screens,
        boot from the approved loading art, scroll tasks, medallion
        levels header, Mine ribbon + arch. Visual layer only. */
-    body{background-image:linear-gradient(rgba(4,6,10,.38),rgba(4,6,10,.55)),url('assets/bg_fjord.webp')!important;background-size:cover!important;background-position:center top!important}
+    body{background-image:linear-gradient(rgba(4,6,10,.90),rgba(4,6,10,.94)),url('assets/bg_wood.webp')!important;background-size:auto,340px!important}
     #epic-frame{position:fixed;inset:0;z-index:100001;pointer-events:none;border-style:solid;border-width:24px;border-image-source:url('assets/frame.webp');border-image-slice:150;border-image-repeat:stretch}
     .app-shell{padding-left:27px;padding-right:27px;padding-bottom:102px}
     .bottom-nav-3d{bottom:20px}
@@ -374,7 +374,10 @@
        painted treatment from the reference pictures — real stone
        texture, knotwork corner frames cut from the mockup cards,
        big gold serif numbers, carved serif buttons, torch glow. */
-    body{background-image:linear-gradient(rgba(4,6,10,.38),rgba(4,6,10,.55)),url('assets/bg_fjord.webp')!important}
+    body{background-image:linear-gradient(rgba(4,6,10,.86),rgba(4,6,10,.91)),radial-gradient(ellipse 130px 320px at 0% 55%, rgba(255,120,30,.13), transparent 70%),radial-gradient(ellipse 130px 320px at 100% 55%, rgba(255,120,30,.13), transparent 70%),url('assets/bg_wood.webp')!important}
+    /* The fjord scene is the Mine page's own background only (owner
+       order 2026-11-15) — every other page keeps the dark wood. */
+    #page-mine{background-image:linear-gradient(rgba(4,6,10,.38),rgba(4,6,10,.55)),url('assets/bg_fjord.webp');background-size:cover;background-position:center top}
     .card-3d,.miner-card-3d{border:13px solid transparent;border-image-source:url('assets/cardframe.webp');border-image-slice:150;border-image-repeat:stretch;background-image:radial-gradient(ellipse 120% 90% at 50% 0%, rgba(64,84,128,.20), rgba(0,0,0,0) 55%),linear-gradient(180deg,#131e33,#0a111f)}
     .sub-3d{background-image:radial-gradient(ellipse 120% 100% at 50% 0%, rgba(64,84,128,.16), rgba(0,0,0,0) 60%),linear-gradient(180deg,#101a2d,#0a1120)}
     #page-tasks .card-3d{border:1px solid #8a6d35;border-bottom:4px solid #5d4517;border-image:none}
@@ -1556,7 +1559,7 @@
     let bootAssetsReady = false;
     const BOOT_IMAGES = [
       'assets/boot_scene.webp?v=4', 'assets/boot_plaque.webp', 'assets/boot_panel.webp',
-      'assets/bg_fjord.webp', 'assets/ref_stone_plain.webp', 'assets/coin_icon.webp',
+      'assets/bg_fjord.webp', 'assets/bg_wood.webp', 'assets/ref_stone_plain.webp', 'assets/coin_icon.webp',
       'assets/hero_forge.webp',
       'assets/nav_mine.webp', 'assets/nav_tasks.webp', 'assets/nav_boost.webp', 'assets/nav_friends.webp', 'assets/nav_profile.webp',
       'assets/icon_shield.webp', 'assets/icon_verified.webp', 'assets/icon_chest.webp',
