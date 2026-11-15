@@ -1057,14 +1057,55 @@ async function ton(path) {
   return r.json();
 }
 async function rawAddress(addr) {
+  // Already-raw addresses normalise locally — the same result the
+  // tonapi parse returns for this shape. TonConnect always reports
+  // the raw form, so binds stop spending a network call on parsing
+  // (and stop failing when tonapi rate-limits). Only user-friendly
+  // forms still go to the parse endpoint.
+  const mRaw = /^(-?\d+):([0-9a-fA-F]{64})$/.exec(String(addr || '').trim());
+  if (mRaw) return mRaw[1] + ':' + mRaw[2].toLowerCase();
   const j = await ton('/address/' + encodeURIComponent(addr) + '/parse');
   if (!j || !j.raw_form) fail(400, 'Invalid wallet address');
   return j.raw_form;
 }
+/* Hold reads (permanent fix, owner order 2026-11-15): every hold in
+   the system funnels through here, so the resilience lives here —
+   (a) concurrent reads of the same wallet coalesce into one call
+   (the boot / double-tap bursts), and (b) when tonapi fails — its
+   rate limit is per-IP and this server speaks with one voice — the
+   SAME balance is read from toncenter v3, a different provider with
+   its own limits. Only when BOTH providers fail does the read throw,
+   and every caller already treats a throw as "no fresh data", never
+   as a state change. Deliberately NO result cache: a sync must
+   reflect the chain NOW (buy coins -> sync -> activation flips on
+   that very read); a cached value broke exactly that loop in
+   testing (t11 R6 / t12) and is not worth the saved calls. */
+const holdInflight = new Map();
+async function jettonHoldViaToncenter(raw) {
+  const j = await tonc('/jetton/wallets?owner_address=' + encodeURIComponent(raw) + '&jetton_address=' + encodeURIComponent(JETTON) + '&limit=1');
+  // Only a well-formed answer counts as a read: a genuine "no jetton
+  // wallet" is 200 + an empty list. A null (404/400) or malformed
+  // body is a FAILED read and must throw — never a fake zero that
+  // could deactivate a referral or misreport a balance.
+  if (!j || !Array.isArray(j.jetton_wallets)) fail(502, 'TON network is busy, try again');
+  const w = j.jetton_wallets[0];
+  if (!w) return 0;
+  return parseFloat(w.balance || '0') / Math.pow(10, await jettonDecimals());
+}
 async function jettonHold(raw) {
-  const j = await ton('/accounts/' + encodeURIComponent(raw) + '/jettons/' + JETTON);
-  if (!j) return 0;
-  return parseFloat(j.balance || '0') / Math.pow(10, (j.jetton && j.jetton.decimals) || 9);
+  const flying = holdInflight.get(raw);
+  if (flying) return flying;
+  const run = (async () => {
+    try {
+      const j = await ton('/accounts/' + encodeURIComponent(raw) + '/jettons/' + JETTON);
+      return !j ? 0 : parseFloat(j.balance || '0') / Math.pow(10, (j.jetton && j.jetton.decimals) || 9);
+    } catch (e) {
+      return jettonHoldViaToncenter(raw); // fallback provider; its own throw propagates
+    }
+  })();
+  holdInflight.set(raw, run);
+  run.then(() => holdInflight.delete(raw), () => holdInflight.delete(raw));
+  return run;
 }
 /* The jetton's decimals, resolved once from tonapi jetton info and
    cached for the process — the same source and `decimals || 9`
@@ -2529,7 +2570,7 @@ function startVerifyWatcher() {
    syncReferralActive, exactly like an in-app one). A failed chain
    read skips the player: a network hiccup must never deactivate
    anyone — only a successful read may move a hold. */
-const REF_HOLD_WATCH_MS = (() => { const v = Number(process.env.REF_HOLD_WATCH_MS); return Number.isFinite(v) && v >= 0 ? Math.floor(v) : 60000; })();
+const REF_HOLD_WATCH_MS = (() => { const v = Number(process.env.REF_HOLD_WATCH_MS); return Number.isFinite(v) && v >= 0 ? Math.floor(v) : 180000; })(); // default 3 min (was 1 min — the sweep was the single biggest tonapi consumer under the signup flood; env still overrides)
 let refHoldWatchRunning = false;
 async function refHoldWatchTick() {
   if (refHoldWatchRunning) return; // ticks never overlap
