@@ -78,7 +78,7 @@
     #boot-loader{position:fixed;inset:0;background:#05070b;z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center;overflow:hidden}
     #banned-screen{position:fixed;inset:0;background:#05070b;z-index:99999;display:none;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center}
     #maintenance-screen{position:fixed;inset:0;background:#05070b;z-index:100005;display:none;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center}
-    #toast{position:fixed;top:14px;left:50%;transform:translateX(-50%);background:#d97706;color:#fff;padding:8px 16px;border-radius:18px;font-size:12px;font-weight:800;display:none;z-index:100000;border:1px solid var(--gb);text-align:center;min-width:240px}
+    #toast{position:fixed;top:calc(max(var(--sat),56px) + 10px);left:50%;transform:translateX(-50%);background:#d97706;color:#fff;padding:8px 16px;border-radius:18px;font-size:12px;font-weight:800;display:none;z-index:100000;border:1px solid var(--gb);text-align:center;min-width:240px}
     .daily-grid{display:flex;justify-content:space-between;gap:4px;margin-bottom:8px}
     .daily-box{flex:1;background:#0b0f17;border:1px solid #334155;border-radius:8px;padding:6px 2px;text-align:center;font-size:9px;color:#94a3b8;position:relative}
     .daily-box.active{border-color:var(--gb);background:rgba(245,158,11,.15);color:var(--gb)}
@@ -748,7 +748,6 @@
           <span data-i18n="set_lang_lbl">LANGUAGE</span>
           <div class="lang-menu-popup" id="lang-dropdown">
             <div class="lang-opt" data-lang="en"><span>🇬🇧 English</span><span id="chk-en">✓</span></div>
-            <div class="lang-opt" data-lang="ar"><span>🇪🇬 العربية</span><span id="chk-ar"></span></div>
             <div class="lang-opt" data-lang="ru"><span>🇷🇺 Русский</span><span id="chk-ru"></span></div>
           </div>
         </div>
@@ -1395,54 +1394,6 @@
         daily_login_title:"🎁 Daily Login (7 Days)", claim_daily_btn:"Claim Daily Reward",
         day:"Day", claimed:"Claimed", no_refs_yet:"No invited friends yet."
       },
-      ar: {
-        mining_rate:"سرعة التعدين", current_rank:"مستوى المحفظة", claimed_in_app:"رصيدك المجموع بالتطبيق",
-        streak_txt:"🔥 نظام الـ 24 ساعة", streak_sub:"اجمع كل 24 ساعة ليستمر التعدين",
-        collect_btn:"اجمع عملات التعدين الآن", buy_btn:"شراء", levels_btn:"المستويات (1–100)",
-        mined_lbl:"المُعدّن", day_rate_lbl:"معدل اليوم", shift_cd_lbl:"عدّاد الوردية", collect_lbl:"اجمع",
-        maint_title:"جارٍ التحديث", maint_sub:"بنحدّث VIKING MINER دلوقتي. ارجع تاني قريب!",
-        avatar_title:"اختر المحارب بتاعك", avatar_sub:"اختار الأفاتار — دي هتبقى هويتك في اللعبة كلها.", avatar_perm:"الاختيار ده نهائي — المحارب ده هيبقى هويتك للأبد. اختار بحكمة.", avatar_confirm:"تأكيد الاختيار", avatar_confirm2:"قفل نهائي للأبد", avatar_warn:"⚠ بعد التأكيد مش هتقدر تغيّر المحارب",
-        ch1_title:"📢 قناة التليجرام الرسمية", ch2_title:"💬 قناة إثباتات السحب والمجتمع",
-        open_ch:"1. افتح القناة", open_grp:"1. افتح القناة", verify_btn:"2. تحقق ✅",
-        bio_task_desc:"أضف <strong id=\"bio-bot-username\" style=\"color:#fff;\">@BOT</strong> إلى البايو بتاعك في تيليجرام، وبعدين دوس الزرار اللي تحت ودوس Start في البوت — المكافأة هتتضاف تلقائيًا. ارجع هنا هتلاقيها اتعملت.",
-        bio_verify_btn:"🤖 تحقق من البوت",
-        join_channel_btn:"انضم للقناة", verify_join_btn:"تحقق",
-        wallet_hold:"رصيد المحفظة (مصدر السرعة)", mined_app:"رصيد البوت (للسحب)",
-        buy_upgrade_btn:"اشترِ العملة الرسمية من STON.fi لرفع سرعتك",
-        ref_rule_title:"⚠️ نظام الإحالات (5% تعدين)",
-        ref_rule_desc:"1️⃣ التفعيل: تتفعل الإحالة عندما يصل صديقك للمستوى 2 (يمتلك 200+ عملة بالمحفظة).<br>2️⃣ ربح 5% مستمر: كلما جمع صديقك، تحصل أنت على 5%!",
-        ref_pending:"معلق", ref_verified:"مفعل", ref_earned:"ربح 5%", copy_btn:"نسخ الرابط", share_btn:"مشاركة",
-        my_referrals_title:"👥 أصدقائي المدعوون", pending_ref_title:"أرباح الإحالات المعلقة", collect_ref_btn:"جمع أرباح الإحالات",
-        ton_wallet_title:"محفظة شبكة TON", connect_wallet_btn:"ربط محفظة TON الآن",
-        sync_hold_btn:"تحديث رصيد المحفظة", disconnect_wallet_btn:"إلغاء الربط",
-        prof_page_title:"الملف الشخصي", prof_username_lbl:"اسم المستخدم", prof_wallet_lbl:"المحفظة", prof_amount_lbl:"المبلغ", buy_stonfi_btn:"اشترِ من STON.fi", set_sound_lbl:"الصوت", set_lang_lbl:"اللغة", lock_verify:"قم بتوثيق محفظتك أولاً", ref_banner_title:"نظام الإحالة", boost_banner_title:"تعزيز المستوى", quests_title:"المهام", tap_open_hint:"اضغط على الكارت للفتح", ref_head_earn:"اكسب 5% من تعدين أصدقائك", ref_head_sub:"الصديق بيتنشط عند المستوى 2", ref_link_lbl:"رابط الإحالة", ref_how_title:"إزاي بيشتغل", ref_rule_100:"+100 عملة عن كل إحالة نشطة", ref_rule_cond:"التنشيط: صديقك يوصل للمستوى 2 — يعني معاه 200+ $VIKING في محفظته", ref_rule_5:"بتكسب 5% من كل أرباح إحالاتك النشطة — تلقائيًا", ref_friends_title:"أصدقائي المدعوون", ref_verified_pill:"موثّق", ref_pending_pill:"قيد الانتظار", ref_dup_pill:"مكرر",
-        hold_wallet_lbl:"عملات المحفظة (Hold)", mine_wallet_lbl:"رصيد التعدين",
-        withdraw_title:"سحب", min_wd_lbl:"الحد الأدنى:", wd_fee_lbl:"رسوم (5%):", net_lbl:"الصافي:",
-        hold_cond_lbl:"شرط 25% بالمحفظة:", your_hold_lbl:"رصيد محفظتك:", req_wd_btn:"طلب سحب الرصيد",
-        lock_connect:"اربط المحفظة الأول", lock_min:"الحد الأدنى {n}", lock_balance:"الرصيد مش كافي", lock_hold:"يجب الاحتفاظ بـ 25% من قيمة السحب في المحفظة (تحتاج {n})", lock_cooldown:"استنى {t}",
-        buy_hold_btn:"اشترِ من STON.fi لتحقيق شرط الـ 25%", buy_tonkeeper_btn:"اشترِ من Tonkeeper", wd_hist_title:"سجل السحوبات",
-        verify_title:"توثيق المحفظة", verify_connected_row:"المحفظة مربوطة",
-        verify_not_connected:"اربط محفظتك فوق الأول، وبعدين وثّقها من هنا.",
-        verify_age_row:"عمر المحفظة", verify_days_word:"يوم",
-        verify_age_req:"الحد الأدنى للعمر: %N% يوم", verify_age_checking:"بنراجع على الشبكة…",
-        verify_btn:"توثيق المحفظة", verify_check_btn:"التحقق من التوثيق",
-        verify_pay_title:"ادفع رسوم التوثيق", verify_deposit_lbl:"محفظة الإيداع",
-        verify_amount_lbl:"المبلغ", verify_comment_lbl:"التعليق (بالظبط)", verify_copy_btn:"نسخ",
-        verify_tonkeeper_btn:"ادفع بـ Tonkeeper", verify_verified_on:"تم التوثيق في",
-        verify_verified_badge:"موثّقة", verify_not_verified_badge:"غير موثّقة",
-        verify_sent_toast:"أكّد الدفع في محفظتك…",
-        verify_notfound_toast:"الدفع لسه موصلش — متقلقش، التطبيق بيراجع تلقائيًا.",
-        verify_success_toast:"المحفظة اتوثّقت!", verify_too_new:"المحفظة جديدة: %D% يوم، محتاجة %N% يوم",
-        verify_manual_hint:"ابعت المبلغ بالظبط بالتعليق بالظبط باستخدام البيانات اللي تحت.",
-        verify_rate_toast:"محاولات تحقق كتير — استنى ثواني وجرّب تاني.",
-        verify_checking_auto:"بنراجع دفعك تلقائيًا…",
-        verify_connect_hint:"اربط محفظتك الأول — وبعدين دوس توثيق تاني.",
-        months:["يناير","فبراير","مارس","أبريل","مايو","يونيو","يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر"],
-        nav_mine:"التعدين", nav_tasks:"المهام", nav_boost:"السرعة", nav_friends:"الأصدقاء", nav_profile:"حسابي",
-        tank_full:"🛑 خزان 24 ساعة ممتلئ (100%) - اجمع الآن!", tank_fill:"⏳ خزان 24 ساعة:",
-        daily_login_title:"🎁 تسجيل الدخول اليومي (7 أيام)", claim_daily_btn:"استلام المكافأة اليومية",
-        day:"يوم", claimed:"تم الاستلام", no_refs_yet:"لا يوجد أصدقاء مدعوون حتى الآن."
-      },
       ru: {
         mining_rate:"СКОРОСТЬ", current_rank:"УРОВЕНЬ КОШЕЛЬКА", claimed_in_app:"Собрано в боте",
         streak_txt:"🔥 Цикл 24 часа", streak_sub:"Собирайте каждые 24ч",
@@ -1492,12 +1443,16 @@
         day:"День", claimed:"Получено", no_refs_yet:"Пока нет приглашенных друзей."
       }
     };
+    // Arabic was removed from the app (owner order 2026-11-15): only
+    // English and Russian remain, and anyone stored as 'ar' (or any
+    // other unsupported value) is switched to English.
     let currentLang = localStorage.getItem('vk_lang') || 'en';
+    if (currentLang !== 'en' && currentLang !== 'ru') { currentLang = 'en'; localStorage.setItem('vk_lang', 'en'); }
     function applyTranslations() {
       const d = I18N[currentLang] || I18N.en;
       document.getElementById('cur-lang-label').innerText = currentLang.toUpperCase();
-      document.body.classList.toggle('rtl-mode', currentLang === 'ar');
-      ['en', 'ar', 'ru'].forEach(l => { document.getElementById('chk-' + l).innerText = l === currentLang ? "✓" : ""; });
+      document.body.classList.remove('rtl-mode');
+      ['en', 'ru'].forEach(l => { document.getElementById('chk-' + l).innerText = l === currentLang ? "✓" : ""; });
       document.querySelectorAll('[data-i18n]').forEach(el => { const k = el.getAttribute('data-i18n'); if (d[k]) el.innerHTML = d[k]; });
     }
 
@@ -2823,7 +2778,15 @@
     // Event Listeners
     document.getElementById('sound-toggle-btn').addEventListener('click', () => { soundEnabled = !soundEnabled; document.getElementById('sound-toggle-btn').style.opacity = soundEnabled ? "1" : "0.45" });
     document.getElementById('lang-menu-btn').addEventListener('click', e => { e.stopPropagation(); document.getElementById('lang-dropdown').classList.toggle('show'); });
-    document.querySelectorAll('.lang-opt').forEach(o => o.addEventListener('click', e => { e.stopPropagation(); currentLang = o.getAttribute('data-lang'); localStorage.setItem('vk_lang', currentLang); document.getElementById('lang-dropdown').classList.remove('show'); applyUI(); }));
+    // Language pick (fix, owner report 2026-11-15): on touch devices the
+    // compatibility click after a tap can be retargeted to the element
+    // UNDER the open popup, so a click-only handler on the option never
+    // fires and the language "stays English". pointerdown is dispatched
+    // to the option itself for both touch and mouse, so select on
+    // pointerdown; keep click as a fallback, deduped so one tap picks once.
+    let langPickAt = 0;
+    const pickLang = (o) => { const now = Date.now(); if (now - langPickAt < 600) return; langPickAt = now; currentLang = o.getAttribute('data-lang'); localStorage.setItem('vk_lang', currentLang); document.getElementById('lang-dropdown').classList.remove('show'); applyUI(); };
+    document.querySelectorAll('.lang-opt').forEach(o => { o.addEventListener('pointerdown', e => { e.stopPropagation(); pickLang(o); }); o.addEventListener('click', e => { e.stopPropagation(); pickLang(o); }); });
     document.addEventListener('click', () => document.getElementById('lang-dropdown').classList.remove('show'));
     // (The settings-row wallet cell was removed again by owner order
     // 2026-11-14 — wallet connect lives in the WALLET section itself.)
