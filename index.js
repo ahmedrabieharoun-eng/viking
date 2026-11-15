@@ -2100,7 +2100,19 @@ async function wallet(c) {
      cooldown failure; binding a DIFFERENT wallet inside the window
      still gets the 429 exactly as before. */
   if (raw !== (p.walletAddr || '') && Date.now() - (p.lastSyncAt || 0) < 8000) fail(429, 'Please wait a few seconds');
-  const hold = await jettonHold(raw);
+  /* The chain read must never decide whether a bind succeeds (live
+     incident 2026-11-15): under the signup flood, tonapi rate-limits
+     this server's single IP and jettonHold throws — and because the
+     read sat BEFORE the claim + bind writes, the whole bind was
+     rejected and players looped on "Not connected" although
+     TonConnect had connected fine. The bind now always persists; the
+     hold is best-effort: a fresh read wins; a failed read keeps the
+     stored hold for the SAME wallet and falls back to 0 for a
+     DIFFERENT wallet (a new wallet is never credited with the old
+     one's balance). The next sync corrects the number. */
+  let hold = 0, holdFresh = false;
+  try { hold = await jettonHold(raw); holdFresh = true; } catch (e) { /* chain read failed — bind anyway */ }
+  if (!holdFresh) hold = (raw === (p.walletAddr || '')) ? (Number(p.hold) || 0) : 0;
   const uid = String(c.user.id);
   // claim the wallet node first (the Firestore original checked ownership
   // inside its transaction before writing anything — same net effect here).
@@ -2124,7 +2136,7 @@ async function wallet(c) {
     // wallet); re-syncing the same wallet keeps it.
     const addrChanged = (d.walletAddr || '') !== raw;
     return {
-      value: { ...d, walletAddr: raw, hold, lastSyncAt: Date.now(), ...(voidsVerify ? { walletVerified: false, verifiedWallet: '', verifiedAt: 0, verifyTx: '' } : {}), ...(addrChanged ? { verifyPendingAt: 0 } : {}) },
+      value: { ...d, walletAddr: raw, hold, lastSyncAt: holdFresh ? Date.now() : (d.lastSyncAt || 0), ...(voidsVerify ? { walletVerified: false, verifiedWallet: '', verifiedAt: 0, verifyTx: '' } : {}), ...(addrChanged ? { verifyPendingAt: 0 } : {}) },
       out: { oldAddr: d.walletAddr || '', voided: voidsVerify }
     };
   });
