@@ -1467,6 +1467,20 @@ async function state(c) {
   // best-effort — wrapped so it can never fail, block or delay state.
   try { await updateMultiLinks(String(c.user.id), c.body); } catch (e) { console.error('multiLinks', e.message); }
   const [player, wds] = await Promise.all([getVal(ref), withdrawalsOfUser(c.user.id)]);
+  // Lazy userNo heal for pre-feature (legacy) records: assignUserNo
+  // only runs at record creation and ensureUserNo only inside the
+  // verify flow, so a player created before userNo existed kept
+  // userNo 0 forever — and every userNo-gated surface in the app
+  // (avatar picker, Mine verification state, the VIKING-<userNo>
+  // verify comment) silently skipped him (live case 2026-11-15:
+  // RaseenRacing_Support + ABO MALAZ browsed unverified with a gold
+  // COLLECT button). state() is the one action every session calls,
+  // so the record heals here on its next open and THIS response
+  // already carries the number. No-op for everyone else.
+  if (player && !(Number(player.userNo) > 0)) {
+    const healedNo = await ensureUserNo(c.user.id);
+    if (healedNo) player.userNo = healedNo;
+  }
   // Expose the bot's REAL username (getMe, cached) so the bio task shows and
   // verifies the right handle; falls back to the settings value inside
   // resolveBotUsername, and publicConfig's copy is kept when both are empty.
