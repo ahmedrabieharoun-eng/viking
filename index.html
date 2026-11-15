@@ -148,10 +148,24 @@
        big evolution portrait, MINED / DAY RATE / SHIFT COUNTDOWN stone
        cards, BUY + round gold COLLECT (coin icon) + LEVELS row. */
     #page-mine{gap:8px}
-    .mn-ribbon{position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:3;background:rgba(9,13,22,.82);border:1px solid rgba(212,175,55,.65);color:var(--gold2);font-weight:900;letter-spacing:2.5px;font-size:14.5px;padding:8px 22px;border-radius:999px;white-space:nowrap;box-shadow:0 4px 12px rgba(0,0,0,.65)}
+    .mn-userbar{position:absolute;top:10px;left:10px;right:10px;z-index:4;display:flex;align-items:center;gap:9px;background:rgba(9,13,22,.78);border:1px solid rgba(212,175,55,.55);border-radius:999px;padding:5px 6px;box-shadow:0 4px 12px rgba(0,0,0,.55)}
+    .mn-userbar>img{width:34px;height:34px;border-radius:50%;object-fit:cover;object-position:50% 16%;border:1.5px solid rgba(212,175,55,.85);flex:none;background:#131f36}
+    .mn-lvl-chip{flex:none;display:flex;align-items:center;gap:4px;background:rgba(19,27,44,.92);border:1px solid rgba(212,175,55,.6);border-radius:999px;padding:4px 10px 4px 6px;font-size:12px;font-weight:900;color:var(--gold2);letter-spacing:.6px}
+    .mn-lvl-chip img{width:16px;height:16px}
+    .mn-user-name{flex:1;min-width:0;display:flex;align-items:center;gap:5px;font-weight:900;font-size:14px;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .mn-wallet-btn{flex:none;width:37px;height:37px;border-radius:50%;border:1px solid rgba(212,175,55,.75);background:linear-gradient(180deg,#fde047,#f59e0b);cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 3px 8px rgba(0,0,0,.5);padding:0}
+    .mn-wallet-btn svg{width:19px;height:19px}
+    .mn-wallet-btn:active{transform:scale(.93)}
+    .mn-stage-stats{position:absolute;left:10px;right:10px;bottom:10px;z-index:4;display:flex;gap:8px}
+    .mn-stat{flex:1;position:relative;background-image:url('assets/ref_stone_plain.webp');background-size:cover;border:1px solid rgba(212,175,55,.55);border-radius:13px;padding:10px 8px 8px;text-align:center;box-shadow:0 6px 14px rgba(0,0,0,.55)}
+    .mn-stat-tab{position:absolute;top:-9px;left:10px;width:23px;height:23px;border-radius:7px;background:#131b2c;border:1px solid rgba(212,175,55,.75);display:flex;align-items:center;justify-content:center}
+    .mn-stat-tab svg{width:13px;height:13px}
+    .mn-stat-lbl{font-size:9.5px;font-weight:900;letter-spacing:1.4px;color:var(--gold2);white-space:nowrap}
+    .mn-stat-num{font-family:Georgia,'Times New Roman',serif;font-size:19px;font-weight:700;color:#fff;display:flex;align-items:center;justify-content:center;gap:5px;margin-top:1px}
+    .mn-stat-num img{width:17px;height:17px}
     .mn-stage{position:relative;flex:1;min-height:0;border-radius:14px;overflow:hidden;border:1px solid rgba(212,175,55,.55);box-shadow:0 10px 22px rgba(0,0,0,.6);cursor:pointer}
-    .mn-stage img{width:100%;height:100%;object-fit:cover;object-position:center 22%;display:block}
-    .mn-stage:active img{transform:scale(1.02)}
+    .mn-stage>img{width:100%;height:100%;object-fit:cover;object-position:center 22%;display:block}
+    .mn-stage:active>img{transform:scale(1.02)}
     #page-mine #hero-video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:50% 50%;display:block}
     .mn-card{background:url('assets/ref_stone_plain.webp') center/cover;border:1px solid rgba(212,175,55,.55);border-radius:12px;padding:9px 14px 11px;text-align:center;box-shadow:0 8px 18px rgba(0,0,0,.55),inset 0 0 0 1px rgba(255,255,255,.05)}
     .mn-lbl{font-size:11.5px;letter-spacing:2.5px;color:var(--gold2);font-weight:900;margin-bottom:2px}
@@ -505,7 +519,24 @@
       <div class="mn-stage" id="coin-3d-trigger">
         <img id="hero-img" src="assets/hero_forge.webp" alt="Viking">
         <video id="hero-video" src="assets/hero_forge.mp4" poster="assets/hero_forge.webp" autoplay muted loop playsinline preload="auto"></video>
-        <div id="mine-level-ribbon" class="mn-ribbon">LEVEL 1 - SHIELDBEARER</div>
+        <div class="mn-userbar">
+          <img id="mine-user-ava" src="assets/avatar_1.webp" alt="">
+          <div class="mn-user-name"><span id="mine-user-name">Warrior</span><span id="mine-user-badge"></span></div>
+          <div class="mn-lvl-chip"><img src="assets/icon_shield.webp" alt=""><span>LV. <span id="mine-lvl-num">1</span></span></div>
+          <button class="mn-wallet-btn" id="mine-wallet-btn" type="button" aria-label="Wallet"><svg viewBox="0 0 24 24" fill="none" stroke="#3a2403" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h13a1 1 0 0 1 1 1v1"/><path d="M3 7v10a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-8a1 1 0 0 0-1-1H5a2 2 0 0 1-2-2z"/><circle cx="16.6" cy="14" r="1.2" fill="#3a2403" stroke="none"/></svg></button>
+        </div>
+        <div class="mn-stage-stats">
+          <div class="mn-stat">
+            <div class="mn-stat-tab"><svg viewBox="0 0 24 24" fill="none" stroke="#e8c766" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h13a1 1 0 0 1 1 1v1"/><path d="M3 7v10a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-8a1 1 0 0 0-1-1H5a2 2 0 0 1-2-2z"/><circle cx="16.6" cy="14" r="1.2" fill="#e8c766" stroke="none"/></svg></div>
+            <div class="mn-stat-lbl" data-i18n="hold_wallet_lbl">Wallet Hold (On-Chain)</div>
+            <div class="mn-stat-num"><span id="mine-hold-bal">0</span> <img src="assets/coin_icon.webp" alt=""></div>
+          </div>
+          <div class="mn-stat">
+            <div class="mn-stat-tab"><svg viewBox="0 0 24 24" fill="none" stroke="#e8c766" stroke-width="1.9" stroke-linecap="round"><path d="M5.5 18.5L14.5 9.5"/><path d="M7.5 5C11 3.6 16.5 4.2 20.5 8.2 17 6.8 13 6.6 9.5 7.6"/></svg></div>
+            <div class="mn-stat-lbl" data-i18n="mine_wallet_lbl">Mined Balance</div>
+            <div class="mn-stat-num"><span id="mine-app-bal">0</span> <img src="assets/coin_icon.webp" alt=""></div>
+          </div>
+        </div>
       </div>
 
       <div class="mn-card">
@@ -2513,6 +2544,8 @@
       renderDailyLogin();
 
       document.getElementById('prof-name').innerHTML = esc(tgUser.first_name || "MANSAWY") + (myWalletVerified ? verifiedBadgeSVG() : '');
+      const mun = document.getElementById('mine-user-name'); if (mun) mun.textContent = tgUser.first_name || "MANSAWY";
+      const mub = document.getElementById('mine-user-badge'); if (mub) mub.innerHTML = myWalletVerified ? verifiedBadgeSVG() : '';
       document.getElementById('prof-username').innerText = tgUser.username ? "@" + tgUser.username : "@user";
       document.getElementById('prof-id').innerText = CURRENT_UID;
       // Profile replica (owner order 2026-11-14): the big square
@@ -2525,8 +2558,10 @@
           const tNow = Math.min(10, Math.max(1, Math.ceil(cur.level / 10)));
           pavEl.src = `assets/evo_a${myAvatar}_t${tNow}.webp`;
         } else pavEl.src = 'assets/avatar_1.webp';
+        const mua = document.getElementById('mine-user-ava'); if (mua) mua.src = pavEl.src;
       }
       const pln = document.getElementById('prof-lvl-num'); if (pln) pln.innerText = cur.level;
+      const mln = document.getElementById('mine-lvl-num'); if (mln) mln.innerText = cur.level;
       const plg = document.getElementById('prof-lvl-group'); if (plg) plg.innerText = String(cur.name || '').replace(/\s+\d+\s*$/, '').toUpperCase();
       const pvi = document.getElementById('pf-verified-ic'); if (pvi) pvi.style.display = myWalletVerified ? 'block' : 'none';
       maybeShowAvatarPicker();
@@ -2540,6 +2575,8 @@
 
       document.getElementById('prof-hold-bal').innerText = Math.floor(walletHold).toLocaleString();
       document.getElementById('prof-mine-bal').innerText = Math.floor(minedInApp).toLocaleString();
+      const mhb = document.getElementById('mine-hold-bal'); if (mhb) mhb.innerText = Math.floor(walletHold).toLocaleString();
+      const mab = document.getElementById('mine-app-bal'); if (mab) mab.innerText = Math.floor(minedInApp).toLocaleString();
       renderVerifyCard();
       maybeLoadVerifyInfo();
       updateWdCalculation();
@@ -2608,11 +2645,6 @@
       const dict = I18N[currentLang] || I18N.en;
       const perSec = cur.perDay / 86400;
       syncTierArt(cur.level);
-      const rb = document.getElementById('mine-level-ribbon');
-      if (rb) {
-        const avName = (myAvatar >= 1 && myAvatar <= 8 && typeof AVATAR_NAMES !== 'undefined' && AVATAR_NAMES[myAvatar]) ? AVATAR_NAMES[myAvatar] : String(cur.name || '').replace(/\s+\d+\s*$/, '');
-        rb.textContent = 'LEVEL ' + cur.level + ' - ' + String(avName).toUpperCase();
-      }
 
       if (Date.now() < lastCollectTime - 60000) lastCollectTime = Date.now();
 
@@ -2748,6 +2780,7 @@
 
 
     document.getElementById('coin-3d-trigger').addEventListener('click', collectMining);
+    document.getElementById('mine-wallet-btn').addEventListener('click', (e) => { e.stopPropagation(); switchTab('profile'); });
     document.getElementById('btn-collect-main').addEventListener('click', collectMining);
     document.getElementById('btn-goto-boost').addEventListener('click', () => switchTab('boost'));
     document.getElementById('btn-collect-ref').addEventListener('click', collectReferralProfits);
