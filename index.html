@@ -163,7 +163,7 @@
     .mn-stat-lbl{font-size:10.5px;font-weight:900;letter-spacing:1.4px;color:var(--gold2);white-space:nowrap}
     .mn-stat-num{font-family:Georgia,'Times New Roman',serif;font-size:21px;font-weight:700;color:#fff;display:flex;align-items:center;justify-content:center;gap:5px;margin-top:2px}
     .mn-stat-num img{width:19px;height:19px}
-    .mn-stage{position:relative;flex:none;height:38dvh;min-height:245px;border-radius:14px;overflow:hidden;border:1px solid rgba(212,175,55,.55);box-shadow:0 10px 22px rgba(0,0,0,.6);cursor:pointer}
+    .mn-stage{position:relative;flex:none;height:36.5dvh;min-height:240px;border-radius:14px;overflow:hidden;border:1px solid rgba(212,175,55,.55);box-shadow:0 10px 22px rgba(0,0,0,.6);cursor:pointer}
     .mn-stage>img{width:100%;height:100%;object-fit:cover;object-position:center 22%;display:block}
     .mn-stage:active>img{transform:scale(1.02)}
     #page-mine #hero-video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:50% 50%;display:block}
@@ -174,12 +174,24 @@
     .mn-coin{width:23px;height:23px;vertical-align:-4px}
     .mn-row{display:flex;gap:8px}
     .mn-row .mn-card{flex:1}
-    .mn-actions{display:flex;align-items:center;gap:10px;padding-top:14px}
+    .mn-actions{display:flex;align-items:center;gap:10px;padding-top:8px}
     .mn-side{flex:1;text-transform:uppercase;letter-spacing:1.5px;font-size:13px;padding:14px 6px}
-    .mn-actions .mn-side{background:url('assets/ref_stone_card.webp') center/cover;border:1px solid rgba(212,175,55,.55);color:#fff}
-    .mn-collect{width:110px;height:110px;flex:none;border-radius:50%;background:radial-gradient(circle at 35% 28%,#ffedb0,#f5c542 46%,#d99a16 76%,#a86e0a);border:3px solid #8a5a08;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;box-shadow:0 10px 24px rgba(0,0,0,.6),inset 0 2px 6px rgba(255,255,255,.55);margin-top:-30px;cursor:pointer;padding:0}
-    .mn-collect img{width:48px;height:48px}
-    .mn-collect span{font-size:13px;font-weight:900;color:#241a05;letter-spacing:1px}
+    .mn-actions .mn-side{background:url('assets/ref_stone_card.webp') center/cover;border:1px solid rgba(212,175,55,.55);color:#fff;transform:translateY(-8px)}
+    /* Short viewports (e.g. Telegram's in-app height on smaller
+       phones): the fixed-size cards + actions row overflowed past
+       the bottom nav and COLLECT was clipped (owner report from
+       Elshenawy's phone 2026-11-15). The stage gives up height
+       first and the cards slim down a touch so the whole page —
+       COLLECT included — fits above the nav. */
+    @media (max-height:830px){
+      .mn-stage{height:30dvh;min-height:210px}
+      .mn-card{padding:10px 14px 11px}
+      .mn-stat{padding:11px 8px 9px}
+      .mn-actions{padding-top:4px}
+    }
+    .mn-collect{width:98px;height:98px;flex:none;border-radius:50%;background:radial-gradient(circle at 35% 28%,#ffedb0,#f5c542 46%,#d99a16 76%,#a86e0a);border:3px solid #8a5a08;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;box-shadow:0 10px 24px rgba(0,0,0,.6),inset 0 2px 6px rgba(255,255,255,.55);margin-top:-24px;cursor:pointer;padding:0}
+    .mn-collect img{width:43px;height:43px}
+    .mn-collect span{font-size:12.5px;font-weight:900;color:#241a05;letter-spacing:1px}
     .mn-collect:active{transform:scale(.95)}
     #page-tasks .daily-grid{margin:10px 2px 2px}
     #page-tasks .daily-box{background:linear-gradient(180deg,#24334f,#131f36);border-color:rgba(212,175,55,.5);color:#d8c491}
