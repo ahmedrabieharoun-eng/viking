@@ -263,10 +263,16 @@ async function noteSignals(uid, keys) {
     await db.ref().update(updates);
   } catch (e) { console.error('signals', e.message); }
 }
-/* A referral counts as ACTIVE only once it is verified: wallet() flips the
-   inviter's referral entry to this status when the invitee syncs a wallet
-   meeting the hold requirement. 'Pending ⏳' and '⚠️ Duplicate' never count
-   (owner rule for the referral achievements). */
+/* A referral counts as ACTIVE only while BOTH activation conditions
+   hold (owner orders 2026-11-14 + 2026-11-15): the invitee's wallet is
+   VERIFIED (the 0.05 TON verification) AND his synced hold meets
+   refMinHold (200 $VIKING = Level 2). The state is LIVE, not a latch:
+   syncReferralActive() re-evaluates it after every wallet sync,
+   verification completion and unlink — buying + verifying flips the
+   inviter's entry to 'Verified ✅' and starts the 5% commission, and
+   selling below the minimum (or losing verification) flips it back to
+   'Pending ⏳' and pauses the commission. '⚠️ Duplicate' entries never
+   flip either way and never count. */
 const ACTIVE_REF_STATUS = 'Verified ✅';
 const countActiveRefs = (refs) => Object.values(refs || {}).filter((r) => r && String(r.status || '').trim() === ACTIVE_REF_STATUS).length;
 const publicPlayer = (d) => {
@@ -1240,6 +1246,98 @@ async function syncRefAvatar(uid, n) {
   } catch (e) { console.error('refAvatar', e.message); }
 }
 
+/* ---------- referral DMs to the inviter (owner order 2026-11-15) ----------
+   Two messages, in the same simple style as the payout DM — tg()
+   applies pz() premium-emoji wrapping and premium button icons
+   centrally. Best-effort by design: a failed DM never fails the
+   action that triggered it. */
+async function sendRefJoinDM(inviterId, user) {
+  try {
+    const cfg = await getConfig();
+    const botUname = await resolveBotUsername(cfg);
+    const kb = botUname ? { inline_keyboard: [[{ text: '⚔️ Open VIKING', url: `https://t.me/${botUname}/app` }]] } : undefined;
+    const name = esc(String((user && user.first_name) || 'Warrior').trim() || 'Warrior');
+    await tg('sendMessage', { chat_id: String(inviterId), text: `🎉 <b>New Referral!</b>\n👤 <b>${name}</b> joined VIKING with your link.\n💡 When they verify their wallet and hold 200+ ${esc(cfg.coinSym)}, they turn <b>Active ✅</b> — and you earn <b>5%</b> of their mining.`, reply_markup: kb });
+  } catch (e) { console.error('ref join dm', e.message); }
+}
+async function sendRefActiveDM(inviterId, inviteeName, cfg) {
+  try {
+    const botUname = await resolveBotUsername(cfg);
+    const kb = botUname ? { inline_keyboard: [[{ text: '⚔️ Open VIKING', url: `https://t.me/${botUname}/app` }]] } : undefined;
+    const name = esc(String(inviteeName || 'Warrior').trim() || 'Warrior');
+    await tg('sendMessage', { chat_id: String(inviterId), text: `✅ <b>Referral Active!</b>\n👤 <b>${name}</b> is now <b>Active ✅</b>\n💰 You earn <b>5%</b> of everything they mine — it lands in your pending referral profits.`, reply_markup: kb });
+  } catch (e) { console.error('ref active dm', e.message); }
+}
+
+/* Append this player to the inviter's referral list (exactly once)
+   and send the inviter the new-referral DM. Used by state() at
+   signup, by state()'s late-attribution path and by the bot /start
+   ref_ param. Returns true when the entry was actually appended. */
+async function attributeReferral(user, inviterId, deviceHash) {
+  try {
+    const invRef = P(inviterId);
+    const inv = await getVal(invRef);
+    if (!inv) return false;
+    const dup = !!(inv.deviceHash && deviceHash && inv.deviceHash === deviceHash);
+    const entry = { id: String(user.id), name: clean(user.first_name || 'Warrior', 64), deviceHash: deviceHash || '', status: dup ? '⚠️ Duplicate' : 'Pending ⏳', profit: 0, at: Date.now(), avatar: 0 };
+    const appended = await txUpdate(invRef, (cur) => {
+      if (cur === null) return { skip: true, out: false };
+      const refs = cur.referrals || [];
+      if (refs.length >= 3000) return { skip: true, out: false }; // cap re-checked on the freshest value
+      if (refs.some((r) => String(r.id) === String(user.id))) return { skip: true, out: false };
+      return { value: { ...cur, referrals: [...refs, entry] }, out: true };
+    });
+    if (appended) { sendRefJoinDM(inviterId, user).catch(() => {}); return true; }
+    return false;
+  } catch (e) { console.error('attributeReferral', e.message); return false; }
+}
+
+/* Referral activation is a LIVE state (see the ACTIVE_REF_STATUS
+   note): ACTIVE while the invitee is wallet-verified AND holds at
+   least refMinHold. This re-evaluates it after every event that can
+   change either input (wallet sync, verification completion,
+   unlink): the invitee's commission gate (refBonusPaid) and the
+   inviter's entry status follow the state in both directions —
+   selling below the minimum deactivates again. The became-active DM
+   fires only on the FIRST upward flip (entry.activeDmAt latch).
+   '⚠️ Duplicate' entries never flip. Best-effort: never fails the
+   caller's action. */
+async function syncReferralActive(uid, cfg) {
+  try {
+    uid = String(uid);
+    const me = await getVal(P(uid));
+    if (!me || !me.invitedBy) return;
+    const need = Number(cfg && cfg.refMinHold) || 200;
+    const active = me.walletVerified === true && (Number(me.hold) || 0) >= need;
+    if ((me.refBonusPaid === true) !== active) {
+      await txUpdate(P(uid), (d) => {
+        if (d === null) return { skip: true };
+        const a = d.walletVerified === true && (Number(d.hold) || 0) >= need;
+        if ((d.refBonusPaid === true) === a) return { skip: true };
+        return { value: { ...d, refBonusPaid: a } };
+      });
+    }
+    const invId = String(me.invitedBy);
+    const res = await txUpdate(P(invId), (inv) => {
+      if (inv === null) return { skip: true, out: null };
+      let changed = false, dm = false;
+      const refs = (inv.referrals || []).map((r) => {
+        if (String(r.id) !== uid) return r;
+        if (r.status === '⚠️ Duplicate') return r;
+        const want = active ? 'Verified ✅' : 'Pending ⏳';
+        if (r.status === want) return r;
+        changed = true;
+        const nr = { ...r, status: want };
+        if (active && !nr.activeDmAt) { nr.activeDmAt = Date.now(); dm = true; }
+        return nr;
+      });
+      if (!changed) return { skip: true, out: null };
+      return { value: { ...inv, referrals: refs }, out: { dm } };
+    });
+    if (res && res.dm) await sendRefActiveDM(invId, me.name, cfg || await getConfig());
+  } catch (e) { console.error('refActiveSync', e.message); }
+}
+
 const newPlayer = (user, extra) => ({
   id: String(user.id), name: clean(user.first_name || 'Warrior', 64), username: clean(user.username || 'user', 64),
   deviceHash: '', mined: 0, hold: 0, lastCollectTime: Date.now(), walletAddr: '', banned: false, invitedBy: null,
@@ -1326,6 +1424,28 @@ async function state(c) {
     // record hot enough to starve whole-record transactions into
     // 'maxretry' aborts. Regression-covered in test_local6 (W4).
     if (Date.now() - (existing.lastSeen || 0) > 60000) await ref.update({ name: clean(c.user.first_name || 'Warrior', 64), username: clean(c.user.username || 'user', 64), lastSeen: Date.now(), ...(dev ? { deviceHash: dev } : {}) });
+    // Late attribution (owner order 2026-11-15): a record created by a
+    // bot first contact (/start or the write-access welcome — both
+    // ensurePlayer with no referral data) or by an action that raced
+    // ahead of the first state used to lose its inviter forever,
+    // because attribution only ran at record creation. A still-fresh
+    // account (created < 24 h ago, nothing earned yet) arriving WITH
+    // a referral param is attributed now instead.
+    if (!existing.invitedBy) {
+      const spL = String(c.startParam || '').replace(/^ref_/, '').trim();
+      const fresh = Date.now() - (Number(existing.createdAt) || 0) < 86400000;
+      const earned = (Number(existing.mined) || 0) > 0 || (Number(existing.earnDaily) || 0) > 0 || (Number(existing.earnTasks) || 0) > 0 || (Number(existing.earnRef) || 0) > 0;
+      if (fresh && !earned && isId(spL) && spL !== String(c.user.id)) {
+        const invL = await getVal(P(spL));
+        if (invL && (invL.referrals || []).length < 3000) {
+          const set = await txUpdate(ref, (cur) => {
+            if (cur === null || cur.invitedBy) return { skip: true, out: false };
+            return { value: { ...cur, invitedBy: spL }, out: true };
+          });
+          if (set) await attributeReferral(c.user, spL, dev);
+        }
+      }
+    }
   } else {
     const sp = String(c.startParam || '').replace(/^ref_/, '').trim();
     let inv = null, invRef = null;
@@ -1338,17 +1458,7 @@ async function state(c) {
       return { value: newPlayer(c.user, { deviceHash: dev, invitedBy: ok ? sp : null }), out: true };
     });
     if (created) await assignUserNo(c.user.id); // permanent sequential userNo from meta/counters (see assignUserNo)
-    if (created && ok) {
-      const dup = inv.deviceHash && inv.deviceHash === dev;
-      const entry = { id: String(c.user.id), name: clean(c.user.first_name || 'Warrior', 64), deviceHash: dev, status: dup ? '⚠️ Duplicate' : 'Pending ⏳', profit: 0, at: Date.now(), avatar: 0 };
-      await txUpdate(invRef, (cur) => {
-        if (cur === null) return { skip: true };
-        const refs = cur.referrals || [];
-        if (refs.length >= 3000) return { skip: true }; // re-check the cap on the freshest value (the pre-read can race a burst of signups)
-        if (refs.some((r) => String(r.id) === String(c.user.id))) return { skip: true };
-        return { value: { ...cur, referrals: [...refs, entry] } };
-      });
-    }
+    if (created && ok) await attributeReferral(c.user, sp, dev);
   }
   await noteSignals(String(c.user.id), clientKeys(c.body.fp));
   // Multi-account detection (report-only): refresh this player's linked
@@ -1442,6 +1552,10 @@ async function collect(c) {
   const out = await txUpdate(ref, (d) => {
     if (d === null) return { error: new Fail(404, 'User not found') };
     if (d.banned === true) return { error: new Fail(403, 'Account banned') };
+    // Mining requires a VERIFIED wallet (owner order 2026-11-15): the
+    // app gates the whole UI behind the wallet-verification page, and
+    // the server enforces the same rule for the mining action itself.
+    if (d.walletVerified !== true) return { error: new Fail(403, 'Verify your wallet first') };
     const now = Date.now();
     const elapsed = Math.max(0, (now - (Number(d.lastCollectTime) || now)) / 1000);
     if (elapsed < MIN_COLLECT_SEC) return { error: new Fail(400, 'Wait 10 seconds') };
@@ -1884,6 +1998,25 @@ async function handleBotMessage(msg) {
   const param = parts[1] || '';
   const cfg = await getConfig();
   await ensurePlayer({ user: from, body: {} }); // same creation path as the API actions
+  // A /start that carries a referral param (ref_<id>) attributes the
+  // fresh record right here — the same fresh-account rule as state()'s
+  // late attribution — so a bot-first contact never burns the referral.
+  const refM = /^ref_(\d+)$/.exec(param);
+  if (refM && refM[1] !== String(from.id)) {
+    try {
+      const meS = await getVal(P(from.id));
+      if (meS && !meS.invitedBy && Date.now() - (Number(meS.createdAt) || 0) < 86400000 && !(Number(meS.mined) > 0)) {
+        const invS = await getVal(P(refM[1]));
+        if (invS && (invS.referrals || []).length < 3000) {
+          const setS = await txUpdate(P(from.id), (cur) => {
+            if (cur === null || cur.invitedBy) return { skip: true, out: false };
+            return { value: { ...cur, invitedBy: refM[1] }, out: true };
+          });
+          if (setS) await attributeReferral(from, refM[1], '');
+        }
+      }
+    } catch (e) { console.error('startRef', e.message); }
+  }
   const T = BIO_TEXTS[bioLangOf(from)];
   if (param !== 'bio') {
     // The EN caption no longer interpolates the name (AdVOLT-style copy,
@@ -1954,7 +2087,6 @@ async function wallet(c) {
      still gets the 429 exactly as before. */
   if (raw !== (p.walletAddr || '') && Date.now() - (p.lastSyncAt || 0) < 8000) fail(429, 'Please wait a few seconds');
   const hold = await jettonHold(raw);
-  const need = Number(c.cfg.refMinHold) || 200;
   const uid = String(c.user.id);
   // claim the wallet node first (the Firestore original checked ownership
   // inside its transaction before writing anything — same net effect here).
@@ -1968,7 +2100,6 @@ async function wallet(c) {
   });
   const out = await txUpdate(ref, (d) => {
     if (d === null) return { error: new Fail(404, 'User not found') };
-    const activate = !!(d.invitedBy && !d.refBonusPaid && hold >= need);
     // Wallet verification is bound to ONE wallet (owner order
     // 2026-11-14): binding a DIFFERENT address than the verified one
     // voids the verification — the new wallet must be verified again.
@@ -1979,8 +2110,8 @@ async function wallet(c) {
     // wallet); re-syncing the same wallet keeps it.
     const addrChanged = (d.walletAddr || '') !== raw;
     return {
-      value: { ...d, walletAddr: raw, hold, lastSyncAt: Date.now(), ...(activate ? { refBonusPaid: true } : {}), ...(voidsVerify ? { walletVerified: false, verifiedWallet: '', verifiedAt: 0, verifyTx: '' } : {}), ...(addrChanged ? { verifyPendingAt: 0 } : {}) },
-      out: { oldAddr: d.walletAddr || '', inviterId: activate ? String(d.invitedBy) : null, myDeviceHash: d.deviceHash, voided: voidsVerify }
+      value: { ...d, walletAddr: raw, hold, lastSyncAt: Date.now(), ...(voidsVerify ? { walletVerified: false, verifiedWallet: '', verifiedAt: 0, verifyTx: '' } : {}), ...(addrChanged ? { verifyPendingAt: 0 } : {}) },
+      out: { oldAddr: d.walletAddr || '', voided: voidsVerify }
     };
   });
   if (out.voided) await syncRefVerifiedFlag(uid, false);
@@ -1990,13 +2121,10 @@ async function wallet(c) {
   // never be linked to a different account, only re-linked to this
   // one. (The claim above already rejects any wallet whose registry
   // node names another userId.)
-  if (out.inviterId) {
-    await txUpdate(P(out.inviterId), (inv) => {
-      if (inv === null) return { skip: true };
-      if (inv.deviceHash === out.myDeviceHash) return { skip: true }; // original updated only when the hashes differ
-      return { value: { ...inv, referrals: (inv.referrals || []).map((r) => (String(r.id) === uid ? { ...r, status: 'Verified ✅' } : r)) } };
-    });
-  }
+  // Referral activation is a live state (verified + hold >= minimum):
+  // re-evaluate it against the hold/verification this sync just wrote —
+  // reaching the minimum activates, dropping below it deactivates.
+  await syncReferralActive(uid, c.cfg);
   return { success: true, hold };
 }
 
@@ -2014,6 +2142,9 @@ async function unlink(c) {
     };
   });
   if (out.voided) await syncRefVerifiedFlag(String(c.user.id), false);
+  // Unlinking zeroes the hold and voids verification: the referral
+  // deactivates (live activation state — see syncReferralActive).
+  await syncReferralActive(String(c.user.id), c.cfg);
   // The wallets-registry node is deliberately KEPT (owner order
   // 2026-11-15): unlinking disconnects the wallet from this account
   // but does NOT free it — it stays registered to this account
@@ -2182,6 +2313,9 @@ async function completeVerification(uid, hash, cfg) {
   if (wDoc) await wRef.update({ verified: true });
   else await wRef.set({ userId: uid, verified: true });
   await syncRefVerifiedFlag(uid, true);
+  // Verification is one of the two activation conditions: if the hold
+  // already meets the minimum, the referral turns Active right here.
+  await syncReferralActive(uid, cfg);
   let ageDays = null;
   try { ageDays = await walletAgeDays(ref, flip.player, wallet); } catch (e) { /* the caption falls back to '—' */ }
   /* Once per payment (owner order 2026-11-14): the flip above can
@@ -3417,4 +3551,4 @@ functions.http('collectMining', async (req, res) => {
   }
 });
 
-module.exports = { verifyInitData, clientKeys, riskOf, noteSignals, hit, publicConfig, chatIdOf, memberStatus, updateMultiLinks, completeVerification, verifyWatchTick, toFriendlyAddress, fmtDayMonYear, txUpdate, attemptPayout, derivePayoutAddress, payoutEnabled, sendPayoutSuccess, buildWdReviewCard, sendWdReviewCard, handleBotCallback };
+module.exports = { verifyInitData, clientKeys, riskOf, noteSignals, hit, publicConfig, chatIdOf, memberStatus, updateMultiLinks, completeVerification, verifyWatchTick, toFriendlyAddress, fmtDayMonYear, txUpdate, attemptPayout, derivePayoutAddress, payoutEnabled, sendPayoutSuccess, buildWdReviewCard, sendWdReviewCard, handleBotCallback, attributeReferral, syncReferralActive };
