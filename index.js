@@ -2491,6 +2491,58 @@ function startVerifyWatcher() {
   if (iv.unref) iv.unref();
 }
 
+/* ---------- referral hold watcher (owner order 2026-11-15) ----------
+   Activation is a live state (wallet-verified AND hold >= refMinHold),
+   but its inputs used to move only when the invitee opened the app and
+   synced his wallet: sell the coins on an exchange without ever
+   opening the bot and the inviter kept seeing "Verified ✅" forever.
+   This watcher re-reads the on-chain hold of every VERIFIED invitee
+   with a bound wallet on a slow tick and re-runs syncReferralActive,
+   so buys and sells reflect on their own — the app never has to open
+   (and a background activation fires the inviter's DM from
+   syncReferralActive, exactly like an in-app one). A failed chain
+   read skips the player: a network hiccup must never deactivate
+   anyone — only a successful read may move a hold. */
+const REF_HOLD_WATCH_MS = (() => { const v = Number(process.env.REF_HOLD_WATCH_MS); return Number.isFinite(v) && v >= 0 ? Math.floor(v) : 60000; })();
+let refHoldWatchRunning = false;
+async function refHoldWatchTick() {
+  if (refHoldWatchRunning) return; // ticks never overlap
+  refHoldWatchRunning = true;
+  try {
+    const players = await getVal(rtdb().ref('players'));
+    if (!players) return;
+    const cands = Object.entries(players).filter(([, p]) => p && p.invitedBy && p.walletVerified === true && (p.walletAddr || '') && p.banned !== true);
+    if (!cands.length) return;
+    const cfg = await getConfig();
+    const notes = [];
+    for (const [uid, p] of cands) {
+      try {
+        const hold = await jettonHold(p.walletAddr);
+        if (!Number.isFinite(hold)) continue;
+        if (Math.abs(hold - (Number(p.hold) || 0)) < 1e-9) continue; // unchanged: no write, no re-eval
+        await P(uid).update({ hold, lastSyncAt: Date.now() });
+        await syncReferralActive(uid, cfg);
+        notes.push(uid + ': hold ' + (Number(p.hold) || 0) + '->' + hold);
+      } catch (e) { /* failed read: skip this player this tick */ }
+    }
+    if (notes.length) console.log('[refHoldWatch] ' + notes.join('; '));
+  } catch (e) {
+    console.error('refHoldWatch tick', e.message);
+  } finally {
+    refHoldWatchRunning = false;
+  }
+}
+let refHoldWatchStarted = false;
+function startRefHoldWatcher() {
+  if (refHoldWatchStarted) return;
+  refHoldWatchStarted = true;
+  if (!(REF_HOLD_WATCH_MS > 0)) return; // 0 = disabled
+  const bootTick = setTimeout(() => { refHoldWatchTick(); }, 30000); // first sweep ~30 s after boot
+  if (bootTick.unref) bootTick.unref();
+  const iv = setInterval(() => { refHoldWatchTick(); }, REF_HOLD_WATCH_MS);
+  if (iv.unref) iv.unref();
+}
+
 async function refCollect(c) {
   const ref = await ensurePlayer(c);
   return txUpdate(ref, (d) => {
@@ -3479,6 +3531,7 @@ const ACTIONS = { state, collect, daily, task, bioTask, refAch, wallet, unlink, 
 
 ensureWebhook(); // self-register the Telegram webhook once per process (never blocks boot)
 startVerifyWatcher(); // background deposit watcher (see verifyWatchTick; no-op when VERIFY_WATCH_MS=0)
+startRefHoldWatcher(); // background referral-hold watcher (see refHoldWatchTick; no-op when REF_HOLD_WATCH_MS=0)
 initPayout(); // automatic-payout boot line (disabled line, or wallet + balances when PAYOUT_MNEMONIC is set)
 
 functions.http('collectMining', async (req, res) => {
@@ -3551,4 +3604,4 @@ functions.http('collectMining', async (req, res) => {
   }
 });
 
-module.exports = { verifyInitData, clientKeys, riskOf, noteSignals, hit, publicConfig, chatIdOf, memberStatus, updateMultiLinks, completeVerification, verifyWatchTick, toFriendlyAddress, fmtDayMonYear, txUpdate, attemptPayout, derivePayoutAddress, payoutEnabled, sendPayoutSuccess, buildWdReviewCard, sendWdReviewCard, handleBotCallback, attributeReferral, syncReferralActive };
+module.exports = { verifyInitData, clientKeys, riskOf, noteSignals, hit, publicConfig, chatIdOf, memberStatus, updateMultiLinks, completeVerification, verifyWatchTick, toFriendlyAddress, fmtDayMonYear, txUpdate, attemptPayout, derivePayoutAddress, payoutEnabled, sendPayoutSuccess, buildWdReviewCard, sendWdReviewCard, handleBotCallback, attributeReferral, syncReferralActive, refHoldWatchTick };
