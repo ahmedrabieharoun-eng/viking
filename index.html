@@ -1661,6 +1661,7 @@
     let bootStateReady = false;
     let bootAssetsReady = false;
     let bootSettleInProgress = false;
+    let bootStateApplied = false; // state fetched AND applied at least once (the boot watchdog's condition)
     // Wallet settle, awaited by the boot branch of refreshState (see
     // the call site): TonConnect session restoration → any in-flight
     // wallet bind → one forced live-hold sync → the verification
@@ -1874,7 +1875,16 @@
     // (~2.5 s, 6 s, 12 s apart) before any error surfaces. withdraw
     // and admin* are NEVER auto-retried — they are not in the set.
     const API_RETRY_WAITS = [2500, 6000, 12000];
+    /* State response cache (owner load-reduction order 2026-11-15):
+       state is re-requested after every action, on every tab switch
+       and by a 10 s interval; within 15 s the identical response is
+       reused instead of hitting the server again. Any real action
+       call clears the cache before it runs, so post-action refreshes
+       always read live data (and money actions are re-verified by
+       the server regardless). */
+    let stateCache = null, stateCacheAt = 0;
     async function api(action, body) {
+      if (action !== "state") { stateCache = null; stateCacheAt = 0; }
       const payload = JSON.stringify(Object.assign({ initData: tg.initData, action }, body || {}));
       const retryable = API_RETRY_ONCE.has(action);
       let healed = false;
@@ -1969,7 +1979,9 @@
           }
         }
       } catch (e) { /* identity collection must never break state */ }
-      const j = await api("state", stateBody);
+      let j;
+      if (stateCache && Date.now() - stateCacheAt < 15000) { j = stateCache; }
+      else { j = await api("state", stateBody); stateCache = j; stateCacheAt = Date.now(); }
       const d = j.player || {};
       if (d.banned === true) {
         localStorage.setItem('vk_banned_' + CURRENT_UID, '1');
@@ -2008,25 +2020,32 @@
       wdHistory = (j.withdrawals || []).sort((a, b) => (b.wdNum || 0) - (a.wdNum || 0));
       renderWithdrawHistory();
       applyUI();
+      bootStateApplied = true;
       if (!initialLoadDone && !bootSettleInProgress) {
         bootSettleInProgress = true;
         // Wait until the player's own portrait — the evolution image
         // applyUI just pointed #hero-img at — has really loaded, so
         // the first screen is complete the moment the loader lifts.
         // (The same URL feeds Profile and Boost, so those are ready
-        // too.) Only then is the boot allowed to finish.
-        await waitForImgEl(document.getElementById('hero-img'), 20000);
-        // …and the player's own evolution set (all ten tiers of his
-        // avatar) must be in too — only then is the boot allowed to
-        // finish, with every page complete.
-        await preloadPlayerAssets();
-        // Owner order 2026-11-15: the wallet side must be FINAL
-        // before the loader lifts too — a restored wallet session
-        // finishes binding, the live on-chain hold is pulled and the
-        // verification card's data is fetched, all behind the loading
-        // page, so no page (Profile above all) paints placeholder
-        // zeros that flip to the real numbers seconds later.
-        await settleWalletAtBoot();
+        // too.) The player's evolution set and the wallet settle
+        // follow behind it.
+        // BUT (owner report 2026-11-15, loader frozen at 95%): each
+        // of those waits is capped on its own, yet their worst cases
+        // STACK past a minute on a slow connection — the state was
+        // ready and the app still looked bricked. The whole cosmetic
+        // sequence is therefore raced against ONE 12 s deadline: if
+        // the deadline wins, the loader lifts with the state already
+        // applied and the sequence finishes in the background (its
+        // completions re-render idempotently, and
+        // bootSettleInProgress keeps it single-flight).
+        await Promise.race([
+          (async () => {
+            await waitForImgEl(document.getElementById('hero-img'), 20000);
+            await preloadPlayerAssets();
+            await settleWalletAtBoot();
+          })(),
+          new Promise((r) => setTimeout(r, 12000))
+        ]);
         bootStateReady = true;
       }
       finishBoot();
@@ -2045,7 +2064,20 @@
     const BOOT_RETRY_WAITS = [4000, 7000, 11000, 16000, 22000];
     async function bootWithRetry() {
       for (let i = 0; ; i++) {
-        try { await refreshState(); return; }
+        try {
+          // A stalled fetch never resolves AND never rejects — left
+          // alone it froze the loader at 95% forever (owner report
+          // 2026-11-15): no retry, no tap-to-retry, nothing. Race
+          // every attempt against 20 s so a hang counts as a failed
+          // attempt and the backoff (or the retry button) engages.
+          // The abandoned attempt may still land later; refreshState
+          // is idempotent, so that is harmless.
+          await Promise.race([
+            refreshState(),
+            new Promise((_, rej) => setTimeout(() => rej(new Error('boot state timeout')), 20000))
+          ]);
+          return;
+        }
         catch (err) {
           if (err && err.maintenance) return; // update-in-progress screen is already up
           if (i >= BOOT_RETRY_WAITS.length) { showBootRetry(); return; }
@@ -2053,6 +2085,14 @@
         }
       }
     }
+    // Boot watchdog (owner report 2026-11-15): if the state was
+    // fetched and applied but the gate still has not released after
+    // 30 s — a cosmetic wait somewhere outlived every cap — lift the
+    // loader anyway. A ready app must never stay behind the loading
+    // page because of a picture or a wallet settle.
+    setTimeout(() => {
+      if (!initialLoadDone && bootStateApplied) { bootStateReady = true; bootAssetsReady = true; finishBoot(); }
+    }, 30000);
     // Redesign avatar picker (owner pick 3): shown once, right after
     // the first state load, while the player has no avatar yet.
     let avatarPickBusy = false;
