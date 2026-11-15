@@ -1591,6 +1591,31 @@
     // it is awaited separately inside refreshState (waitForImgEl).
     let bootStateReady = false;
     let bootAssetsReady = false;
+    let bootSettleInProgress = false;
+    // Wallet settle, awaited by the boot branch of refreshState (see
+    // the call site): TonConnect session restoration → any in-flight
+    // wallet bind → one forced live-hold sync → the verification
+    // card's data. Every step is time-capped and failure-silent: the
+    // loader must never hang on the wallet, it just must not lift
+    // while the wallet is still settling in the common case.
+    async function settleWalletAtBoot() {
+      const cap = ms => new Promise(r => setTimeout(r, ms));
+      try {
+        if (tonConnectUI && tonConnectUI.connectionRestored) {
+          await Promise.race([Promise.resolve(tonConnectUI.connectionRestored).catch(() => {}), cap(6000)]);
+        }
+        await Promise.race([walletStatusPromise, cap(8000)]);
+        if (linkedWalletAddr) {
+          lastAutoSyncAt = 0; // the one boot sync bypasses the 20 s throttle
+          const p = maybeAutoSyncHold();
+          if (p) { bootHoldSyncDone = true; await Promise.race([p, cap(12000)]); }
+          if (!myWalletVerified) {
+            await Promise.race([loadVerifyInfo(), cap(8000)]);
+            try { renderVerifyCard(); } catch (e) {}
+          }
+        }
+      } catch (e) { /* the loader must never hang on the wallet settle */ }
+    }
     const BOOT_IMAGES = [
       'assets/boot_scene.webp?v=4', 'assets/boot_plaque.webp', 'assets/boot_panel.webp',
       'assets/bg_fjord.webp', 'assets/bg_wood.webp', 'assets/ref_stone_plain.webp', 'assets/ref_stone_card.webp', 'assets/coin_icon.webp',
@@ -1913,7 +1938,8 @@
       wdHistory = (j.withdrawals || []).sort((a, b) => (b.wdNum || 0) - (a.wdNum || 0));
       renderWithdrawHistory();
       applyUI();
-      if (!initialLoadDone) {
+      if (!initialLoadDone && !bootSettleInProgress) {
+        bootSettleInProgress = true;
         // Wait until the player's own portrait — the evolution image
         // applyUI just pointed #hero-img at — has really loaded, so
         // the first screen is complete the moment the loader lifts.
@@ -1924,6 +1950,13 @@
         // avatar) must be in too — only then is the boot allowed to
         // finish, with every page complete.
         await preloadPlayerAssets();
+        // Owner order 2026-11-15: the wallet side must be FINAL
+        // before the loader lifts too — a restored wallet session
+        // finishes binding, the live on-chain hold is pulled and the
+        // verification card's data is fetched, all behind the loading
+        // page, so no page (Profile above all) paints placeholder
+        // zeros that flip to the real numbers seconds later.
+        await settleWalletAtBoot();
         bootStateReady = true;
       }
       finishBoot();
@@ -2073,12 +2106,14 @@
     }
 
     let tonConnectUI = null, userClickedConnect = false;
+    let walletStatusPromise = Promise.resolve();
     try {
       tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
         manifestUrl: 'https://ahmedrabieharoun-eng.github.io/viking/tonconnect-manifest.json',
         buttonRootId: 'ton-connect-container'
       });
-      tonConnectUI.onStatusChange(async wallet => {
+      tonConnectUI.onStatusChange(wallet => { walletStatusPromise = handleWalletStatus(wallet); });
+      async function handleWalletStatus(wallet) {
         const addr = wallet?.account?.address || "";
         if (!addr) return;
         const announce = userClickedConnect;
@@ -2110,7 +2145,7 @@
           }
           if (announce) showToast("❌ " + err.message, "#ef4444");
         }
-      });
+      }
     } catch (e) {}
 
     async function connectTonWallet(e) {
@@ -2167,11 +2202,11 @@
        re-sync — the next trigger simply retries). */
     let lastAutoSyncAt = 0, bootHoldSyncDone = false;
     function maybeAutoSyncHold() {
-      if (!linkedWalletAddr) return;
+      if (!linkedWalletAddr) return null;
       const now = Date.now();
-      if (now - lastAutoSyncAt < 20000) return;
+      if (now - lastAutoSyncAt < 20000) return null;
       lastAutoSyncAt = now; // stamped BEFORE the call: the sync itself reloads state, which must not re-enter
-      try { Promise.resolve(syncOnChainJettonHold(false)).catch(() => {}); } catch (e) { /* silent by design */ }
+      try { return Promise.resolve(syncOnChainJettonHold(false)).catch(() => {}); } catch (e) { return null; /* silent by design */ }
     }
 
     /* ---------- Address display helpers (DISPLAY ONLY) ----------
