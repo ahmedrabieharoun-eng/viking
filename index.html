@@ -633,6 +633,21 @@
         <button class="btn-3d-dark" id="btn-open-ch2" data-i18n="open_grp" style="display:none;">1. Open Group</button>
       </div>
 
+      <div class="q-wrap">
+        <div class="q-row" id="ch3-row">
+          <img class="q-scroll" src="assets/quest_scroll.webp" alt="">
+          <div class="q-row-in">
+            <img class="q-ic" src="assets/icon_q_warriors.webp" alt="">
+            <div class="q-mid">
+              <div class="q-title" id="ch-3-title" data-i18n="ch3_title" style="font-size:13px;">👥 Community Channel</div>
+              <div class="q-rew"><img src="assets/coin_icon.webp" alt="">+<span class="ui-task-rew">50</span> <span class="coin-sym">$VIKING</span></div>
+            </div>
+            <button class="btn-3d-gold q-btn" id="ch-task-3-btn">Join Channel</button>
+          </div>
+        </div>
+        <button class="btn-3d-dark" id="btn-open-ch3" data-i18n="open_ch" style="display:none;">1. Open Channel</button>
+      </div>
+
       <div class="q-wrap" id="bio-task-card">
         <div class="q-row">
           <img class="q-scroll" src="assets/quest_scroll.webp" alt="">
@@ -1353,7 +1368,7 @@
         mined_lbl:"MINED", day_rate_lbl:"DAY RATE", shift_cd_lbl:"SHIFT COUNTDOWN", collect_lbl:"COLLECT",
         maint_title:"Update in progress", maint_sub:"We are updating VIKING MINER right now. Please check back soon!",
         avatar_title:"Choose your warrior", avatar_sub:"Pick your avatar — it becomes your identity everywhere in the game.", avatar_perm:"This choice is permanent — your warrior becomes your identity forever. Choose wisely.", avatar_confirm:"CONFIRM SELECTION", avatar_confirm2:"LOCK IN PERMANENTLY", avatar_warn:"⚠ Once confirmed, your warrior cannot be changed",
-        ch1_title:"📢 Official Telegram Channel", ch2_title:"💬 Payouts & Community Channel",
+        ch1_title:"📢 Official Telegram Channel", ch2_title:"💬 Payouts & Community Channel", ch3_title:"👥 Community Channel",
         open_ch:"1. Open Channel", open_grp:"1. Open Group", verify_btn:"2. Verify ✅",
         bio_task_desc:"Add <strong id=\"bio-bot-username\" style=\"color:#fff;\">@BOT</strong> to your Telegram bio, then tap the button below and press Start in the bot — your reward is added automatically. Come back here and it will show as done.",
         bio_verify_btn:"🤖 Verify in bot",
@@ -1401,7 +1416,7 @@
         mined_lbl:"ДОБЫТО", day_rate_lbl:"СТАВКА В ДЕНЬ", shift_cd_lbl:"ОБРАТНЫЙ ОТСЧЁТ", collect_lbl:"СОБРАТЬ",
         maint_title:"Идёт обновление", maint_sub:"Мы обновляем VIKING MINER прямо сейчас. Загляните чуть позже!",
         avatar_title:"Выберите воина", avatar_sub:"Выберите аватар — он станет вашим образом во всей игре.", avatar_perm:"Этот выбор навсегда — воин станет вашим образом навсегда. Выбирайте мудро.", avatar_confirm:"ПОДТВЕРДИТЬ ВЫБОР", avatar_confirm2:"ЗАФИКСИРОВАТЬ НАВСЕГДА", avatar_warn:"⚠ После подтверждения воина изменить нельзя",
-        ch1_title:"📢 Официальный канал", ch2_title:"💬 Канал выплат",
+        ch1_title:"📢 Официальный канал", ch2_title:"💬 Канал выплат", ch3_title:"👥 Канал сообщества",
         open_ch:"1. Открыть", open_grp:"1. Открыть", verify_btn:"2. Проверить ✅",
         bio_task_desc:"Добавьте <strong id=\"bio-bot-username\" style=\"color:#fff;\">@BOT</strong> в био вашего Telegram, затем нажмите кнопку ниже и нажмите Start в боте — награда добавится автоматически. Вернитесь сюда, и задание будет отмечено выполненным.",
         bio_verify_btn:"🤖 Проверить в боте",
@@ -1479,7 +1494,7 @@
       payoutWallet: "", botToken: "", payoutChannel: "@YGRAM1",
       adminChatId: "",
       buySwapUrl: "https://app.ston.fi/swap?chartVisible=false&tt=EQC6uN73kvaKh8LrTHQ8TQ5_vgqheI93iny5XUWkpQL9vjxI&ft=GRAM",
-      channel1: "https://t.me/YGRAM1", channel2: "https://t.me/telegram", botUsername: "VIKING_MINER_BOT"
+      channel1: "https://t.me/YGRAM1", channel2: "https://t.me/telegram", channel3: "https://t.me/VikingMiner_Community", botUsername: "VIKING_MINER_BOT"
     };
     let config = Object.assign({}, defaultConfig, JSON.parse(localStorage.getItem('vksec_config') || "{}"));
     delete config.botToken;
@@ -1492,8 +1507,8 @@
     let lastWithdrawTime = 0;
     let wdCooldownActive = false;
     let pendingRefComm = 0;
-    let task1Done = false, task2Done = false;
-    let chV = {1:false, 2:false};
+    let task1Done = false, task2Done = false, task3Done = false;
+    let chV = {1:false, 2:false, 3:false};
     let bioTaskDone = false, refAchClaimed = {}, activeRefs = 0;
     const REF_MILESTONES = [1, 10, 25, 50, 100];
     let linkedWalletAddr = localStorage.getItem('vksec_wallet_addr') || "";
@@ -1899,6 +1914,7 @@
       myAvatar = Number(d.avatar) || 0;
       task1Done = !!d.task1Done;
       task2Done = !!d.task2Done;
+      task3Done = !!d.task3Done;
       bioTaskDone = !!d.bioTaskDone;
       refAchClaimed = d.refAchClaimed || {};
       activeRefs = Number(d.activeRefs) || 0;
@@ -2436,10 +2452,13 @@
       const dict = I18N[currentLang] || I18N.en;
       const cn1 = channelDisplayName(config.channel1);
       const cn2 = channelDisplayName(config.channel2);
+      const cn3 = channelDisplayName(config.channel3);
       const t1 = document.getElementById('ch-1-title');
       const t2 = document.getElementById('ch-2-title');
+      const t3 = document.getElementById('ch-3-title');
       if (t1) t1.innerText = cn1 ? `📢 ${cn1}` : dict.ch1_title;
       if (t2) t2.innerText = cn2 ? `💬 ${cn2}` : dict.ch2_title;
+      if (t3) t3.innerText = cn3 ? `👥 ${cn3}` : dict.ch3_title;
 
       // bio task card (hidden gracefully until the bot username is known)
       const bioCard = document.getElementById('bio-task-card');
@@ -2500,7 +2519,7 @@
     function paintChBtn(n) {
       const btn = document.getElementById('ch-task-' + n + '-btn'); if (!btn) return;
       const d = I18N[currentLang] || I18N.en;
-      const done = (n === 1 ? task1Done : task2Done) || !!localStorage.getItem('vksec_task' + n);
+      const done = (n === 1 ? task1Done : n === 2 ? task2Done : task3Done) || !!localStorage.getItem('vksec_task' + n);
       if (done) { btn.innerText = "✓ Done"; btn.classList.add('btn-done-green'); return; }
       btn.classList.remove('btn-done-green');
       btn.innerText = chV[n] ? (d.verify_join_btn || "Verify") : (d.join_channel_btn || "Join Channel");
@@ -2521,7 +2540,7 @@
       document.getElementById('mine-day-rate').innerText = Number(cur.perDay.toFixed(2)).toLocaleString('en-US', {maximumFractionDigits: 2});
       document.getElementById('mine-to-go').innerText = `Hold: ${Math.floor(walletHold).toLocaleString()} ${config.coinSym}`;
 
-      paintChBtn(1); paintChBtn(2);
+      paintChBtn(1); paintChBtn(2); paintChBtn(3);
       renderTasksExtras();
 
       document.getElementById('boost-lvl-header').innerText = "Level " + cur.level;
@@ -2819,11 +2838,13 @@
 
     document.getElementById('btn-open-ch1').addEventListener('click', () => { chV[1] = true; safeOpen(config.channel1); paintChBtn(1); });
     document.getElementById('btn-open-ch2').addEventListener('click', () => { chV[2] = true; safeOpen(config.channel2); paintChBtn(2); });
+    document.getElementById('btn-open-ch3').addEventListener('click', () => { chV[3] = true; safeOpen(config.channel3); paintChBtn(3); });
     const ch1Row = document.getElementById('ch1-row'); if (ch1Row) ch1Row.addEventListener('click', e => { if (e.target.closest('button')) return; document.getElementById('btn-open-ch1').click(); });
     const ch2Row = document.getElementById('ch2-row'); if (ch2Row) ch2Row.addEventListener('click', e => { if (e.target.closest('button')) return; document.getElementById('btn-open-ch2').click(); });
-    [1, 2].forEach(n => document.getElementById(`ch-task-${n}-btn`).addEventListener('click', async e => {
+    const ch3Row = document.getElementById('ch3-row'); if (ch3Row) ch3Row.addEventListener('click', e => { if (e.target.closest('button')) return; document.getElementById('btn-open-ch3').click(); });
+    [1, 2, 3].forEach(n => document.getElementById(`ch-task-${n}-btn`).addEventListener('click', async e => {
       if (!isHumanClick(e)) return;
-      if ((n === 1 && task1Done) || (n === 2 && task2Done)) return showToast("Already claimed!", "#f59e0b");
+      if ((n === 1 && task1Done) || (n === 2 && task2Done) || (n === 3 && task3Done)) return showToast("Already claimed!", "#f59e0b");
       if (!chV[n]) { document.getElementById('btn-open-ch' + n).click(); return; }
       await withBtnBusy(e.currentTarget, async () => {
         try { const r = await api("task", { n }); SoundFX.buySuccess(); showToast(`🎉 +${r.reward} ${config.coinSym}!`); await refreshState(); }
@@ -2857,7 +2878,7 @@
     document.querySelectorAll('#avatar-picker .ap-tile').forEach(t => t.addEventListener('click', () => apSelect(Number(t.getAttribute('data-avatar')), t)));
     const apConfirmBtn = document.getElementById('ap-confirm'); if (apConfirmBtn) apConfirmBtn.addEventListener('click', confirmAvatar);
     apSelect(1, document.querySelector('#avatar-picker .ap-tile[data-avatar="1"]'), true);
-    [1, 2].forEach(n => {
+    [1, 2, 3].forEach(n => {
       const openBtn = document.getElementById('btn-open-ch' + n);
       const title = document.getElementById('ch-' + n + '-title');
       const card = title ? title.closest('.card-3d') : null;
