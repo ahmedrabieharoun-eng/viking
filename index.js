@@ -1957,7 +1957,10 @@ async function wallet(c) {
   const need = Number(c.cfg.refMinHold) || 200;
   const uid = String(c.user.id);
   // claim the wallet node first (the Firestore original checked ownership
-  // inside its transaction before writing anything — same net effect here)
+  // inside its transaction before writing anything — same net effect here).
+  // The claim is PERMANENT (owner order 2026-11-15): neither unlink nor
+  // binding a different wallet ever deletes a registry node, so a wallet
+  // belongs to the first account that linked it, forever.
   await txUpdate(walletDoc(raw), (w) => {
     if (w === null) return { value: { userId: uid } };
     if (String(w.userId) !== uid) return { error: new Fail(400, 'This wallet is linked to another account') };
@@ -1981,7 +1984,12 @@ async function wallet(c) {
     };
   });
   if (out.voided) await syncRefVerifiedFlag(uid, false);
-  if (out.oldAddr && out.oldAddr !== raw) await walletDoc(out.oldAddr).remove();
+  // Wallet ownership is PERMANENT (owner order 2026-11-15): the
+  // registry node of the previously bound wallet is deliberately NOT
+  // removed here — a wallet that was ever linked to this account can
+  // never be linked to a different account, only re-linked to this
+  // one. (The claim above already rejects any wallet whose registry
+  // node names another userId.)
   if (out.inviterId) {
     await txUpdate(P(out.inviterId), (inv) => {
       if (inv === null) return { skip: true };
@@ -2006,7 +2014,11 @@ async function unlink(c) {
     };
   });
   if (out.voided) await syncRefVerifiedFlag(String(c.user.id), false);
-  if (out.oldAddr) await walletDoc(out.oldAddr).remove();
+  // The wallets-registry node is deliberately KEPT (owner order
+  // 2026-11-15): unlinking disconnects the wallet from this account
+  // but does NOT free it — it stays registered to this account
+  // forever and can only be re-linked here, never to another
+  // account (the claim in wallet() rejects any other userId).
   return { success: true };
 }
 
