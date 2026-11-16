@@ -1284,6 +1284,47 @@ async function toncTransactions(rawAddr, limit, order) {
   const j = await tonc('/transactions?account=' + encodeURIComponent(rawAddr) + '&limit=' + limit + '&sort=' + order);
   return (j && Array.isArray(j.transactions)) ? j.transactions : [];
 }
+/* Deep newest-first scan of one account's transactions, paged with
+   the lt/hash cursor toncenter v3 accepts (each page asks for the
+   transactions OLDER than the previous page's last one). Built for
+   the verification paths (owner order 2026-11-16): after the app
+   reopened to everyone, the deposit wallet began receiving ~150 fee
+   payments an hour, so the fixed 50-transaction window covered only
+   ~20 minutes — a payment whose owner was not yet marked pending,
+   or whose tick hiccuped, aged out of the window and could never be
+   matched again (player 3935 paid at 07:59, was only picked up as a
+   support case hours later). Pages are deduplicated by canonical
+   hash, and the walk stops on a short page, a missing cursor, or a
+   page that adds nothing new — so an API variant that ignores the
+   cursor degrades to a single 100-transaction page instead of
+   looping forever. */
+async function toncTransactionsDeep(rawAddr, maxTotal) {
+  const out = [];
+  const seen = new Set();
+  let lt = null, hash = null;
+  while (out.length < maxTotal) {
+    const limit = Math.min(100, maxTotal - out.length);
+    let qs = '/transactions?account=' + encodeURIComponent(rawAddr) + '&limit=' + limit + '&sort=desc';
+    if (lt !== null && hash) qs += '&lt=' + encodeURIComponent(lt) + '&hash=' + encodeURIComponent(hash);
+    const j = await tonc(qs);
+    const txs = (j && Array.isArray(j.transactions)) ? j.transactions : [];
+    if (!txs.length) break;
+    let added = 0;
+    for (const tx of txs) {
+      const h = txHashHex(tx && tx.hash);
+      if (h && seen.has(h)) continue;
+      if (h) seen.add(h);
+      out.push(tx);
+      added++;
+    }
+    if (!added) break; // cursor ignored by the API — never spin
+    const last = txs[txs.length - 1];
+    lt = last && last.lt !== undefined && last.lt !== null ? String(last.lt) : null;
+    hash = last && last.hash ? String(last.hash) : null;
+    if (txs.length < limit || lt === null || !hash) break;
+  }
+  return out;
+}
 /* Wallet age in whole days = time since the wallet's FIRST transaction
    (the ascending query). A wallet with no transactions at all is 0. */
 async function fetchWalletAgeDays(raw) {
@@ -2583,7 +2624,14 @@ async function verifyCheck(c) {
   const minNano = BigInt(Math.floor(feeTon * 1e9 * 0.99)); // 1% tolerance for wallet-side rounding
   const comment = verifyComment(userNo);
   const depRaw = toRawAddress(c.cfg.verifyDepositWallet);
-  const txs = await toncTransactions(depRaw, 50, 'desc');
+  // Deep scan (owner order 2026-11-16): the player is actively
+  // waiting on this answer, and at the post-reopening deposit rate
+  // the newest 50 transactions cover only ~20 minutes — a payment
+  // sent earlier (e.g. from the wallet app with the app closed) sat
+  // hundreds of transactions deep and this check answered 404
+  // forever. Page back up to VERIFY_CHECK_SCAN transactions before
+  // declaring the payment missing.
+  const txs = await toncTransactionsDeep(depRaw, VERIFY_CHECK_SCAN);
   for (const tx of txs) {
     const inMsg = tx && tx.in_msg;
     if (!inMsg) continue;
@@ -2611,8 +2659,9 @@ async function verifyCheck(c) {
    players node once and filter pending intents in memory (fine at
    the current scale — revisit with an indexed query if the player
    count grows by orders of magnitude); with nobody pending the tick
-   costs that one read and ZERO chain calls. Otherwise ONE scan of
-   the deposit wallet's 50 newest transactions serves every pending
+   costs that one read and ZERO chain calls. Otherwise ONE paged
+   scan of the deposit wallet's newest transactions (VERIFY_WATCH_SCAN,
+   default 200) serves every pending
    player, matched by their exact VIKING-<userNo> comment, sender ==
    their CURRENT bound wallet, value >= fee (1% tolerance), hash
    unclaimed — plus the same wallet-age rule verifyCheck applies
@@ -2627,6 +2676,8 @@ async function verifyCheck(c) {
    flat regardless of the interval. */
 const VERIFY_WATCH_MS = (() => { const v = Number(process.env.VERIFY_WATCH_MS); return Number.isFinite(v) && v >= 0 ? Math.floor(v) : 20000; })(); // default 20 s (was 10 s — owner load-reduction order 2026-11-15; the tick is indexed now, and verification completing a few seconds later is invisible next to the ~90 s the app itself polls)
 const VERIFY_WATCH_AGE_BATCH = (() => { const v = Number(process.env.VERIFY_WATCH_AGE_BATCH); return Number.isFinite(v) && v > 0 ? Math.floor(v) : 60; })(); // fresh wallet-age determinations per tick (see verifyWatchTick)
+const VERIFY_WATCH_SCAN = (() => { const v = Number(process.env.VERIFY_WATCH_SCAN); return Number.isFinite(v) && v > 0 ? Math.floor(v) : 200; })(); // deposit transactions scanned per watcher tick (paged; was a fixed 50 — see toncTransactionsDeep)
+const VERIFY_CHECK_SCAN = (() => { const v = Number(process.env.VERIFY_CHECK_SCAN); return Number.isFinite(v) && v > 0 ? Math.floor(v) : 500; })(); // deposit transactions scanned by one in-app verifyCheck before it may answer "not found"
 let verifyWatchRunning = false;
 async function verifyWatchTick() {
   if (verifyWatchRunning) return; // ticks never overlap
@@ -2686,7 +2737,7 @@ async function verifyWatchTick() {
       }
       if (!byComment.size) return;
       const depRaw = toRawAddress(cfg.verifyDepositWallet);
-      const txs = await toncTransactions(depRaw, 50, 'desc');
+      const txs = await toncTransactionsDeep(depRaw, VERIFY_WATCH_SCAN);
       scanned = txs.length;
       for (const tx of txs) {
         const inMsg = tx && tx.in_msg;
@@ -2725,6 +2776,108 @@ function startVerifyWatcher() {
   const bootTick = setTimeout(() => { verifyWatchTick(); }, 15000); // one early tick ~15 s after boot
   if (bootTick.unref) bootTick.unref();
   const iv = setInterval(() => { verifyWatchTick(); }, VERIFY_WATCH_MS);
+  if (iv.unref) iv.unref();
+}
+
+/* ---------- verification reconciliation sweep (owner order 2026-11-16) ----------
+   The watcher only completes players who are marked PENDING, and
+   even its deepened scan is a window. A player can still fall
+   through both: he pays from his wallet app before ever opening the
+   verification card (never marked pending), or his payment ages
+   past the watcher's window during a deposit flood before he comes
+   back (player 3935: paid 07:59, surfaced as a support case at
+   11:26 with the payment hundreds of transactions deep). This slow
+   sweep is the structural backstop. Every VERIFY_SWEEP_MS it pages
+   back over the deposit wallet's newest VERIFY_SWEEP_SCAN
+   transactions, collects every payment carrying a VIKING-<userNo>
+   comment at or above the fee, resolves each DISTINCT payer via
+   the indexed userNo query, and — for a player who is unverified,
+   unbanned, and bound to the very wallet that sent the payment,
+   with the wallet-age rule satisfied — completes the verification
+   through the shared completeVerification, so claims, messages and
+   referral syncs behave exactly as in the live paths. Payments
+   already claimed (including by a completed verification) are
+   skipped by completeVerification itself, so re-scanning the same
+   history every hour is harmless. Fresh wallet-age determinations
+   are budgeted per sweep; cached ages are free. Sweeps never
+   overlap; failures are logged and swallowed. VERIFY_SWEEP_MS: 0
+   disables (tests). */
+const VERIFY_SWEEP_MS = (() => { const v = Number(process.env.VERIFY_SWEEP_MS); return Number.isFinite(v) && v >= 0 ? Math.floor(v) : 3600000; })(); // default 1 h
+const VERIFY_SWEEP_SCAN = (() => { const v = Number(process.env.VERIFY_SWEEP_SCAN); return Number.isFinite(v) && v > 0 ? Math.floor(v) : 1000; })(); // deposit transactions paged per sweep
+const VERIFY_SWEEP_AGE_BATCH = (() => { const v = Number(process.env.VERIFY_SWEEP_AGE_BATCH); return Number.isFinite(v) && v > 0 ? Math.floor(v) : 120; })(); // fresh wallet-age determinations per sweep
+let verifySweepRunning = false;
+async function verifySweepTick() {
+  if (verifySweepRunning) return; // sweeps never overlap
+  verifySweepRunning = true;
+  try {
+    const cfg = await getConfig();
+    const minAge = Number(cfg.verifyMinAgeDays) || 7;
+    const feeTon = Number(cfg.verifyFeeTon) || 0;
+    const minNano = BigInt(Math.floor(feeTon * 1e9 * 0.99));
+    const depRaw = toRawAddress(cfg.verifyDepositWallet);
+    const txs = await toncTransactionsDeep(depRaw, VERIFY_SWEEP_SCAN);
+    const byUserNo = new Map(); // payer userNo -> [{ hash, source }]
+    for (const tx of txs) {
+      const inMsg = tx && tx.in_msg;
+      if (!inMsg) continue;
+      let val;
+      try { val = BigInt(String(inMsg.value || '0')); } catch (e) { continue; }
+      if (val < minNano) continue;
+      const text = decodeTextComment(inMsg);
+      if (!text) continue;
+      const m = /^VIKING-(\d+)$/.exec(text.trim());
+      if (!m) continue;
+      const hash = txHashHex(tx.hash);
+      if (!/^[0-9a-fA-F]{64}$/.test(hash)) continue;
+      const userNo = Number(m[1]);
+      if (!byUserNo.has(userNo)) byUserNo.set(userNo, []);
+      byUserNo.get(userNo).push({ hash, source: inMsgSourceRaw(inMsg) });
+    }
+    let completed = 0;
+    let ageReads = 0;
+    const notes = [];
+    for (const [userNo, payments] of byUserNo) {
+      const found = await queryPlayersByChild('userNo', 'equalTo', userNo);
+      if (!found) { notes.push(userNo + ': lookup-failed'); continue; }
+      const entries = Object.entries(found);
+      if (!entries.length) { notes.push(userNo + ': no-player'); continue; }
+      const [uid, p] = entries[0];
+      if (!p || p.banned === true) { notes.push(userNo + ': banned'); continue; }
+      if (p.walletVerified === true) continue; // already done — the common case, stays silent
+      const wallet = p.walletAddr || '';
+      if (!wallet) { notes.push(userNo + ': no-wallet'); continue; }
+      const mine = payments.filter((x) => x.source === wallet);
+      if (!mine.length) { notes.push(userNo + ': source-mismatch'); continue; }
+      const ageCached = p.walletAgeV === WALLET_AGE_CACHE_V && p.walletAgeFor === wallet && p.walletAgeAt && (Date.now() - p.walletAgeAt) < WALLET_AGE_CACHE_MS && Number(p.walletAgeDays) >= 0;
+      if (!ageCached && ageReads >= VERIFY_SWEEP_AGE_BATCH) { notes.push(userNo + ': age-deferred'); continue; }
+      let age = null;
+      try { age = await walletAgeDays(P(uid), p, wallet); } catch (e) { /* treated as not-yet-eligible below */ }
+      if (!ageCached) ageReads++;
+      if (age === null || age < minAge) { notes.push(userNo + ': age ' + (age === null ? '?' : age) + '<' + minAge); continue; }
+      for (const pay of mine) {
+        try {
+          const done = await completeVerification(uid, pay.hash, cfg);
+          if (done.won) { completed++; notes.push(userNo + ': WON ' + pay.hash.slice(0, 10) + '…'); break; }
+          if (done.reason === 'already') break;
+          // 'claimed': this hash belongs to another account — try the payer's next payment
+        } catch (e) { notes.push(userNo + ': ERROR ' + e.message); break; }
+      }
+    }
+    console.log('[verifySweep] scanned=' + txs.length + ' payers=' + byUserNo.size + ' completed=' + completed + (notes.length ? ' | ' + notes.join('; ') : ''));
+  } catch (e) {
+    console.error('verifySweep tick', e.message);
+  } finally {
+    verifySweepRunning = false;
+  }
+}
+let verifySweepStarted = false;
+function startVerifySweeper() {
+  if (verifySweepStarted) return;
+  verifySweepStarted = true;
+  if (!(VERIFY_SWEEP_MS > 0)) return; // 0 = disabled
+  const bootTick = setTimeout(() => { verifySweepTick(); }, 120000); // first sweep ~2 min after boot — catches whatever the old window missed while this build was deploying
+  if (bootTick.unref) bootTick.unref();
+  const iv = setInterval(() => { verifySweepTick(); }, VERIFY_SWEEP_MS);
   if (iv.unref) iv.unref();
 }
 
@@ -3869,6 +4022,7 @@ const ACTIONS = { state, collect, daily, task, bioTask, refAch, wallet, unlink, 
 
 ensureWebhook(); // self-register the Telegram webhook once per process (never blocks boot)
 startVerifyWatcher(); // background deposit watcher (see verifyWatchTick; no-op when VERIFY_WATCH_MS=0)
+startVerifySweeper(); // hourly reconciliation sweep (see verifySweepTick; no-op when VERIFY_SWEEP_MS=0)
 startRefHoldWatcher(); // background referral-hold watcher (see refHoldWatchTick; no-op when REF_HOLD_WATCH_MS=0)
 startRefRepairWatcher(); // background referral repair sweep (see refRepairTick; no-op when REF_REPAIR_MS=0)
 initPayout(); // automatic-payout boot line (disabled line, or wallet + balances when PAYOUT_MNEMONIC is set)
@@ -3949,4 +4103,4 @@ functions.http('collectMining', async (req, res) => {
   }
 });
 
-module.exports = { verifyInitData, clientKeys, riskOf, noteSignals, hit, publicConfig, chatIdOf, memberStatus, updateMultiLinks, completeVerification, verifyWatchTick, toFriendlyAddress, fmtDayMonYear, txUpdate, attemptPayout, derivePayoutAddress, payoutEnabled, sendPayoutSuccess, buildWdReviewCard, sendWdReviewCard, handleBotCallback, attributeReferral, syncReferralActive, refHoldWatchTick, refRepairTick };
+module.exports = { verifyInitData, clientKeys, riskOf, noteSignals, hit, publicConfig, chatIdOf, memberStatus, updateMultiLinks, completeVerification, verifyWatchTick, verifySweepTick, toFriendlyAddress, fmtDayMonYear, txUpdate, attemptPayout, derivePayoutAddress, payoutEnabled, sendPayoutSuccess, buildWdReviewCard, sendWdReviewCard, handleBotCallback, attributeReferral, syncReferralActive, refHoldWatchTick, refRepairTick };
