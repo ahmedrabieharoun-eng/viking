@@ -1147,6 +1147,27 @@ async function ton(path) {
   if (!r.ok) fail(502, 'TON network is busy, try again');
   return r.json();
 }
+/* TonAPI plan pacing (live lesson 2026-11-16): the owner's plan is
+   the Free tier = 1 request/sec, and the deep scans below page
+   through results back-to-back — an unpaced second page lands
+   inside the same second as the first and dies on a 429, which
+   aborted the whole cursor walk every tick even with a valid key
+   installed (five rapid probes from the instance: 429 429 429 200
+   429). Page fetches inside the deep scans are therefore spaced by
+   TONAPI_PAGE_GAP_MS (default 1100; tests set 0) and a failed page
+   is retried in place with growing waits before the failure is
+   allowed to propagate — a page is only ever accepted whole, so
+   the cursor's contiguity guarantee is unaffected. */
+const TONAPI_PAGE_GAP_MS = (() => { const v = Number(process.env.TONAPI_PAGE_GAP_MS); return Number.isFinite(v) && v >= 0 ? Math.floor(v) : 1100; })();
+const sleepMs = (ms) => new Promise((r) => setTimeout(r, ms));
+async function tonPage(qs) {
+  let lastErr = null;
+  for (let attempt = 0; attempt < 4; attempt++) {
+    if (attempt > 0) await sleepMs([1500, 3000, 6000][attempt - 1]);
+    try { return await ton(qs); } catch (e) { lastErr = e; }
+  }
+  throw lastErr;
+}
 async function rawAddress(addr) {
   // Already-raw addresses normalise locally — the same result the
   // tonapi parse returns for this shape. TonConnect always reports
@@ -1326,11 +1347,14 @@ async function tonapiTransactionsDeep(rawAddr, maxTotal) {
   const out = [];
   const seen = new Set();
   let beforeLt = null;
+  let firstPage = true;
   while (out.length < maxTotal) {
     const limit = Math.min(100, maxTotal - out.length);
     let qs = '/blockchain/accounts/' + encodeURIComponent(rawAddr) + '/transactions?limit=' + limit;
     if (beforeLt !== null) qs += '&before_lt=' + encodeURIComponent(beforeLt);
-    const j = await ton(qs);
+    if (!firstPage && TONAPI_PAGE_GAP_MS > 0) await sleepMs(TONAPI_PAGE_GAP_MS);
+    firstPage = false;
+    const j = await tonPage(qs);
     if (!j) {
       // ton() answers null on 404/400: on the first page that is a
       // provider failure (the caller falls back to toncenter); on a
@@ -2805,11 +2829,14 @@ async function tonapiWalkBack(rawAddr, maxTxs, stopPred) {
   const out = [];
   const seen = new Set();
   let beforeLt = null;
+  let firstPage = true;
   while (out.length < maxTxs) {
     const limit = Math.min(100, maxTxs - out.length);
     let qs = '/blockchain/accounts/' + encodeURIComponent(rawAddr) + '/transactions?limit=' + limit;
     if (beforeLt !== null) qs += '&before_lt=' + encodeURIComponent(beforeLt);
-    const j = await ton(qs);
+    if (!firstPage && TONAPI_PAGE_GAP_MS > 0) await sleepMs(TONAPI_PAGE_GAP_MS);
+    firstPage = false;
+    const j = await tonPage(qs);
     if (!j) throw new Fail(502, 'tonapi walk: empty answer');
     const txs = Array.isArray(j.transactions) ? j.transactions : [];
     if (!txs.length) break;
