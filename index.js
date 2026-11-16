@@ -2445,7 +2445,7 @@ async function wallet(c) {
     // wallet); re-syncing the same wallet keeps it.
     const addrChanged = (d.walletAddr || '') !== raw;
     return {
-      value: { ...d, walletAddr: raw, hold, lastSyncAt: holdFresh ? Date.now() : (d.lastSyncAt || 0), ...(voidsVerify ? { walletVerified: false, verifiedWallet: '', verifiedAt: 0, verifyTx: '' } : {}), ...(addrChanged ? { verifyPendingAt: 0 } : {}) },
+      value: { ...d, walletAddr: raw, hold, lastSyncAt: holdFresh ? Date.now() : (d.lastSyncAt || 0), ...(voidsVerify ? { walletVerified: false, verifiedWallet: '', verifiedAt: 0, verifyTx: '', lastVerifyTx: d.verifyTx || '' } : {}), ...(addrChanged ? { verifyPendingAt: 0 } : {}) },
       out: { oldAddr: d.walletAddr || '', voided: voidsVerify }
     };
   });
@@ -2472,7 +2472,7 @@ async function unlink(c) {
     // one — must be verified again.
     const wasVerified = d.walletVerified === true;
     return {
-      value: { ...d, walletAddr: '', hold: 0, verifyPendingAt: 0, ...(wasVerified ? { walletVerified: false, verifiedWallet: '', verifiedAt: 0, verifyTx: '' } : {}) },
+      value: { ...d, walletAddr: '', hold: 0, verifyPendingAt: 0, ...(wasVerified ? { walletVerified: false, verifiedWallet: '', verifiedAt: 0, verifyTx: '', lastVerifyTx: d.verifyTx || '' } : {}) },
       out: { oldAddr: d.walletAddr || '', voided: wasVerified }
     };
   });
@@ -2635,7 +2635,7 @@ async function completeVerification(uid, hash, cfg) {
     if (d.walletVerified === true) return { skip: true, out: { won: false, reason: 'already' } }; // a racer (the other path) won
     if ((d.walletAddr || '') !== wallet) return { error: new Fail(409, 'Wallet changed, try again') };
     return {
-      value: { ...d, walletVerified: true, verifiedWallet: wallet, verifiedAt: Date.now(), verifyTx: hash, verifyPendingAt: 0 },
+      value: { ...d, walletVerified: true, verifiedWallet: wallet, verifiedAt: Date.now(), verifyTx: hash, verifyPendingAt: 0, lastVerifyTx: '' },
       out: { won: true, player: { ...d, walletAddr: wallet, userNo: Number(d.userNo) || 0, name: d.name || '' } }
     };
   });
@@ -2696,6 +2696,20 @@ async function verifyCheck(c) {
   const feeTon = Number(c.cfg.verifyFeeTon) || 0;
   const minNano = BigInt(Math.floor(feeTon * 1e9 * 0.99)); // 1% tolerance for wallet-side rounding
   const comment = verifyComment(userNo);
+  /* Manual re-check, first stop (owner root-fix order 2026-11-16):
+     if one of this player's payments already sits in the unresolved
+     registry (e.g. he paid while his wallet binding was mid-flight),
+     retry it here before scanning — this button never creates a new
+     pending and never charges anything; it only re-examines. */
+  try {
+    const all = (await getVal(rtdb().ref('verifyUnresolved'))) || {};
+    for (const [hash, e] of Object.entries(all)) {
+      if (!e || e.status !== 'open' || Number(e.userNo) !== Number(userNo)) continue;
+      const o = await processVerifyCandidate({ hash, userNo, source: e.source || '', valueNano: e.valueNano || '0' }, c.cfg, { origin: 'check' });
+      if (o === 'WON') return { verified: true, tx: hash };
+      if (o === 'already') return { verified: true, tx: p.verifyTx || hash, already: true };
+    }
+  } catch (e) { /* advisory — the deep scan below still runs */ }
   const depRaw = toRawAddress(c.cfg.verifyDepositWallet);
   // Deep scan (owner order 2026-11-16): the player is actively
   // waiting on this answer, and at the post-reopening deposit rate
@@ -2725,118 +2739,295 @@ async function verifyCheck(c) {
   fail(404, 'Payment not found yet');
 }
 
-/* ---------- background deposit watcher (owner order 2026-11-14) ----------
-   Verification must complete even while the app is CLOSED: a player
-   who opened the verification card (verifyInfo marked them pending),
-   paid, and closed the app is finished here. Every tick: read the
-   players node once and filter pending intents in memory (fine at
-   the current scale — revisit with an indexed query if the player
-   count grows by orders of magnitude); with nobody pending the tick
-   costs that one read and ZERO chain calls. Otherwise ONE paged
-   scan of the deposit wallet's newest transactions (VERIFY_WATCH_SCAN,
-   default 200) serves every pending
-   player, matched by their exact VIKING-<userNo> comment, sender ==
-   their CURRENT bound wallet, value >= fee (1% tolerance), hash
-   unclaimed — plus the same wallet-age rule verifyCheck applies
-   (checked per player from the cache-aware age, so a too-young
-   wallet simply stays pending and is retried as it ages). Completion
-   goes through the shared completeVerification, so messages fire
-   exactly once, from whichever path wins. Ticks never overlap and a
-   failing tick is logged and swallowed — the watcher can never wedge
-   the process. VERIFY_WATCH_MS: 0 disables (tests), default 10 s —
-   at 10 s a tick with nobody pending is one RTDB read, and a tick
-   with pending players is one chain scan, so the API load stays
-   flat regardless of the interval. */
-const VERIFY_WATCH_MS = (() => { const v = Number(process.env.VERIFY_WATCH_MS); return Number.isFinite(v) && v >= 0 ? Math.floor(v) : 20000; })(); // default 20 s (was 10 s — owner load-reduction order 2026-11-15; the tick is indexed now, and verification completing a few seconds later is invisible next to the ~90 s the app itself polls)
-const VERIFY_WATCH_AGE_BATCH = (() => { const v = Number(process.env.VERIFY_WATCH_AGE_BATCH); return Number.isFinite(v) && v > 0 ? Math.floor(v) : 60; })(); // fresh wallet-age determinations per tick (see verifyWatchTick)
-const VERIFY_WATCH_SCAN = (() => { const v = Number(process.env.VERIFY_WATCH_SCAN); return Number.isFinite(v) && v > 0 ? Math.floor(v) : 200; })(); // deposit transactions scanned per watcher tick (paged; was a fixed 50 — see toncTransactionsDeep)
+/* ---------- deposit-cursor verification processor (owner root-fix order 2026-11-16) ----------
+   WHY THIS REPLACED THE PENDING-CENTRIC WATCHER: the old tick first
+   built the eligible-pending set (fresh wallet-age determinations
+   budgeted per tick, oldest first) and only then scanned the newest
+   200 deposits — with ~1000 pendings, a player who paid NOW waited
+   behind hundreds of stale intents for an age slot (case 14920:
+   paid 19:00, still unverified 19:15+), and any payment that aged
+   out of the scan window before its turn was lost to the live path.
+   THE DEPOSIT IS NOW THE TRIGGER. A persisted cursor
+   (meta/depositCursor = the newest FULLY processed deposit
+   transaction) walks the deposit wallet's history on tonapi's real
+   before_lt paging:
+   - every tick collects every transaction newer than the cursor
+     (walking back until the cursor transaction itself is found) and
+     processes the range OLDEST -> NEWEST;
+   - the cursor advances in ONE write, only after every outcome in
+     the range has been recorded (a completion, or an unresolved
+     entry with a reason) — a crash or a tonapi outage leaves the
+     cursor untouched, so the next tick retries the identical range
+     and nothing is ever skipped;
+   - deposits arriving DURING a walk sit above the snapshot head and
+     are picked up by the next tick (before_lt pages are anchored by
+     lt and never shift);
+   - processing is idempotent end to end (completeVerification's
+     atomic verifyClaims claim + guarded flip + once-per-payment
+     notification), so re-processing a range after a crash completes
+     every payment exactly once;
+   - a payment that cannot complete (no such player, wallet not the
+     bound one, wallet too young, banned, under-value, claim owned
+     by another account) is written to verifyUnresolved/{hash} with
+     a machine-readable reason and is NEVER auto-deleted: the hourly
+     reconciler re-examines open entries until they settle.
+   The pending marker (verifyPendingAt) is untouched — it remains
+   the app's "checking" signal and verifyCheck's job — but it no
+   longer gates discovery: a player who pays before ever opening the
+   verification card is found by his deposit alone. First boot with
+   no cursor processes the newest VERIFY_CURSOR_INIT_SCAN deposits
+   as the initial range (older history belongs to the reconciler). */
+const VERIFY_WATCH_MS = (() => { const v = Number(process.env.VERIFY_WATCH_MS); return Number.isFinite(v) && v >= 0 ? Math.floor(v) : 20000; })(); // default 20 s (owner load-reduction order 2026-11-15; env still overrides — production runs 60000)
+const VERIFY_CURSOR_PAGES = (() => { const v = Number(process.env.VERIFY_CURSOR_PAGES); return Number.isFinite(v) && v > 0 ? Math.floor(v) : 100; })(); // pages of 100 per steady-state walk (10,000 tx cap ≈ 2 days of peak flood)
+const VERIFY_CURSOR_INIT_SCAN = (() => { const v = Number(process.env.VERIFY_CURSOR_INIT_SCAN); return Number.isFinite(v) && v > 0 ? Math.floor(v) : 2000; })(); // deposits processed by the first tick when no cursor exists yet
+const VERIFY_RECHECK_BATCH = (() => { const v = Number(process.env.VERIFY_RECHECK_BATCH); return Number.isFinite(v) && v > 0 ? Math.floor(v) : 200; })(); // open unresolved entries re-examined per sweep
 const VERIFY_CHECK_SCAN = (() => { const v = Number(process.env.VERIFY_CHECK_SCAN); return Number.isFinite(v) && v > 0 ? Math.floor(v) : 500; })(); // deposit transactions scanned by one in-app verifyCheck before it may answer "not found"
+const depositCursorRef = () => rtdb().ref('meta/depositCursor');
+const verifyHealthRef = () => rtdb().ref('meta/verifyHealth');
+const unresolvedRef = (hash) => rtdb().ref('verifyUnresolved/' + hash);
+
+async function writeVerifyHealth(patch) {
+  try {
+    const cur = (await getVal(verifyHealthRef())) || {};
+    await verifyHealthRef().set({ ...cur, ...patch });
+  } catch (e) { /* health is advisory — never fail a tick over it */ }
+}
+
+/* tonapi-only backward walk over the deposit wallet (newest ->
+   oldest, normalised, deduplicated by canonical hash). Unlike
+   depositTransactionsDeep there is NO toncenter fallback here: the
+   cursor's contiguity guarantee needs real paging, and a degraded
+   single page would silently corrupt it — a provider failure throws
+   and the caller aborts the tick with the cursor untouched.
+   stopPred(normalisedTx) ends the walk BEFORE that transaction
+   (it and everything older are excluded). */
+async function tonapiWalkBack(rawAddr, maxTxs, stopPred) {
+  const out = [];
+  const seen = new Set();
+  let beforeLt = null;
+  while (out.length < maxTxs) {
+    const limit = Math.min(100, maxTxs - out.length);
+    let qs = '/blockchain/accounts/' + encodeURIComponent(rawAddr) + '/transactions?limit=' + limit;
+    if (beforeLt !== null) qs += '&before_lt=' + encodeURIComponent(beforeLt);
+    const j = await ton(qs);
+    if (!j) throw new Fail(502, 'tonapi walk: empty answer');
+    const txs = Array.isArray(j.transactions) ? j.transactions : [];
+    if (!txs.length) break;
+    let added = 0;
+    let stopped = false;
+    for (const tx of txs) {
+      const h = txHashHex(tx && tx.hash);
+      if (!h || seen.has(h)) continue;
+      const ntx = normalizeTonapiTx(tx);
+      if (stopPred && stopPred(ntx)) { stopped = true; break; }
+      seen.add(h);
+      out.push(ntx);
+      added++;
+    }
+    if (stopped) break;
+    if (!added) break; // provider repeating itself — never spin
+    const lastLt = Number(txs[txs.length - 1] && txs[txs.length - 1].lt);
+    if (!Number.isFinite(lastLt) || (beforeLt !== null && lastLt >= beforeLt)) break;
+    beforeLt = lastLt;
+    if (txs.length < limit) break;
+  }
+  return out;
+}
+
+/* Record (or refresh) an unresolved deposit. Entries are NEVER
+   deleted automatically (owner order 2026-11-16): a settled entry
+   flips to status 'completed' and stays as history. A failure of
+   this write throws to the caller on purpose — an outcome that
+   cannot be recorded must not let the cursor advance past it. */
+async function recordUnresolved(cand, reason, uid) {
+  const now = Date.now();
+  await txUpdate(unresolvedRef(cand.hash), (cur) => {
+    if (cur && cur.status === 'completed') return { skip: true, out: false };
+    if (cur) return { value: { ...cur, reason, uid: uid || cur.uid || '', lastCheckedAt: now, checks: (Number(cur.checks) || 1) + 1 }, out: true };
+    return { value: { userNo: cand.userNo, uid: uid || '', source: cand.source, valueNano: String(cand.valueNano), reason, status: 'open', firstSeenAt: now, lastCheckedAt: now, checks: 1 }, out: true };
+  });
+}
+async function markUnresolvedCompleted(hash) {
+  try {
+    await txUpdate(unresolvedRef(hash), (cur) => {
+      if (!cur || cur.status === 'completed') return { skip: true, out: false };
+      return { value: { ...cur, status: 'completed', completedAt: Date.now(), lastCheckedAt: Date.now() }, out: true };
+    });
+  } catch (e) { /* advisory: the verification itself already landed */ }
+}
+
+/* THE shared candidate processor: one payment-shaped deposit
+   ({ hash, userNo, source, valueNano }) is validated end to end and
+   either completed through completeVerification or recorded in
+   verifyUnresolved with the reason. Validation order (owner order
+   2026-11-16): value >= fee (1% tolerance) -> claim state -> player
+   exists -> not banned -> bound wallet == deposit source -> wallet
+   age >= minimum -> complete. ctx.ageBudget ({left}) caps FRESH
+   wallet-age determinations for the background paths that can defer
+   (sweep/recheck); the cursor path passes none — a player who paid
+   is never queued behind an age budget again. Returns one of:
+   'WON' | 'already' | 'unresolved' | 'age-deferred' | 'skip'. */
+async function processVerifyCandidate(cand, cfg, ctx) {
+  const minAge = Number(cfg.verifyMinAgeDays) || 7;
+  const feeTon = Number(cfg.verifyFeeTon) || 0;
+  const minNano = BigInt(Math.floor(feeTon * 1e9 * 0.99));
+  let val;
+  try { val = BigInt(String(cand.valueNano || '0')); } catch (e) { return 'skip'; }
+  if (val < minNano) { await recordUnresolved(cand, 'undervalue'); return 'unresolved'; }
+  const claim = await getVal(rtdb().ref('verifyClaims/' + cand.hash));
+  const found = await queryPlayersByChild('userNo', 'equalTo', cand.userNo);
+  const entries = found ? Object.entries(found) : [];
+  if (!entries.length) {
+    if (claim && claim.userId) return 'already'; // claimed by a player who no longer resolves — nothing actionable
+    await recordUnresolved(cand, 'no-player');
+    return 'unresolved';
+  }
+  /* userNo is unique in production (counter-assigned transactionally);
+     if a duplicate record ever shares it, the payer is the entry whose
+     bound wallet actually sent this deposit — a wallet-less namesake
+     must never shadow him and eat the payment as 'no-wallet'. */
+  const [uid, p] = entries.find(([, q]) => q && q.walletAddr && q.walletAddr === cand.source) || entries[0];
+  if (claim && String(claim.userId) === uid && p && p.walletVerified === true) { await markUnresolvedCompleted(cand.hash); return 'already'; }
+  if (claim && String(claim.userId) !== uid) { await recordUnresolved(cand, 'claim-conflict', uid); return 'unresolved'; }
+  if (!p || p.banned === true) { await recordUnresolved(cand, 'banned', uid); return 'unresolved'; }
+  const wallet = p.walletAddr || '';
+  if (p.walletVerified === true && wallet && p.verifiedWallet === wallet) { await markUnresolvedCompleted(cand.hash); return 'already'; }
+  if (!wallet) { await recordUnresolved(cand, 'no-wallet', uid); return 'unresolved'; }
+  if (cand.source !== wallet) { await recordUnresolved(cand, 'source-mismatch', uid); return 'unresolved'; }
+  const ageCached = p.walletAgeV === WALLET_AGE_CACHE_V && p.walletAgeFor === wallet && p.walletAgeAt && (Date.now() - p.walletAgeAt) < WALLET_AGE_CACHE_MS && Number(p.walletAgeDays) >= 0;
+  if (!ageCached && ctx && ctx.ageBudget && ctx.ageBudget.left <= 0) return 'age-deferred';
+  let age = null;
+  try { age = await walletAgeDays(P(uid), p, wallet); } catch (e) { /* treated as unknown below — never guessed */ }
+  if (!ageCached && ctx && ctx.ageBudget) ctx.ageBudget.left--;
+  if (age === null) { await recordUnresolved(cand, 'age-unknown', uid); return 'unresolved'; }
+  if (age < minAge) { await recordUnresolved(cand, 'age-too-low', uid); return 'unresolved'; }
+  let done;
+  try { done = await completeVerification(uid, cand.hash, cfg); } catch (e) {
+    await recordUnresolved(cand, 'error:' + String((e && e.message) || e).slice(0, 80), uid);
+    return 'unresolved';
+  }
+  if (done.won) { await markUnresolvedCompleted(cand.hash); return 'WON'; }
+  if (done.reason === 'already') { await markUnresolvedCompleted(cand.hash); return 'already'; }
+  await recordUnresolved(cand, done.reason === 'claimed' ? 'claim-conflict' : (done.reason || 'error'), uid);
+  return 'unresolved';
+}
+
+/* One raw deposit transaction -> candidate (or 'skip' when it is not
+   a verification payment at all: no exact VIKING-<userNo> comment). */
+async function processVerifyDeposit(tx, cfg, ctx) {
+  const inMsg = tx && tx.in_msg;
+  if (!inMsg) return 'skip';
+  const text = decodeTextComment(inMsg);
+  if (!text) return 'skip';
+  const m = /^VIKING-(\d+)$/.exec(text.trim());
+  if (!m) return 'skip';
+  const hash = txHashHex(tx.hash);
+  if (!/^[0-9a-fA-F]{64}$/.test(hash)) return 'skip';
+  return processVerifyCandidate({ hash, userNo: Number(m[1]), source: inMsgSourceRaw(inMsg), valueNano: String(inMsg.value || '0') }, cfg, ctx);
+}
+
 let verifyWatchRunning = false;
 async function verifyWatchTick() {
   if (verifyWatchRunning) return; // ticks never overlap
   verifyWatchRunning = true;
   try {
-    const queried = await queryPlayersByChild('verifyPendingAt', 'startAt', 1);
-    const players = queried || await getVal(rtdb().ref('players'));
-    if (!players) return;
-    const pending = Object.entries(players).filter(([, p]) => p && Number(p.verifyPendingAt) > 0);
-    if (!pending.length) return; // nobody waiting: zero chain calls this tick
-    /* Observability (round 3, incident 2026-11-14): a tick with at
-       least one pending player logs ONE summary line when it ends —
-       how many were pending, how many chain transactions were
-       scanned, and the outcome for every player it skipped or tried
-       to complete (won / reason / error). A stalled verification is
-       therefore visible in the server logs instead of silent: in
-       the incident, a paid player's completion kept dying inside
-       transactions and the watcher said nothing at all. The
-       nobody-pending case above stays completely silent. */
-    let scanned = 0;
-    const notes = [];
+    const cfg = await getConfig();
+    const depRaw = toRawAddress(cfg.verifyDepositWallet);
+    /* Re-completion pass: a verification voided by a wallet change
+       keeps lastVerifyTx pointing at the payment that verified the
+       player before. If he re-binds THAT wallet (the wallets
+       registry still shows it verified for him) and re-pends, the
+       same payment completes him again — it sits at or below the
+       cursor, so the walk will never see it again. No new fee, and
+       the claim's notifiedAt keeps the re-completion silent
+       (once-per-payment messaging). */
     try {
-      const cfg = await getConfig();
-      const minAge = Number(cfg.verifyMinAgeDays) || 7;
-      const feeTon = Number(cfg.verifyFeeTon) || 0;
-      const minNano = BigInt(Math.floor(feeTon * 1e9 * 0.99));
-      const byComment = new Map(); // exact payment comment -> { uid, wallet }
-      let ageReads = 0; // fresh (uncached) wallet-age determinations spent this tick
-      for (const [uid, p] of pending) {
-        if (p.banned === true) { notes.push(uid + ': banned'); continue; } // stays pending; an unban restores the flow
-        if (p.walletVerified === true || !(p.walletAddr || '')) {
-          // Stale intent (verified by another path, or wallet gone):
-          // just clear the marker so the player leaves the scan set.
-          try { await P(uid).update({ verifyPendingAt: 0 }); } catch (e) { /* next tick retries */ }
-          notes.push(uid + ': stale-cleared');
-          continue;
-        }
-        const userNo = await ensureUserNo(uid);
-        if (!userNo) { notes.push(uid + ': no-userNo'); continue; }
-        // Age determinations are this tick's only per-player chain
-        // cost, and a known age is cached for 3 h — but after a
-        // signup flood hundreds of pendings can be uncached at once
-        // (762 on 2026-11-15), and determining all of them every
-        // 20 s would keep the chain layer saturated on retries.
-        // Cached ages are free and always evaluated; FRESH reads
-        // are budgeted per tick and the rest defer to the next one.
-        // A player paying right now still confirms instantly via
-        // the in-app verifyCheck, so the budget costs nobody a
-        // confirmation — it only paces the background catch-up.
-        const ageCached = p.walletAgeV === WALLET_AGE_CACHE_V && p.walletAgeFor === p.walletAddr && p.walletAgeAt && (Date.now() - p.walletAgeAt) < WALLET_AGE_CACHE_MS && Number(p.walletAgeDays) >= 0;
-        if (!ageCached && ageReads >= VERIFY_WATCH_AGE_BATCH) { notes.push(uid + ': age-deferred'); continue; }
-        let age = null;
-        try { age = await walletAgeDays(P(uid), p, p.walletAddr); } catch (e) { /* treated as not-yet-eligible below */ }
-        if (!ageCached) ageReads++;
-        if (age === null || age < minAge) { notes.push(uid + ': age ' + (age === null ? '?' : age) + '<' + minAge); continue; } // the age rule applies here too — retried as the wallet ages
-        byComment.set(verifyComment(userNo), { uid, wallet: p.walletAddr });
+      const pend = await queryPlayersByChild('verifyPendingAt', 'startAt', 1);
+      for (const [uid, p] of Object.entries(pend || {})) {
+        if (!p || p.walletVerified === true || p.banned === true) continue;
+        const ltx = String(p.lastVerifyTx || '');
+        if (!/^[0-9a-fA-F]{64}$/.test(ltx) || !p.walletAddr) continue;
+        const claim = await getVal(rtdb().ref('verifyClaims/' + ltx));
+        if (!claim || String(claim.userId) !== uid) continue;
+        const wdoc = await getVal(walletDoc(p.walletAddr));
+        if (!wdoc || String(wdoc.userId) !== uid || wdoc.verified !== true) continue;
+        const done = await completeVerification(uid, ltx, cfg);
+        if (done.won) console.log('[verifyCursor] re-completed uid=' + uid + ' from his original payment (void + rebind of the same wallet)');
       }
-      if (!byComment.size) return;
-      const depRaw = toRawAddress(cfg.verifyDepositWallet);
-      const txs = await depositTransactionsDeep(depRaw, VERIFY_WATCH_SCAN);
-      scanned = txs.length;
-      for (const tx of txs) {
-        const inMsg = tx && tx.in_msg;
-        if (!inMsg) continue;
-        const text = decodeTextComment(inMsg);
-        if (!text) continue;
-        const cand = byComment.get(text.trim());
-        if (!cand) continue;
-        if (inMsgSourceRaw(inMsg) !== cand.wallet) continue; // must be sent FROM that player's bound wallet
-        let val;
-        try { val = BigInt(String(inMsg.value || '0')); } catch (e) { continue; }
-        if (val < minNano) continue;
-        const hash = txHashHex(tx.hash);
-        if (!/^[0-9a-fA-F]{64}$/.test(hash)) continue;
-        try {
-          const done = await completeVerification(cand.uid, hash, cfg);
-          if (done.won) notes.push(cand.uid + ': WON ' + hash.slice(0, 10) + '…');
-          else notes.push(cand.uid + ': ' + done.reason);
-          if (done.won || done.reason === 'already') byComment.delete(text.trim());
-        } catch (e) { notes.push(cand.uid + ': ERROR ' + e.message); } // per-player failure never stops the tick (and is in the summary line)
-      }
-    } finally {
-      console.log('[verifyWatch] pending=' + pending.length + ' scanned=' + scanned + (notes.length ? ' | ' + notes.join('; ') : ''));
+    } catch (e) { console.error('verifyCursor recompletion pass', e.message); }
+    const cursor = await getVal(depositCursorRef());
+    const isInit = !cursor || !cursor.hash;
+    const maxTxs = isInit ? VERIFY_CURSOR_INIT_SCAN : VERIFY_CURSOR_PAGES * 100;
+    let stopPred = null;
+    if (!isInit) {
+      const cLt = Number(cursor.lt) || 0;
+      const cHash = String(cursor.hash);
+      stopPred = (ntx) => ntx.hash === cHash || (Number(ntx.lt) || 0) < cLt;
     }
+    let walked;
+    try {
+      walked = await tonapiWalkBack(depRaw, maxTxs, stopPred); // newest -> oldest, cursor tx excluded
+    } catch (walkErr) {
+      /* tonapi unreachable: degrade to ONE fallback page (the newest
+         100 deposits via depositTransactionsDeep's toncenter path)
+         and process it WITHOUT advancing the cursor. Contiguity is
+         preserved — the cursor stays frozen and the full range is
+         re-walked when tonapi recovers (processing is idempotent) —
+         while in-page payers still complete during the outage
+         instead of waiting for it to end. If the fallback also
+         yields nothing, rethrow into the stall bookkeeping below. */
+      const page = await depositTransactionsDeep(depRaw, 100);
+      if (!page.length) throw walkErr;
+      const outcomes = {};
+      for (const tx of page.slice().reverse()) {
+        const o = await processVerifyDeposit(tx, cfg, { origin: 'cursor-fallback' });
+        outcomes[o] = (outcomes[o] || 0) + 1;
+      }
+      await writeVerifyHealth({ lastTickAt: Date.now(), lastFallbackAt: Date.now() });
+      console.log('[verifyCursor] tonapi down — fallback page=' + page.length + ' (cursor held) ' + Object.entries(outcomes).map(([k, v]) => k + '=' + v).join(' '));
+      return;
+    }
+    if (!walked.length) {
+      if (isInit) {
+        try { await depositCursorRef().set({ lt: 0, hash: '', utime: 0, processedTotal: 0, updatedAt: Date.now() }); } catch (e) { /* retried next tick */ }
+      }
+      await writeVerifyHealth({ lastTickAt: Date.now() });
+      return;
+    }
+    const range = walked.slice().reverse(); // OLDEST -> NEWEST
+    const outcomes = {};
+    for (const tx of range) {
+      const o = await processVerifyDeposit(tx, cfg, { origin: isInit ? 'cursor-init' : 'cursor' });
+      outcomes[o] = (outcomes[o] || 0) + 1;
+    }
+    /* THE cursor advance (owner point 1): one write, only now —
+       every deposit in the range has a recorded outcome above. Any
+       throw before this line leaves the persisted cursor untouched
+       and the identical range is retried by the next tick. */
+    const head = walked[0];
+    const processedTotal = (cursor && Number(cursor.processedTotal) || 0) + range.length;
+    await depositCursorRef().set({ lt: Number(head.lt) || 0, hash: head.hash, utime: Number(head.now) || 0, processedTotal, updatedAt: Date.now() });
+    await writeVerifyHealth({ lastTickAt: Date.now(), lastAdvanceAt: Date.now(), cursorLt: Number(head.lt) || 0, cursorUtime: Number(head.now) || 0, processedTotal });
+    console.log('[verifyCursor] ' + (isInit ? 'init ' : '') + 'processed=' + range.length + ' ' + Object.entries(outcomes).map(([k, v]) => k + '=' + v).join(' '));
   } catch (e) {
-    console.error('verifyWatch tick', e.message);
+    console.error('verifyCursor tick', e.message);
+    /* Stall alert (owner point 7): if the cursor has not advanced
+       for over 10 minutes while ticks keep failing, tell the admins
+       once an hour at most. The deposits are NOT lost — the frozen
+       cursor means the whole range is retried when the provider
+       recovers — but a human should know the fast path is stuck. */
+    try {
+      const h = (await getVal(verifyHealthRef())) || {};
+      const now = Date.now();
+      const stalledFor = now - (Number(h.lastAdvanceAt) || now);
+      await verifyHealthRef().set({ ...h, lastTickAt: now, lastTickErrorAt: now, lastTickError: String((e && e.message) || e).slice(0, 120) });
+      if (stalledFor > 10 * 60 * 1000 && now - (Number(h.stallAlertedAt) || 0) > 60 * 60 * 1000) {
+        await verifyHealthRef().set({ ...h, lastTickAt: now, lastTickErrorAt: now, stallAlertedAt: now });
+        for (const adminId of adminChatIds()) {
+          await tg('sendMessage', { chat_id: adminId, parse_mode: 'HTML', text: `⚠️ <b>VIKING verification cursor stalled</b>\nNo deposit processed for ${Math.floor(stalledFor / 60000)} min (last error: ${esc(String((e && e.message) || e).slice(0, 120))}).\nDeposits are safe — the cursor is frozen and the range will be retried automatically; the hourly reconciler is the backstop.` });
+        }
+      }
+    } catch (e2) { /* the alert path must never wedge the watcher */ }
   } finally {
     verifyWatchRunning = false;
   }
@@ -2852,27 +3043,20 @@ function startVerifyWatcher() {
   if (iv.unref) iv.unref();
 }
 
-/* ---------- verification reconciliation sweep (owner order 2026-11-16) ----------
-   The watcher only completes players who are marked PENDING, and
-   even its deepened scan is a window. A player can still fall
-   through both: he pays from his wallet app before ever opening the
-   verification card (never marked pending), or his payment ages
-   past the watcher's window during a deposit flood before he comes
-   back (player 3935: paid 07:59, surfaced as a support case at
-   11:26 with the payment hundreds of transactions deep). This slow
-   sweep is the structural backstop. Every VERIFY_SWEEP_MS it pages
-   back over the deposit wallet's newest VERIFY_SWEEP_SCAN
-   transactions, collects every payment carrying a VIKING-<userNo>
-   comment at or above the fee, resolves each DISTINCT payer via
-   the indexed userNo query, and — for a player who is unverified,
-   unbanned, and bound to the very wallet that sent the payment,
-   with the wallet-age rule satisfied — completes the verification
-   through the shared completeVerification, so claims, messages and
-   referral syncs behave exactly as in the live paths. Payments
-   already claimed (including by a completed verification) are
-   skipped by completeVerification itself, so re-scanning the same
-   history every hour is harmless. Fresh wallet-age determinations
-   are budgeted per sweep; cached ages are free. Sweeps never
+/* ---------- verification reconciler (owner orders 2026-11-16) ----------
+   The structural backstop behind the cursor, in two phases.
+   Phase 1 re-examines every OPEN verifyUnresolved entry (budgeted):
+   a deposit that failed because the wallet was not yet bound, the
+   wallet was too young, or the player was mid-fix is retried until
+   it settles — entries are never deleted, settled ones flip to
+   'completed'. Phase 2 is the deep historical scan: it pages back
+   over the deposit wallet's newest VERIFY_SWEEP_SCAN transactions
+   and routes every payment-shaped deposit through the same
+   processVerifyCandidate as the cursor path, so anything the cursor
+   has not covered (history from before its initialisation, a gap
+   beyond one walk's page cap) is completed — or recorded
+   unresolved — here. Fresh wallet-age determinations are budgeted
+   per sweep across both phases; cached ages are free. Sweeps never
    overlap; failures are logged and swallowed. VERIFY_SWEEP_MS: 0
    disables (tests). */
 const VERIFY_SWEEP_MS = (() => { const v = Number(process.env.VERIFY_SWEEP_MS); return Number.isFinite(v) && v >= 0 ? Math.floor(v) : 3600000; })(); // default 1 h
@@ -2884,18 +3068,38 @@ async function verifySweepTick() {
   verifySweepRunning = true;
   try {
     const cfg = await getConfig();
-    const minAge = Number(cfg.verifyMinAgeDays) || 7;
-    const feeTon = Number(cfg.verifyFeeTon) || 0;
-    const minNano = BigInt(Math.floor(feeTon * 1e9 * 0.99));
+    const notes = [];
+    let completed = 0;
+    let rechecked = 0;
+    const ageBudget = { left: VERIFY_SWEEP_AGE_BATCH };
+    /* Phase 1: re-examine open unresolved entries, oldest first. */
+    try {
+      const all = (await getVal(rtdb().ref('verifyUnresolved'))) || {};
+      const openEntries = Object.entries(all).filter(([, e]) => e && e.status === 'open')
+        .sort((a, b) => (Number(a[1].firstSeenAt) || 0) - (Number(b[1].firstSeenAt) || 0));
+      for (const [hash, e] of openEntries.slice(0, VERIFY_RECHECK_BATCH)) {
+        rechecked++;
+        const o = await processVerifyCandidate({ hash, userNo: Number(e.userNo) || 0, source: e.source || '', valueNano: e.valueNano || '0' }, cfg, { origin: 'recheck', ageBudget });
+        if (o === 'WON') { completed++; notes.push(e.userNo + ': WON(recheck)'); }
+      }
+      const openCount = openEntries.length;
+      const h = (await getVal(verifyHealthRef())) || {};
+      await writeVerifyHealth({ openUnresolved: openCount, lastRecheckAt: Date.now() });
+      /* Backlog surge alert (owner point 7): once per 6 h at most. */
+      if (openCount > 50 && Date.now() - (Number(h.surgeAlertedAt) || 0) > 6 * 60 * 60 * 1000) {
+        await writeVerifyHealth({ surgeAlertedAt: Date.now() });
+        for (const adminId of adminChatIds()) {
+          await tg('sendMessage', { chat_id: adminId, parse_mode: 'HTML', text: `⚠️ <b>VIKING verification backlog</b>\n${openCount} deposits are recorded unresolved (paid but not yet completable — wrong wallet, too young, or no matching player). They are kept and re-checked hourly; none are deleted.` });
+        }
+      }
+    } catch (e) { console.error('verifySweep recheck', e.message); }
+    /* Phase 2: deep historical scan through the shared processor. */
     const depRaw = toRawAddress(cfg.verifyDepositWallet);
     const txs = await depositTransactionsDeep(depRaw, VERIFY_SWEEP_SCAN);
-    const byUserNo = new Map(); // payer userNo -> [{ hash, source }]
+    const byUserNo = new Map(); // payer userNo -> [candidates, oldest first]
     for (const tx of txs) {
       const inMsg = tx && tx.in_msg;
       if (!inMsg) continue;
-      let val;
-      try { val = BigInt(String(inMsg.value || '0')); } catch (e) { continue; }
-      if (val < minNano) continue;
       const text = decodeTextComment(inMsg);
       if (!text) continue;
       const m = /^VIKING-(\d+)$/.exec(text.trim());
@@ -2904,39 +3108,17 @@ async function verifySweepTick() {
       if (!/^[0-9a-fA-F]{64}$/.test(hash)) continue;
       const userNo = Number(m[1]);
       if (!byUserNo.has(userNo)) byUserNo.set(userNo, []);
-      byUserNo.get(userNo).push({ hash, source: inMsgSourceRaw(inMsg) });
+      byUserNo.get(userNo).unshift({ hash, userNo, source: inMsgSourceRaw(inMsg), valueNano: String(inMsg.value || '0') });
     }
-    let completed = 0;
-    let ageReads = 0;
-    const notes = [];
     for (const [userNo, payments] of byUserNo) {
-      const found = await queryPlayersByChild('userNo', 'equalTo', userNo);
-      if (!found) { notes.push(userNo + ': lookup-failed'); continue; }
-      const entries = Object.entries(found);
-      if (!entries.length) { notes.push(userNo + ': no-player'); continue; }
-      const [uid, p] = entries[0];
-      if (!p || p.banned === true) { notes.push(userNo + ': banned'); continue; }
-      if (p.walletVerified === true) continue; // already done — the common case, stays silent
-      const wallet = p.walletAddr || '';
-      if (!wallet) { notes.push(userNo + ': no-wallet'); continue; }
-      const mine = payments.filter((x) => x.source === wallet);
-      if (!mine.length) { notes.push(userNo + ': source-mismatch'); continue; }
-      const ageCached = p.walletAgeV === WALLET_AGE_CACHE_V && p.walletAgeFor === wallet && p.walletAgeAt && (Date.now() - p.walletAgeAt) < WALLET_AGE_CACHE_MS && Number(p.walletAgeDays) >= 0;
-      if (!ageCached && ageReads >= VERIFY_SWEEP_AGE_BATCH) { notes.push(userNo + ': age-deferred'); continue; }
-      let age = null;
-      try { age = await walletAgeDays(P(uid), p, wallet); } catch (e) { /* treated as not-yet-eligible below */ }
-      if (!ageCached) ageReads++;
-      if (age === null || age < minAge) { notes.push(userNo + ': age ' + (age === null ? '?' : age) + '<' + minAge); continue; }
-      for (const pay of mine) {
-        try {
-          const done = await completeVerification(uid, pay.hash, cfg);
-          if (done.won) { completed++; notes.push(userNo + ': WON ' + pay.hash.slice(0, 10) + '…'); break; }
-          if (done.reason === 'already') break;
-          // 'claimed': this hash belongs to another account — try the payer's next payment
-        } catch (e) { notes.push(userNo + ': ERROR ' + e.message); break; }
+      for (const cand of payments) {
+        const o = await processVerifyCandidate(cand, cfg, { origin: 'sweep', ageBudget });
+        if (o === 'WON') { completed++; notes.push(userNo + ': WON ' + cand.hash.slice(0, 10) + '…'); break; }
+        if (o === 'already') break;
+        // 'unresolved': the reason is recorded — try the payer's next payment
       }
     }
-    console.log('[verifySweep] scanned=' + txs.length + ' payers=' + byUserNo.size + ' completed=' + completed + (notes.length ? ' | ' + notes.join('; ') : ''));
+    console.log('[verifySweep] rechecked=' + rechecked + ' scanned=' + txs.length + ' payers=' + byUserNo.size + ' completed=' + completed + (notes.length ? ' | ' + notes.join('; ') : ''));
   } catch (e) {
     console.error('verifySweep tick', e.message);
   } finally {
@@ -2948,7 +3130,7 @@ function startVerifySweeper() {
   if (verifySweepStarted) return;
   verifySweepStarted = true;
   if (!(VERIFY_SWEEP_MS > 0)) return; // 0 = disabled
-  const bootTick = setTimeout(() => { verifySweepTick(); }, 120000); // first sweep ~2 min after boot — catches whatever the old window missed while this build was deploying
+  const bootTick = setTimeout(() => { verifySweepTick(); }, 120000); // first sweep ~2 min after boot — drains whatever predates the cursor
   if (bootTick.unref) bootTick.unref();
   const iv = setInterval(() => { verifySweepTick(); }, VERIFY_SWEEP_MS);
   if (iv.unref) iv.unref();
@@ -4176,4 +4358,4 @@ functions.http('collectMining', async (req, res) => {
   }
 });
 
-module.exports = { verifyInitData, clientKeys, riskOf, noteSignals, hit, publicConfig, chatIdOf, memberStatus, updateMultiLinks, completeVerification, verifyWatchTick, verifySweepTick, toFriendlyAddress, fmtDayMonYear, txUpdate, attemptPayout, derivePayoutAddress, payoutEnabled, sendPayoutSuccess, buildWdReviewCard, sendWdReviewCard, handleBotCallback, attributeReferral, syncReferralActive, refHoldWatchTick, refRepairTick };
+module.exports = { verifyInitData, clientKeys, riskOf, noteSignals, hit, publicConfig, chatIdOf, memberStatus, updateMultiLinks, completeVerification, verifyWatchTick, verifySweepTick, processVerifyCandidate, processVerifyDeposit, toFriendlyAddress, fmtDayMonYear, txUpdate, attemptPayout, derivePayoutAddress, payoutEnabled, sendPayoutSuccess, buildWdReviewCard, sendWdReviewCard, handleBotCallback, attributeReferral, syncReferralActive, refHoldWatchTick, refRepairTick };
