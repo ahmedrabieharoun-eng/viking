@@ -2266,7 +2266,7 @@
     }
     async function initCloudSync() {
       bootWithRetry();
-      setInterval(() => { if (!document.hidden) refreshState().catch(() => {}); }, 10000);
+      setInterval(() => { if (!document.hidden) refreshState().catch(() => {}); }, 30000);
     }
 
     // Returning from the bot (the bio verification happens there) must
