@@ -292,6 +292,16 @@
     #connected-wallet-actions{margin-left:auto;flex:none}
     .pf-disconnect{background:linear-gradient(180deg,#5d3c1a,#38220d);border:1px solid #9a6d2f;color:#f0d9a0;font-family:Georgia,serif;font-weight:900;font-size:10.5px;letter-spacing:1.2px;padding:8px 13px;border-radius:6px;cursor:pointer;box-shadow:0 4px 10px rgba(0,0,0,.5)}
     .pf-disconnect:active{transform:scale(.95)}
+    .pf-modal{position:fixed;inset:0;background:rgba(2,6,14,.78);display:flex;align-items:center;justify-content:center;z-index:100002;padding:22px}
+    .pf-modal-card{background:#0d1b2e;border:1px solid rgba(212,175,55,.6);border-radius:14px;max-width:340px;width:100%;padding:22px 18px;text-align:center;box-shadow:0 18px 50px rgba(0,0,0,.7)}
+    .pf-modal-title{font-family:Georgia,serif;font-weight:900;font-size:17px;letter-spacing:1px;color:#f0d9a0;margin-bottom:10px}
+    .pf-modal-body{font-size:13.5px;line-height:1.55;color:#e8e2d4;margin-bottom:18px}
+    .pf-modal-row{display:flex;gap:10px}
+    .pf-modal-cancel{flex:1;background:linear-gradient(180deg,#2a3a52,#16233a);border:1px solid rgba(255,255,255,.25);color:#dbe4f0;font-weight:800;font-size:13px;padding:11px 0;border-radius:8px;cursor:pointer}
+    .pf-modal-confirm{flex:1;background:linear-gradient(180deg,#8a2f23,#5d1a12);border:1px solid #c0563f;color:#ffe1d6;font-weight:800;font-size:13px;padding:11px 0;border-radius:8px;cursor:pointer}
+    .pf-modal-cancel:active,.pf-modal-confirm:active{transform:scale(.96)}
+    .pf-copy-btn{background:none;border:none;cursor:pointer;padding:2px 5px;vertical-align:-2px}
+    .pf-copy-btn:active{transform:scale(.9)}
     .pf-stats{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:20px}
     .pf-stat{position:relative;border:1px solid rgba(212,175,55,.55);background:url('assets/ref_stone_plain.webp') center/cover;border-radius:10px;padding:24px 8px 13px;text-align:center;box-shadow:inset 0 0 0 1px rgba(255,255,255,.05)}
     .pf-stat-ic{position:absolute;top:-15px;left:10px;width:32px;height:32px;background:linear-gradient(180deg,#1a2438,#0c1322);border:1px solid rgba(212,175,55,.6);border-radius:5px;display:flex;align-items:center;justify-content:center}
@@ -539,6 +549,16 @@
   </div>
 
   <div id="toast">Notification</div>
+  <div id="unlink-modal" class="pf-modal" style="display:none">
+    <div class="pf-modal-card">
+      <div class="pf-modal-title" data-i18n="unlink_title">Disconnect Wallet?</div>
+      <div class="pf-modal-body" data-i18n="unlink_warn">⚠️ Disconnecting will cancel your wallet verification. To verify again, you will have to pay the verification fee again.</div>
+      <div class="pf-modal-row">
+        <button class="pf-modal-cancel" id="btn-unlink-cancel"><span data-i18n="unlink_cancel">Cancel</span></button>
+        <button class="pf-modal-confirm" id="btn-unlink-confirm"><span data-i18n="unlink_confirm">Disconnect</span></button>
+      </div>
+    </div>
+  </div>
 
   <div class="app-shell" id="main-app-shell">
     <!-- Top bar REMOVED (owner order 2026-11-14): its three controls —
@@ -807,7 +827,7 @@
             </div>
           </div>
           <div class="pf-meta"><span data-i18n="prof_username_lbl">USERNAME</span> — <span id="prof-username">@mansawy1</span></div>
-          <div class="pf-meta"><span>ID</span> — <span id="prof-id">7216746593</span></div>
+          <div class="pf-meta"><span>ID</span> — <span id="prof-id">7216746593</span> <button id="btn-copy-id" class="pf-copy-btn" aria-label="Copy ID"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#d4af37" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button></div>
         </div>
       </section>
 
@@ -1407,7 +1427,7 @@
         ref_pending:"Pending", ref_verified:"Active", ref_earned:"5% Earned", copy_btn:"Copy Link", share_btn:"Share",
         my_referrals_title:"👥 My Invited Friends", pending_ref_title:"Pending Referral Profits", collect_ref_btn:"COLLECT",
         ton_wallet_title:"TON Blockchain Wallet", connect_wallet_btn:"Connect TON Wallet",
-        sync_hold_btn:"Verify Wallet Hold", disconnect_wallet_btn:"Disconnect",
+        sync_hold_btn:"Verify Wallet Hold", disconnect_wallet_btn:"Disconnect", unlink_title:"Disconnect Wallet?", unlink_warn:"⚠️ Disconnecting will cancel your wallet verification. To verify again, you will have to pay the verification fee again.", unlink_confirm:"Disconnect", unlink_cancel:"Cancel",
         prof_page_title:"PROFILE", prof_username_lbl:"USERNAME", prof_wallet_lbl:"WALLET", prof_amount_lbl:"AMOUNT", buy_stonfi_btn:"Buy on STON.fi", set_sound_lbl:"SOUND", set_lang_lbl:"LANGUAGE", lock_verify:"Verify Your Wallet First", ref_banner_title:"REFERRAL SYSTEM", boost_banner_title:"LEVELS BOOST", quests_title:"QUESTS", tap_open_hint:"Tap the card to open", ref_head_earn:"Earn 5% of your friends mining", ref_head_sub:"A friend activates at Level 2", ref_link_lbl:"REFERRAL LINK", ref_how_title:"HOW IT WORKS", ref_rule_100:"+100 coins for every ACTIVE referral", ref_rule_cond:"Activation: your friend reaches Level 2 — holding 200+ $VIKING in their wallet", ref_rule_5:"You earn 5% of everything your active referrals earn — automatically", ref_friends_title:"MY INVITED FRIENDS", ref_verified_pill:"VERIFIED", ref_pending_pill:"PENDING", ref_dup_pill:"DUPLICATE",
         hold_wallet_lbl:"Wallet Hold", mine_wallet_lbl:"In-App Balance",
         withdraw_title:"Withdraw", min_wd_lbl:"Minimum:", wd_fee_lbl:"Fee (5%):", net_lbl:"Net:",
@@ -1457,7 +1477,7 @@
         ref_pending:"معلق", ref_verified:"مفعل", ref_earned:"ربح 5%", copy_btn:"نسخ الرابط", share_btn:"مشاركة",
         my_referrals_title:"👥 أصدقائي المدعوون", pending_ref_title:"أرباح الإحالات المعلقة", collect_ref_btn:"جمع أرباح الإحالات",
         ton_wallet_title:"محفظة شبكة TON", connect_wallet_btn:"ربط محفظة TON الآن",
-        sync_hold_btn:"تحديث رصيد المحفظة", disconnect_wallet_btn:"إلغاء الربط",
+        sync_hold_btn:"تحديث رصيد المحفظة", disconnect_wallet_btn:"إلغاء الربط", unlink_title:"فك ربط المحفظة؟", unlink_warn:"⚠️ فك ربط المحفظة سيلغي توثيق محفظتك، وستضطر لدفع رسوم التوثيق مرة أخرى لإعادة التوثيق.", unlink_confirm:"فك الربط", unlink_cancel:"إلغاء",
         prof_page_title:"الملف الشخصي", prof_username_lbl:"اسم المستخدم", prof_wallet_lbl:"المحفظة", prof_amount_lbl:"المبلغ", buy_stonfi_btn:"اشترِ من STON.fi", set_sound_lbl:"الصوت", set_lang_lbl:"اللغة", lock_verify:"قم بتوثيق محفظتك أولاً", ref_banner_title:"نظام الإحالة", boost_banner_title:"تعزيز المستوى", quests_title:"المهام", tap_open_hint:"اضغط على الكارت للفتح", ref_head_earn:"اكسب 5% من تعدين أصدقائك", ref_head_sub:"الصديق بيتنشط عند المستوى 2", ref_link_lbl:"رابط الإحالة", ref_how_title:"إزاي بيشتغل", ref_rule_100:"+100 عملة عن كل إحالة نشطة", ref_rule_cond:"التنشيط: صديقك يوصل للمستوى 2 — يعني معاه 200+ $VIKING في محفظته", ref_rule_5:"بتكسب 5% من كل أرباح إحالاتك النشطة — تلقائيًا", ref_friends_title:"أصدقائي المدعوون", ref_verified_pill:"موثّق", ref_pending_pill:"قيد الانتظار", ref_dup_pill:"مكرر",
         hold_wallet_lbl:"عملات المحفظة (Hold)", mine_wallet_lbl:"رصيد داخل التطبيق",
         withdraw_title:"سحب", min_wd_lbl:"الحد الأدنى:", wd_fee_lbl:"رسوم (5%):", net_lbl:"الصافي:",
@@ -1507,7 +1527,7 @@
         ref_pending:"Ожидание", ref_verified:"Активно", ref_earned:"Доход 5%", copy_btn:"Копировать", share_btn:"Поделиться",
         my_referrals_title:"👥 Мои рефералы", pending_ref_title:"Ожидаемый доход", collect_ref_btn:"Собрать доход",
         ton_wallet_title:"Кошелек TON", connect_wallet_btn:"Подключить TON Кошелек",
-        sync_hold_btn:"Обновить Холд", disconnect_wallet_btn:"Отключить",
+        sync_hold_btn:"Обновить Холд", disconnect_wallet_btn:"Отключить", unlink_title:"Отключить кошелёк?", unlink_warn:"⚠️ Отключение отменит верификацию кошелька. Для повторной верификации придётся снова оплатить комиссию.", unlink_confirm:"Отключить", unlink_cancel:"Отмена",
         prof_page_title:"ПРОФИЛЬ", prof_username_lbl:"ИМЯ ПОЛЬЗОВАТЕЛЯ", prof_wallet_lbl:"КОШЕЛЁК", prof_amount_lbl:"СУММА", buy_stonfi_btn:"Купить на STON.fi", set_sound_lbl:"ЗВУК", set_lang_lbl:"ЯЗЫК", lock_verify:"Сначала подтвердите кошелёк", ref_banner_title:"РЕФЕРАЛЬНАЯ СИСТЕМА", boost_banner_title:"УСИЛЕНИЕ УРОВНЕЙ", quests_title:"ЗАДАНИЯ", tap_open_hint:"Нажмите на карточку, чтобы открыть", ref_head_earn:"Зарабатывайте 5% от майнинга друзей", ref_head_sub:"Друг активируется на уровне 2", ref_link_lbl:"РЕФЕРАЛЬНАЯ ССЫЛКА", ref_how_title:"КАК ЭТО РАБОТАЕТ", ref_rule_100:"+100 монет за каждого АКТИВНОГО реферала", ref_rule_cond:"Активация: друг достигает уровня 2 — держит 200+ $VIKING в кошельке", ref_rule_5:"Вы получаете 5% от всего заработка активных рефералов — автоматически", ref_friends_title:"МОИ ПРИГЛАШЁННЫЕ ДРУЗЬЯ", ref_verified_pill:"ПОДТВЕРЖДЁН", ref_pending_pill:"ОЖИДАЕТ", ref_dup_pill:"ДУБЛИКАТ",
         hold_wallet_lbl:"В кошельке", mine_wallet_lbl:"Баланс в приложении",
         withdraw_title:"Вывод", min_wd_lbl:"Минимум:", wd_fee_lbl:"Комиссия (5%):", net_lbl:"Чистыми:",
@@ -2334,6 +2354,12 @@
       }
     }
 
+    function askUnlinkConfirm(e) {
+      if (!isHumanClick(e)) return;
+      SoundFX.click();
+      document.getElementById('unlink-modal').style.display = 'flex';
+    }
+
     async function disconnectTonWallet(e) {
       if (!isHumanClick(e)) return;
       SoundFX.click();
@@ -3036,7 +3062,24 @@
       const a = (document.getElementById('official-contract-addr').textContent || "").trim();
       try { navigator.clipboard.writeText(a); showToast("📋 Copied!"); } catch (e) {}
     });
-    document.getElementById('btn-disconnect-wallet').addEventListener('click', disconnectTonWallet);
+    document.getElementById('btn-disconnect-wallet').addEventListener('click', askUnlinkConfirm);
+    document.getElementById('btn-unlink-cancel').addEventListener('click', (e) => {
+      if (!isHumanClick(e)) return;
+      SoundFX.click();
+      document.getElementById('unlink-modal').style.display = 'none';
+    });
+    document.getElementById('btn-unlink-confirm').addEventListener('click', (e) => {
+      document.getElementById('unlink-modal').style.display = 'none';
+      disconnectTonWallet(e);
+    });
+    document.getElementById('unlink-modal').addEventListener('click', (e) => {
+      if (e.target && e.target.id === 'unlink-modal') e.currentTarget.style.display = 'none';
+    });
+    document.getElementById('btn-copy-id').addEventListener('click', () => {
+      SoundFX.click();
+      const a = (document.getElementById('prof-id').textContent || "").trim();
+      try { navigator.clipboard.writeText(a); showToast("📋 Copied!"); } catch (e) {}
+    });
     document.getElementById('wd-input-amt').addEventListener('input', (e) => {
       const digits = e.target.value.replace(/[^\d]/g, '').slice(0, 12);
       e.target.value = digits ? Number(digits).toLocaleString('en-US') : '';
