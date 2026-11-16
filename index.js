@@ -24,16 +24,20 @@ function initRtdb() {
 /* Database backend (Supabase migration, owner order 2026-11-16):
    DB_BACKEND=rtdb (default) uses Firebase RTDB exactly as before;
    'dual' keeps RTDB primary and mirrors every committed write to
-   Supabase; 'supabase' serves everything from Supabase through the
-   RTDB-compatible adapter in sb_adapter.js. */
+   Supabase; 'dual_sb' flips reads to Supabase (primary) while RTDB
+   stays on as the write shadow, so rolling back to 'dual'/'rtdb'
+   loses nothing; 'supabase' serves everything from Supabase through
+   the RTDB-compatible adapter in sb_adapter.js. */
 let _backend = null;
 function rtdb() {
   if (_backend) return _backend;
   const mode = String(process.env.DB_BACKEND || 'rtdb').toLowerCase();
-  if (mode === 'supabase' || mode === 'dual') {
+  if (mode === 'supabase' || mode === 'dual' || mode === 'dual_sb') {
     const { createSbDb, DualDb } = require('./sb_adapter');
     const sb = createSbDb(process.env.SUPABASE_REST_URL || '', process.env.SUPABASE_SERVICE_KEY || '');
-    _backend = mode === 'supabase' ? sb : new DualDb(initRtdb(), sb);
+    if (mode === 'supabase') _backend = sb;
+    else if (mode === 'dual') _backend = new DualDb(initRtdb(), sb);
+    else _backend = new DualDb(sb, initRtdb());
     return _backend;
   }
   _backend = initRtdb();

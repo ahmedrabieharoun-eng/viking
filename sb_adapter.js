@@ -300,10 +300,17 @@ class SbQuery {
   }
 }
 
-/* Dual mode: RTDB stays the primary (all reads + writes); every
-   committed write is mirrored to Supabase. Mirror failures are only
-   logged — the periodic reconciler diffs full snapshots and repairs
-   the shadow from RTDB, so a dropped mirror write is never fatal. */
+/* Dual mode: one database stays the primary (all reads + writes);
+   every committed write is mirrored to the other (the shadow).
+   'dual' = RTDB primary / Supabase shadow; 'dual_sb' = Supabase
+   primary / RTDB shadow (the read-flip phase, so a rollback to
+   Firebase loses nothing — RTDB never stopped receiving writes).
+   Mirror writes are idempotent by construction (keyed set/update/
+   remove, transactions mirror their final value), so retrying one
+   can never duplicate an operation. A mirror that still fails after
+   bounded retries is counted in shadowFails and logged; the periodic
+   reconciler diffs full snapshots and repairs the shadow from the
+   primary, so a dropped mirror write is never fatal. */
 class DualRef {
   constructor(dual, segs) { this._dual = dual; this._segs = segs; }
   get key() { return this._segs.length ? this._segs[this._segs.length - 1] : null; }
@@ -315,8 +322,15 @@ class DualRef {
   async once(ev) { return this._real().once(ev); }
   orderByChild(child) { return this._real().orderByChild(child); }
   async _mirror(fn) {
-    try { await fn(this._shadow()); }
-    catch (e) { this._dual.shadowFails++; console.error('dual mirror failed on', this._segs.join('/') || '/', '-', e.message); }
+    const delays = [0, 150, 500, 1500];
+    let lastErr = null;
+    for (let i = 0; i < delays.length; i++) {
+      if (delays[i]) await new Promise((r) => setTimeout(r, delays[i] + Math.floor(Math.random() * 60)));
+      try { await fn(this._shadow()); return; }
+      catch (e) { lastErr = e; }
+    }
+    this._dual.shadowFails++;
+    console.error('dual mirror failed on', this._segs.join('/') || '/', '-', lastErr && lastErr.message);
   }
   async set(value) { await this._real().set(value); await this._mirror((s) => s.set(value)); }
   async update(obj) { await this._real().update(obj); await this._mirror((s) => s.update(obj)); }
@@ -334,6 +348,9 @@ class DualRef {
 }
 
 class DualDb {
+  /* (primary, shadow): reads + writes hit the primary; committed
+     writes mirror to the shadow. Field names keep the original
+     dual-mode labels: .real = primary, .sb = shadow. */
   constructor(real, sb) { this.real = real; this.sb = sb; this.shadowFails = 0; }
   ref(path) { return new DualRef(this, splitPath(path)); }
 }
