@@ -1284,20 +1284,83 @@ async function toncTransactions(rawAddr, limit, order) {
   const j = await tonc('/transactions?account=' + encodeURIComponent(rawAddr) + '&limit=' + limit + '&sort=' + order);
   return (j && Array.isArray(j.transactions)) ? j.transactions : [];
 }
-/* Deep newest-first scan of one account's transactions, paged with
-   the lt/hash cursor toncenter v3 accepts (each page asks for the
-   transactions OLDER than the previous page's last one). Built for
-   the verification paths (owner order 2026-11-16): after the app
-   reopened to everyone, the deposit wallet began receiving ~150 fee
-   payments an hour, so the fixed 50-transaction window covered only
-   ~20 minutes — a payment whose owner was not yet marked pending,
-   or whose tick hiccuped, aged out of the window and could never be
-   matched again (player 3935 paid at 07:59, was only picked up as a
-   support case hours later). Pages are deduplicated by canonical
-   hash, and the walk stops on a short page, a missing cursor, or a
-   page that adds nothing new — so an API variant that ignores the
-   cursor degrades to a single 100-transaction page instead of
-   looping forever. */
+/* Deep newest-first scan of one account's transactions — the
+   verification paths' workhorse (owner order 2026-11-16). After the
+   app reopened to everyone, the deposit wallet began receiving
+   ~150–190 fee payments an hour, so the fixed 50-transaction window
+   the paths used before covered only ~20 minutes: a payment whose
+   owner was not yet marked pending, or whose tick hiccuped, aged
+   out of the window and could never be matched again (player 3935
+   paid correctly at 07:59 and surfaced as a support case hours
+   later, his payment ~600 transactions deep).
+   The scan runs on tonapi, whose account-transactions endpoint
+   pages correctly with before_lt (each page returns transactions
+   strictly older than the previous page's last lt — verified live
+   2026-11-16). toncenter v3 cannot do this at all: probed live the
+   same day, its lt/hash parameters act as an EXACT-match filter
+   (and a base64 hash is rejected with 422), while offset and to_lt
+   are silently ignored — every variant returned either the first
+   page again or the cursor transaction alone. tonapi transactions
+   are normalised into the toncenter shape the consumers already
+   read (hash / in_msg.source / in_msg.value / text comment), so
+   verifyCheck, the watcher and the sweep share one code path.
+   Pages are deduplicated by canonical hash, and the walk stops on
+   a short page, a non-advancing lt, or a page that adds nothing
+   new, so a misbehaving provider degrades instead of looping. */
+function normalizeTonapiTx(tx) {
+  const im = (tx && tx.in_msg) || {};
+  const body = (im.decoded_body && typeof im.decoded_body === 'object') ? im.decoded_body : {};
+  const text = typeof body.text === 'string' ? body.text : (typeof body.comment === 'string' ? body.comment : '');
+  const src = (im.source && typeof im.source === 'object') ? (im.source.address || '') : (im.source || '');
+  return {
+    hash: tx && tx.hash, lt: tx && tx.lt, now: tx && tx.utime,
+    in_msg: {
+      source: src,
+      value: String(im.value !== undefined && im.value !== null ? im.value : '0'),
+      message_content: text ? { decoded: { type: 'text_comment', comment: text } } : undefined,
+      comment: text || undefined
+    }
+  };
+}
+async function tonapiTransactionsDeep(rawAddr, maxTotal) {
+  const out = [];
+  const seen = new Set();
+  let beforeLt = null;
+  while (out.length < maxTotal) {
+    const limit = Math.min(100, maxTotal - out.length);
+    let qs = '/blockchain/accounts/' + encodeURIComponent(rawAddr) + '/transactions?limit=' + limit;
+    if (beforeLt !== null) qs += '&before_lt=' + encodeURIComponent(beforeLt);
+    const j = await ton(qs);
+    if (!j) {
+      // ton() answers null on 404/400: on the first page that is a
+      // provider failure (the caller falls back to toncenter); on a
+      // later page, keep whatever was already gathered.
+      if (!out.length) return null;
+      break;
+    }
+    const txs = Array.isArray(j.transactions) ? j.transactions : [];
+    if (!txs.length) break;
+    let added = 0;
+    for (const tx of txs) {
+      const h = txHashHex(tx && tx.hash);
+      if (!h || seen.has(h)) continue;
+      seen.add(h);
+      out.push(normalizeTonapiTx(tx));
+      added++;
+    }
+    if (!added) break; // provider repeating itself — never spin
+    const lastLt = Number(txs[txs.length - 1] && txs[txs.length - 1].lt);
+    if (!Number.isFinite(lastLt) || (beforeLt !== null && lastLt >= beforeLt)) break;
+    beforeLt = lastLt;
+    if (txs.length < limit) break;
+  }
+  return out;
+}
+/* toncenter fallback for the deep scan (see the note above: its
+   lt/hash walk is an exact-match filter in practice, so this
+   degrades to a single 100-transaction page — still never worse
+   than the pre-2026-11-16 behaviour, and it keeps the verification
+   paths alive if tonapi is down). */
 async function toncTransactionsDeep(rawAddr, maxTotal) {
   const out = [];
   const seen = new Set();
@@ -1305,7 +1368,7 @@ async function toncTransactionsDeep(rawAddr, maxTotal) {
   while (out.length < maxTotal) {
     const limit = Math.min(100, maxTotal - out.length);
     let qs = '/transactions?account=' + encodeURIComponent(rawAddr) + '&limit=' + limit + '&sort=desc';
-    if (lt !== null && hash) qs += '&lt=' + encodeURIComponent(lt) + '&hash=' + encodeURIComponent(hash);
+    if (lt !== null && hash) qs += '&lt=' + encodeURIComponent(lt) + '&hash=' + encodeURIComponent(txHashHex(hash) || hash);
     const j = await tonc(qs);
     const txs = (j && Array.isArray(j.transactions)) ? j.transactions : [];
     if (!txs.length) break;
@@ -1324,6 +1387,16 @@ async function toncTransactionsDeep(rawAddr, maxTotal) {
     if (txs.length < limit || lt === null || !hash) break;
   }
   return out;
+}
+/* The one entry point the verification paths use: tonapi deep scan
+   first, toncenter single-page fallback when tonapi cannot answer. */
+async function depositTransactionsDeep(rawAddr, maxTotal) {
+  try {
+    const via = await tonapiTransactionsDeep(rawAddr, maxTotal);
+    if (via && via.length) return via;
+    if (via) return via; // a clean (empty) tonapi answer is authoritative
+  } catch (e) { /* tonapi failed — fall through to the toncenter page */ }
+  return toncTransactionsDeep(rawAddr, Math.min(maxTotal, 100));
 }
 /* Wallet age in whole days = time since the wallet's FIRST transaction
    (the ascending query). A wallet with no transactions at all is 0. */
@@ -2631,7 +2704,7 @@ async function verifyCheck(c) {
   // hundreds of transactions deep and this check answered 404
   // forever. Page back up to VERIFY_CHECK_SCAN transactions before
   // declaring the payment missing.
-  const txs = await toncTransactionsDeep(depRaw, VERIFY_CHECK_SCAN);
+  const txs = await depositTransactionsDeep(depRaw, VERIFY_CHECK_SCAN);
   for (const tx of txs) {
     const inMsg = tx && tx.in_msg;
     if (!inMsg) continue;
@@ -2737,7 +2810,7 @@ async function verifyWatchTick() {
       }
       if (!byComment.size) return;
       const depRaw = toRawAddress(cfg.verifyDepositWallet);
-      const txs = await toncTransactionsDeep(depRaw, VERIFY_WATCH_SCAN);
+      const txs = await depositTransactionsDeep(depRaw, VERIFY_WATCH_SCAN);
       scanned = txs.length;
       for (const tx of txs) {
         const inMsg = tx && tx.in_msg;
@@ -2803,7 +2876,7 @@ function startVerifyWatcher() {
    overlap; failures are logged and swallowed. VERIFY_SWEEP_MS: 0
    disables (tests). */
 const VERIFY_SWEEP_MS = (() => { const v = Number(process.env.VERIFY_SWEEP_MS); return Number.isFinite(v) && v >= 0 ? Math.floor(v) : 3600000; })(); // default 1 h
-const VERIFY_SWEEP_SCAN = (() => { const v = Number(process.env.VERIFY_SWEEP_SCAN); return Number.isFinite(v) && v > 0 ? Math.floor(v) : 1000; })(); // deposit transactions paged per sweep
+const VERIFY_SWEEP_SCAN = (() => { const v = Number(process.env.VERIFY_SWEEP_SCAN); return Number.isFinite(v) && v > 0 ? Math.floor(v) : 2000; })(); // deposit transactions paged per sweep (~11 h of flood at the 2026-11-16 rate)
 const VERIFY_SWEEP_AGE_BATCH = (() => { const v = Number(process.env.VERIFY_SWEEP_AGE_BATCH); return Number.isFinite(v) && v > 0 ? Math.floor(v) : 120; })(); // fresh wallet-age determinations per sweep
 let verifySweepRunning = false;
 async function verifySweepTick() {
@@ -2815,7 +2888,7 @@ async function verifySweepTick() {
     const feeTon = Number(cfg.verifyFeeTon) || 0;
     const minNano = BigInt(Math.floor(feeTon * 1e9 * 0.99));
     const depRaw = toRawAddress(cfg.verifyDepositWallet);
-    const txs = await toncTransactionsDeep(depRaw, VERIFY_SWEEP_SCAN);
+    const txs = await depositTransactionsDeep(depRaw, VERIFY_SWEEP_SCAN);
     const byUserNo = new Map(); // payer userNo -> [{ hash, source }]
     for (const tx of txs) {
       const inMsg = tx && tx.in_msg;
