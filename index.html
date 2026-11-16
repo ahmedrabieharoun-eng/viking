@@ -241,6 +241,7 @@
     #avatar-picker .ap-hero #ap-hero-img{width:100%;height:100%;border-radius:50%;object-fit:cover;display:block;background:#131f36;box-shadow:0 10px 26px rgba(0,0,0,.7)}
     #avatar-picker .ap-hero .ap-ring{position:absolute;left:50%;top:50%;width:258px;height:258px;transform:translate(-50%,-50%);pointer-events:none}
     #ap-confirm small{display:block;font-size:10.5px;letter-spacing:2px;margin-top:2px;opacity:.85}
+    .ap-build{margin-top:10px;font-size:9px;letter-spacing:1.5px;color:rgba(255,255,255,.35);text-align:center}
     #avatar-picker .ap-plaque{background:linear-gradient(180deg,#3a2413,#1c1007);border:1px solid rgba(212,175,55,.7);border-radius:10px;padding:8px 22px;margin-bottom:16px;box-shadow:0 8px 18px rgba(0,0,0,.55)}
     #avatar-picker .ap-name{font-family:Georgia,serif;color:var(--gold2);font-size:19px;font-weight:900;letter-spacing:2px}
     #avatar-picker .ap-plaque-sub{color:#cdbd93;font-size:11px;margin-top:2px}
@@ -534,6 +535,7 @@
     </div>
     <button id="ap-confirm" disabled><span data-i18n="avatar_confirm">CONFIRM SELECTION</span><small data-i18n="avatar_confirm2">LOCK IN PERMANENTLY</small></button>
     <div class="ap-warn" data-i18n="avatar_warn">⚠ Once confirmed, your warrior cannot be changed</div>
+    <div class="ap-build" id="ap-build"></div>
   </div>
 
   <div id="toast">Notification</div>
@@ -1961,7 +1963,7 @@
       setTimeout(() => { spin.remove(); btn.classList.remove('btn-busy'); delete btn.dataset.busy; }, 900);
     }
 
-    async function refreshState() {
+    async function refreshState(forceLive) {
       // AdVOLT device identity (anti-fraud-frontend block above): the
       // persistent deviceId + combined fingerprint + the five signal
       // hashes ride along with state, exactly the fields VOLT's _apiRaw
@@ -1980,7 +1982,7 @@
         }
       } catch (e) { /* identity collection must never break state */ }
       let j;
-      if (stateCache && Date.now() - stateCacheAt < 15000) { j = stateCache; }
+      if (!forceLive && stateCache && Date.now() - stateCacheAt < 15000) { j = stateCache; }
       else { j = await api("state", stateBody); stateCache = j; stateCacheAt = Date.now(); }
       const d = j.player || {};
       if (d.banned === true) {
@@ -2117,9 +2119,31 @@
     function storeSavedPick() {
       try { localStorage.setItem('vk_avatar_' + CURRENT_UID, String(myUserNo) + ':' + String(myAvatar)); } catch (e) {}
     }
+    // PICK GUARD (owner order 2026-11-16): the build stamp identifies
+    // the exact frontend a player is running (shown on the picker and
+    // in Profile), and the picker may only appear after a SECOND,
+    // independent LIVE state payload confirms the avatar is unset for
+    // this same account — one glitched payload must never show it
+    // (the Elshenawy case: an established account kept landing on the
+    // picker while its record held avatar 5).
+    const VK_BUILD = 'pickguard-2026-11-16';
+    let avatarZeroConfirmedFor = 0;
+    let avatarConfirmInFlight = false;
+    async function confirmAvatarZero() {
+      if (avatarConfirmInFlight || !myUserNo) return;
+      avatarConfirmInFlight = true;
+      try {
+        await refreshState(true); // forced live re-fetch, cache bypassed
+        if (myUserNo && !(myAvatar >= 1 && myAvatar <= 8)) avatarZeroConfirmedFor = myUserNo;
+      } catch (e) { /* a failed confirmation must never show the picker */ }
+      avatarConfirmInFlight = false;
+      maybeShowAvatarPicker();
+    }
     function maybeShowAvatarPicker() {
       const pk = document.getElementById('avatar-picker'); if (!pk) return;
+      const ab = document.getElementById('ap-build'); if (ab && !ab.textContent) ab.textContent = 'BUILD ' + VK_BUILD;
       if (myAvatar >= 1 && myAvatar <= 8) {
+        avatarZeroConfirmedFor = 0;
         pk.classList.remove('show');
         storeSavedPick();
         return;
@@ -2138,6 +2162,9 @@
       // state payload that comes back without the avatar field.
       const savedPick = readSavedPick();
       if (savedPick >= 1 && savedPick <= 8) { myAvatar = savedPick; pk.classList.remove('show'); return; }
+      // PICK GUARD: not yet confirmed by a second live payload — stay
+      // hidden and run the confirmation fetch (in-flight latched).
+      if (avatarZeroConfirmedFor !== myUserNo) { pk.classList.remove('show'); confirmAvatarZero(); return; }
       pk.classList.add('show');
     }
     /* Unverified Mine state (owner order 2026-11-15, REPLACES the
