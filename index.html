@@ -2013,6 +2013,7 @@
       refBonusPaid = !!d.refBonusPaid;
       myReferrals = d.referrals || [];
       myAvatar = Number(d.avatar) || 0;
+      lastStateAvatar = (d.avatar === undefined ? null : d.avatar); lastStateUserNo = (d.userNo === undefined ? null : d.userNo);
       task1Done = !!d.task1Done;
       task2Done = !!d.task2Done;
       task3Done = !!d.task3Done;
@@ -2126,14 +2127,16 @@
     // this same account — one glitched payload must never show it
     // (the Elshenawy case: an established account kept landing on the
     // picker while its record held avatar 5).
-    const VK_BUILD = 'pickguard-2026-11-16';
+    const VK_BUILD = 'pickguard2-2026-11-16';
     let avatarZeroConfirmedFor = 0;
     let avatarConfirmInFlight = false;
+    let lastStateAvatar = null, lastStateUserNo = null, confirmStateAvatar = null;
     async function confirmAvatarZero() {
       if (avatarConfirmInFlight || !myUserNo) return;
       avatarConfirmInFlight = true;
       try {
         await refreshState(true); // forced live re-fetch, cache bypassed
+        confirmStateAvatar = lastStateAvatar;
         if (myUserNo && !(myAvatar >= 1 && myAvatar <= 8)) avatarZeroConfirmedFor = myUserNo;
       } catch (e) { /* a failed confirmation must never show the picker */ }
       avatarConfirmInFlight = false;
@@ -2141,7 +2144,7 @@
     }
     function maybeShowAvatarPicker() {
       const pk = document.getElementById('avatar-picker'); if (!pk) return;
-      const ab = document.getElementById('ap-build'); if (ab && !ab.textContent) ab.textContent = 'BUILD ' + VK_BUILD;
+      const ab = document.getElementById('ap-build'); if (ab) ab.textContent = 'BUILD ' + VK_BUILD + ' · A0:' + String(lastStateAvatar) + ' A1:' + String(confirmStateAvatar) + ' NO:' + String(lastStateUserNo);
       if (myAvatar >= 1 && myAvatar <= 8) {
         avatarZeroConfirmedFor = 0;
         pk.classList.remove('show');
