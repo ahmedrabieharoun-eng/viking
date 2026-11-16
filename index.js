@@ -7,7 +7,7 @@ const crypto = require('crypto');
    The database is initialised lazily on first use so the module still boots
    (and answers auth errors) when the DB env is not configured yet. */
 let _rtdb = null;
-function rtdb() {
+function initRtdb() {
   if (_rtdb) return _rtdb;
   const url = process.env.FIREBASE_DATABASE_URL || '';
   if (!url) throw new Fail(500, 'Server not configured');
@@ -19,6 +19,25 @@ function rtdb() {
     throw new Fail(500, 'Server not configured');
   }
   return _rtdb;
+}
+
+/* Database backend (Supabase migration, owner order 2026-11-16):
+   DB_BACKEND=rtdb (default) uses Firebase RTDB exactly as before;
+   'dual' keeps RTDB primary and mirrors every committed write to
+   Supabase; 'supabase' serves everything from Supabase through the
+   RTDB-compatible adapter in sb_adapter.js. */
+let _backend = null;
+function rtdb() {
+  if (_backend) return _backend;
+  const mode = String(process.env.DB_BACKEND || 'rtdb').toLowerCase();
+  if (mode === 'supabase' || mode === 'dual') {
+    const { createSbDb, DualDb } = require('./sb_adapter');
+    const sb = createSbDb(process.env.SUPABASE_REST_URL || '', process.env.SUPABASE_SERVICE_KEY || '');
+    _backend = mode === 'supabase' ? sb : new DualDb(initRtdb(), sb);
+    return _backend;
+  }
+  _backend = initRtdb();
+  return _backend;
 }
 
 // Hosting env (Render > Environment / secret files):
