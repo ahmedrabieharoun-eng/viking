@@ -3834,7 +3834,7 @@ async function sendPayoutSuccess(wd, player, cfg) {
       if (appUrl) rows.push([{ text: '⚔️ Open VIKING', url: appUrl }]);
       if (txUrl) rows.push([{ text: '🔗 View Transaction', url: txUrl }]);
       const kb = rows.length ? { inline_keyboard: rows } : undefined;
-      const caption = `💸 Your Payout is Sent!\n💎 <b>+${amount} ${esc(cfg.coinSym)}</b>\n👛 Wallet: <code>${esc(shortFriendlyAddress(walletRaw))}</code>\n🔢 Withdrawal #${num}\n📅 ${fmtDayMonYear(Date.now())}`;
+      const caption = `💸 Your Payout is Sent!\n💎 <b>+${amount} ${esc(cfg.coinSym)}</b>\n👛 Wallet: <code>${esc(shortFriendlyAddress(walletRaw))}</code>\n📅 ${fmtDayMonYear(Date.now())}`;
       const photoRes = await tg('sendPhoto', { chat_id: String(wd.userId), photo: PAYOUT_DM_BANNER, caption, reply_markup: kb });
       if (!photoRes || !photoRes.ok) {
         await tg('sendMessage', { chat_id: String(wd.userId), text: caption, reply_markup: kb });
@@ -3844,18 +3844,31 @@ async function sendPayoutSuccess(wd, player, cfg) {
     try {
       const chanId = chatIdOf(cfg.channel2);
       if (chanId !== null && chanId !== '') {
-        const fullName = (player && player.name) || wd.userName || '';
+        // The username comes from the PLAYER record (the wd record
+        // carries only userName): use the passed-in player when the
+        // caller loaded one (attemptPayout), else read it here —
+        // adminWd's manual approve passes null.
+        const pl = player || await getVal(P(wd.userId)).catch(() => null);
+        const fullName = (pl && pl.name) || wd.userName || '';
         const displayName = esc(String(fullName).trim() || 'Viking');
+        // «(@username)» rides along when the player HAS a Telegram
+        // username (owner order 2026-11-17). newPlayer stores the
+        // placeholder 'user' for accounts without one — never a real
+        // username (Telegram requires 5+ chars) — so it renders as
+        // no username, exactly like a missing/empty field.
+        const uname = String((pl && pl.username) || '').trim();
+        const unamePart = uname && uname !== 'user' ? ' (@' + esc(uname) + ')' : '';
         const rows = [];
         if (appUrl) rows.push([{ text: '⚔️ Start Mining Now', url: appUrl }]);
         if (txUrl) rows.push([{ text: '🔗 View Transaction', url: txUrl }]);
         const kb = rows.length ? { inline_keyboard: rows } : undefined;
         // Public proof style — different wording/layout from the DM:
-        // FULL name (owner order 2026-11-14) + amount + the FULL
-        // friendly receiver wallet (owner reversed the earlier
-        // no-wallet-in-channel rule) + WD number. The DM still
-        // shows only the SHORT wallet form.
-        const caption = `🏆 New Payout!\n👤 <b>${displayName}</b>\n💰 <b>${amount} ${esc(cfg.coinSym)}</b>\n👛 <code>${esc(toFriendlyAddress(wd.walletAddr || ''))}</code>\n🔢 Withdrawal #${num}`;
+        // FULL name + «(@username)» when he has one (owner order
+        // 2026-11-17) + amount + the FULL friendly receiver wallet
+        // (owner reversed the earlier no-wallet-in-channel rule).
+        // NO withdrawal number in either message (owner order
+        // 2026-11-17). The DM still shows only the SHORT wallet form.
+        const caption = `🏆 New Payout!\n👤 <b>${displayName}</b>${unamePart}\n💰 <b>${amount} ${esc(cfg.coinSym)}</b>\n👛 <code>${esc(toFriendlyAddress(wd.walletAddr || ''))}</code>`;
         let ok = false;
         const photoRes = await tg('sendPhoto', { chat_id: chanId, photo: PAYOUT_CHANNEL_BANNER, caption, reply_markup: kb });
         if (photoRes && photoRes.ok) ok = true;
