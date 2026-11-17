@@ -4368,6 +4368,493 @@ async function adminSettings(c) {
   return { success: true };
 }
 
+/* ---------- admin PANEL API (owner order 2026-11-17) ----------
+   Key-guarded actions for the web admin panel. These are NOT
+   Telegram actions: the handler dispatches any action starting
+   with 'panel' to PANEL_ACTIONS BEFORE the initData gate, with a
+   minimal context { body, cfg } — there is no c.user and nothing
+   in this section may touch one. Every action re-checks the key
+   itself (panelKey): ADMIN_PANEL_KEY is read from the env at call
+   time; unset disables the panel (503), a mismatch is 401.
+   Money rules are the LIVE ones, never the legacy adminWd ones:
+   approvals go through attemptPayout, rejections use the
+   bot-callback flip (Pending -> Rejected, NO refund), and
+   verifications go through completeVerification. Consequential
+   writes are audit-logged to meta/panelAudit; the owner's panel
+   requests live in meta/panelRequests (both meta/ docs). */
+function panelKey(c) {
+  const k = process.env.ADMIN_PANEL_KEY || '';
+  if (!k) fail(503, 'Panel disabled');
+  if (!c.body || c.body.key !== k) fail(401, 'Bad key');
+}
+
+/* Audit helper: appends { at, action, target, detail } to
+   meta/panelAudit, keeping the newest 200 entries. Best-effort by
+   design — an audit failure never fails the action it describes. */
+async function panelAudit(action, target, detail) {
+  try {
+    await txUpdate(rtdb().ref('meta/panelAudit'), (cur) => {
+      const doc = (cur && typeof cur === 'object') ? cur : {};
+      const entries = Array.isArray(doc.entries) ? doc.entries : [];
+      const next = [...entries, { at: Date.now(), action: String(action), target: String(target || ''), detail: String(detail || '').slice(0, 300) }].slice(-200);
+      return { value: { ...doc, entries: next }, out: true };
+    });
+  } catch (e) { console.error('panelAudit', action, e.message); }
+}
+
+/* Full-table scans shared by the panel reads, cached in memory for
+   60 s: the panel polls stats and lists, and a fresh full read per
+   poll is exactly the load the background watchers were dieted
+   off. The data layer paginates table reads, so a scan is exact. */
+const PANEL_SCAN_MS = 60000;
+let panelScan = { players: null, playersAt: 0, withdrawals: null, withdrawalsAt: 0 };
+async function panelPlayersScan() {
+  if (panelScan.players && Date.now() - panelScan.playersAt < PANEL_SCAN_MS) return panelScan.players;
+  const obj = (await getVal(rtdb().ref('players'))) || {};
+  const rows = Object.entries(obj).filter(([, v]) => v && typeof v === 'object').map(([k, v]) => ({ ...v, id: String(v.id || k) }));
+  panelScan.players = rows; panelScan.playersAt = Date.now();
+  return rows;
+}
+async function panelWithdrawalsScan() {
+  if (panelScan.withdrawals && Date.now() - panelScan.withdrawalsAt < PANEL_SCAN_MS) return panelScan.withdrawals;
+  const obj = (await getVal(rtdb().ref('withdrawals'))) || {};
+  const rows = Object.entries(obj).filter(([, v]) => v && typeof v === 'object').map(([docId, v]) => ({ docId, ...v }));
+  panelScan.withdrawals = rows; panelScan.withdrawalsAt = Date.now();
+  return rows;
+}
+
+/* Start of today in Africa/Cairo as a UTC ms timestamp. Egypt
+   observes DST, so the offset is derived from Intl at the target
+   date instead of being assumed fixed. */
+function cairoOffsetMs(ts) {
+  const parts = new Intl.DateTimeFormat('en-US', { timeZone: 'Africa/Cairo', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' }).formatToParts(new Date(ts));
+  const g = (t) => Number(parts.find((p) => p.type === t).value);
+  return Date.UTC(g('year'), g('month') - 1, g('day'), g('hour'), g('minute'), g('second')) - Math.floor(ts / 1000) * 1000;
+}
+function cairoStartOfTodayMs(now = Date.now()) {
+  const parts = new Intl.DateTimeFormat('en-US', { timeZone: 'Africa/Cairo', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date(now));
+  const g = (t) => Number(parts.find((p) => p.type === t).value);
+  const y = g('year'), m = g('month'), d = g('day');
+  let guess = Date.UTC(y, m - 1, d);
+  for (let i = 0; i < 3; i++) {
+    const corrected = Date.UTC(y, m - 1, d) - cairoOffsetMs(guess);
+    if (corrected === guess) break;
+    guess = corrected;
+  }
+  return guess;
+}
+
+async function panelStats(c) {
+  panelKey(c);
+  const [players, wds] = await Promise.all([panelPlayersScan(), panelWithdrawalsScan()]);
+  const startToday = cairoStartOfTodayMs();
+  let verified = 0, banned = 0, newToday = 0, totalMined = 0;
+  for (const p of players) {
+    if (p.walletVerified === true) verified++;
+    if (p.banned === true) banned++;
+    if ((Number(p.createdAt) || 0) >= startToday) newToday++;
+    totalMined += Number(p.mined) || 0;
+  }
+  let pending = 0, paidCount = 0, rejectedCount = 0;
+  for (const w of wds) {
+    const s = String(w.status || '');
+    if (s.includes('Pending')) pending++;
+    else if (s.includes('Paid')) paidCount++;
+    else if (s.includes('Rejected')) rejectedCount++;
+  }
+  const h = await getVal(rtdb().ref('meta/verifyHealth'));
+  const verify = h
+    ? { openUnresolved: Number(h.openUnresolved) || 0, cursorLagSec: h.cursorUtime ? Math.max(0, Math.floor(Date.now() / 1000 - Number(h.cursorUtime))) : null, processedTotal: Number(h.processedTotal) || 0 }
+    : { openUnresolved: 0, cursorLagSec: null, processedTotal: 0 };
+  // Payout wallet balances: the same client calls initPayout makes.
+  // Advisory only — any failure (or payouts disabled) reads null.
+  let payout = null;
+  if (payoutEnabled()) {
+    try {
+      const client = await getPayoutClient();
+      const d = await jettonDecimals();
+      payout = { ton: Number(await client.getTonBalance()) / 1e9, viking: Number(await client.getJettonBalance()) / Math.pow(10, d) };
+    } catch (e) { payout = null; }
+  }
+  return {
+    ok: true,
+    players: { total: players.length, verified, banned, newToday, totalMined },
+    withdrawals: { pending, paidCount, rejectedCount },
+    verify, payout,
+    serverTime: Date.now(), uptimeSec: Math.floor(process.uptime())
+  };
+}
+
+function panelSlimPlayer(p) {
+  return {
+    id: String(p.id), userNo: Number(p.userNo) || 0, name: p.name || '', username: p.username || '',
+    avatar: Number(p.avatar) || 0, mined: Number(p.mined) || 0, hold: Number(p.hold) || 0,
+    walletAddr: p.walletAddr || '', walletVerified: p.walletVerified === true, banned: p.banned === true,
+    createdAt: Number(p.createdAt) || 0, lastSeen: Number(p.lastSeen) || 0,
+    invitedBy: p.invitedBy ? String(p.invitedBy) : null,
+    refCount: Array.isArray(p.referrals) ? p.referrals.length : 0
+  };
+}
+
+async function panelPlayers(c) {
+  panelKey(c);
+  const q = String(c.body.q ?? '').trim();
+  let rows;
+  if (q && /^\d+$/.test(q) && q.length >= 7) {
+    // A long all-digits query is a Telegram id: one direct read.
+    const p = await getVal(P(q));
+    rows = p ? [{ ...p, id: String(p.id || q) }] : [];
+  } else {
+    const all = await panelPlayersScan();
+    if (!q) rows = [...all].sort((a, b) => (Number(b.lastSeen) || 0) - (Number(a.lastSeen) || 0));
+    else if (/^\d+$/.test(q)) rows = all.filter((p) => Number(p.userNo) === Number(q)); // short digits: a userNo
+    else {
+      const needle = q.toLowerCase();
+      rows = all.filter((p) => String(p.name || '').toLowerCase().includes(needle) || String(p.username || '').toLowerCase().includes(needle));
+    }
+  }
+  const total = rows.length;
+  const size = 50;
+  const pages = Math.max(1, Math.ceil(total / size));
+  let page = Math.floor(Number(c.body.page) || 0);
+  if (!Number.isFinite(page) || page < 0) page = 0;
+  if (page > pages - 1) page = pages - 1;
+  return { ok: true, total, page, pages, rows: rows.slice(page * size, page * size + size).map(panelSlimPlayer) };
+}
+
+async function panelPlayer(c) {
+  panelKey(c);
+  if (!isId(c.body.id)) fail(400, 'Bad id');
+  const id = String(c.body.id);
+  const p = await getVal(P(id));
+  if (!p) fail(404, 'User not found');
+  const withdrawals = (await panelWithdrawalsScan())
+    .filter((w) => String(w.userId) === id)
+    .sort((a, b) => (Number(b.wdNum) || 0) - (Number(a.wdNum) || 0))
+    .slice(0, 50);
+  const vu = (await getVal(rtdb().ref('verifyUnresolved'))) || {};
+  const verifyRecords = Object.entries(vu)
+    .filter(([, e]) => e && Number(e.userNo) === Number(p.userNo))
+    .map(([hash, e]) => ({ hash, ...e }))
+    .sort((a, b) => (Number(b.utime) || Number(b.firstSeenAt) || 0) - (Number(a.utime) || Number(a.firstSeenAt) || 0))
+    .slice(0, 50);
+  let risk = null;
+  try { risk = await riskOf(id); } catch (e) { risk = null; }
+  let inviter = null;
+  if (p.invitedBy) {
+    const inv = await getVal(P(p.invitedBy));
+    if (inv) inviter = { id: String(inv.id || p.invitedBy), userNo: Number(inv.userNo) || 0, name: inv.name || '', username: inv.username || '' };
+  }
+  return { ok: true, player: p, withdrawals, verifyRecords, risk, inviter };
+}
+
+async function panelBan(c) {
+  panelKey(c);
+  if (!isId(c.body.id)) fail(400, 'Bad id');
+  const ref = P(c.body.id);
+  if ((await getVal(ref)) === null) fail(404, 'User not found');
+  const banned = c.body.banned === true;
+  await ref.update({ banned });
+  await panelAudit('panelBan', c.body.id, banned ? 'banned' : 'unbanned');
+  return { ok: true, banned };
+}
+
+async function panelAdjust(c) {
+  panelKey(c);
+  const amt = Number(c.body.amount);
+  // Same bounds as adminAdjust: an unbounded value would make
+  // `mined` un-storable (Infinity) and fail writes later.
+  if (!isId(c.body.id) || !Number.isFinite(amt) || Math.abs(amt) > 1e12) fail(400, 'Bad input');
+  const ref = P(c.body.id);
+  const before = await getVal(ref);
+  if (before === null) fail(404, 'User not found');
+  await ref.update({ mined: admin.database.ServerValue.increment(amt) });
+  const after = await getVal(ref);
+  const mined = Number(after && after.mined) || 0;
+  await panelAudit('panelAdjust', c.body.id, 'amount ' + amt + ': mined ' + (Number(before.mined) || 0) + ' -> ' + mined);
+  return { ok: true, mined };
+}
+
+async function panelSetAvatar(c) {
+  panelKey(c);
+  if (!isId(c.body.id)) fail(400, 'Bad id');
+  const avatar = Number(c.body.avatar);
+  if (!Number.isInteger(avatar) || avatar < 0 || avatar > 8) fail(400, 'Bad avatar');
+  const ref = P(c.body.id);
+  if ((await getVal(ref)) === null) fail(404, 'User not found');
+  await ref.update({ avatar });
+  await panelAudit('panelSetAvatar', c.body.id, 'avatar -> ' + avatar);
+  return { ok: true, avatar };
+}
+
+/* Shared panel verification: the panel's guards (exists / not
+   banned / wallet bound / not already verified for the bound
+   wallet), then the ONE shared completion path — completeVerification
+   claims the hash, flips the player, updates the wallets registry,
+   syncs the referral flags and sends the success DM exactly once.
+   On a win the player's open verifyUnresolved records are closed
+   out as resolved-by-panel. */
+async function panelDoVerify(id, hash, cfg) {
+  const p = await getVal(P(id));
+  if (!p) fail(404, 'User not found');
+  if (p.banned === true) fail(403, 'Account banned');
+  const wallet = p.walletAddr || '';
+  if (!wallet) fail(400, 'Connect wallet first');
+  if (p.walletVerified === true && p.verifiedWallet === wallet) return { won: false, reason: 'already' };
+  const res = await completeVerification(String(id), hash, cfg);
+  if (res.won) {
+    try {
+      const vu = (await getVal(rtdb().ref('verifyUnresolved'))) || {};
+      for (const [h, e] of Object.entries(vu)) {
+        if (e && e.status === 'open' && Number(e.userNo) === Number(p.userNo)) {
+          await rtdb().ref('verifyUnresolved/' + h).update({ status: 'resolved', resolvedAt: Date.now(), resolvedBy: 'panel' });
+        }
+      }
+    } catch (e) { console.error('panel verify close-out', id, e.message); }
+  }
+  return res;
+}
+
+async function panelVerifyPlayer(c) {
+  panelKey(c);
+  if (!isId(c.body.id)) fail(400, 'Bad id');
+  const id = String(c.body.id);
+  const p = await getVal(P(id));
+  if (!p) fail(404, 'User not found');
+  let hash = String(c.body.hash || '').trim();
+  if (hash && !/^[A-Za-z0-9_-]+$/.test(hash)) fail(400, 'Bad hash'); // the hash becomes a path segment — never let it traverse
+  if (!hash) hash = String(p.lastVerifyTx || '') || ('manual-' + Date.now());
+  const res = await panelDoVerify(id, hash, c.cfg);
+  await panelAudit('panelVerifyPlayer', id, 'hash ' + hash + ' -> ' + (res.won ? 'verified' : 'not won (' + (res.reason || '?') + ')'));
+  return { ok: true, won: !!res.won, ...(res.reason ? { reason: res.reason } : {}), tx: hash };
+}
+
+async function panelWithdrawals(c) {
+  panelKey(c);
+  const f = String(c.body.status ?? 'pending');
+  if (!['pending', 'paid', 'rejected', 'all'].includes(f)) fail(400, 'Bad status');
+  let rows = [...(await panelWithdrawalsScan())].sort((a, b) => (Number(b.wdNum) || 0) - (Number(a.wdNum) || 0));
+  if (f !== 'all') {
+    const want = f === 'pending' ? 'Pending' : f === 'paid' ? 'Paid' : 'Rejected';
+    rows = rows.filter((w) => String(w.status || '').includes(want));
+  }
+  rows = rows.slice(0, 100);
+  // Verified badges, adminState's pattern: one bounded lookup per
+  // distinct user on the page (from the players scan where possible).
+  const players = await panelPlayersScan();
+  const byId = new Map(players.map((p) => [String(p.id), p]));
+  const seen = new Map();
+  await Promise.all([...new Set(rows.map((x) => String(x.userId)))].map(async (id) => {
+    let src = byId.get(id);
+    if (!src) { try { src = await getVal(P(id)); } catch (e) { src = null; } }
+    seen.set(id, !!(src && src.walletVerified === true));
+  }));
+  rows.forEach((x) => { x.userVerified = seen.get(String(x.userId)) === true; });
+  return { ok: true, rows };
+}
+
+function panelWdNum(c) {
+  const num = Math.floor(Number(c.body.wdNum));
+  if (!Number.isFinite(num) || num <= 0) fail(400, 'Bad wdNum');
+  return num;
+}
+
+async function panelWdApprove(c) {
+  panelKey(c);
+  const num = panelWdNum(c);
+  const ref = rtdb().ref('withdrawals/wd_' + num);
+  const wd = await getVal(ref);
+  if (!wd) fail(404, 'Not found');
+  if (wd.status !== 'Pending ⏳') fail(400, 'Already processed');
+  if (wd.payoutState === 'paying' || wd.payoutState === 'paid') fail(400, 'Already processed');
+  // The payout state machine does the money movement — nothing
+  // hand-rolled here. It never throws its failures: they land on
+  // the record as payoutState 'failed' + payoutError, read back
+  // below and reported as-is.
+  await attemptPayout(num);
+  const fin = (await getVal(ref)) || {};
+  await panelAudit('panelWdApprove', 'wd_' + num, 'status ' + (fin.status || '?') + ', payoutState ' + (fin.payoutState || 'none') + (fin.payoutError ? ', error ' + fin.payoutError : ''));
+  return { ok: true, status: fin.status || null, payoutState: fin.payoutState || null, payoutTx: fin.payoutTx || '', ...(fin.payoutError ? { payoutError: fin.payoutError } : {}) };
+}
+
+/* The bot-callback decision flip, shared by panel reject/ban:
+   atomically Pending -> Rejected with decidedAt, NO refund ever
+   (the owner's explicit order — the deducted coins stay deducted). */
+async function panelFlipReject(num) {
+  const ref = rtdb().ref('withdrawals/wd_' + num);
+  const wd = await getVal(ref);
+  if (!wd) fail(404, 'Not found');
+  const flip = await txUpdate(ref, (x) => {
+    if (x === null) return { skip: true, out: null };
+    if (x.status !== 'Pending ⏳') return { skip: true, out: null };
+    return { value: { ...x, status: 'Rejected ❌', decidedAt: Date.now() }, out: x };
+  });
+  if (!flip) fail(400, 'Already processed');
+  return flip;
+}
+
+async function panelWdReject(c) {
+  panelKey(c);
+  const num = panelWdNum(c);
+  const wd = await panelFlipReject(num);
+  await panelAudit('panelWdReject', 'wd_' + num, 'rejected ' + (wd.amt ?? '') + ' for user ' + (wd.userId ?? '') + ' (no refund)');
+  return { ok: true, status: 'Rejected ❌' };
+}
+
+async function panelWdBan(c) {
+  panelKey(c);
+  const num = panelWdNum(c);
+  const wd = await panelFlipReject(num);
+  // The flip is committed first; the ban follows it, exactly like
+  // the bot flow (a ban-write failure is logged, never un-flips).
+  try {
+    const pref = P(wd.userId);
+    if ((await getVal(pref)) !== null) await pref.update({ banned: true });
+  } catch (e) { console.error('panel wd ban', num, e.message); }
+  await panelAudit('panelWdBan', 'wd_' + num, 'rejected + banned user ' + (wd.userId ?? '') + ' (no refund)');
+  return { ok: true, status: 'Rejected ❌', banned: true };
+}
+
+async function panelVerifyQueue(c) {
+  panelKey(c);
+  const vu = (await getVal(rtdb().ref('verifyUnresolved'))) || {};
+  const players = await panelPlayersScan();
+  const byId = new Map(players.map((p) => [String(p.id), p]));
+  const byUserNo = new Map(players.map((p) => [Number(p.userNo) || 0, p]));
+  const entries = Object.entries(vu)
+    .filter(([, e]) => e && e.status === 'open')
+    .sort((a, b) => (Number(b[1].utime) || Number(b[1].firstSeenAt) || 0) - (Number(a[1].utime) || Number(a[1].firstSeenAt) || 0))
+    .slice(0, 200);
+  const rows = [];
+  for (const [hash, e] of entries) {
+    let player = null;
+    if (e.uid && byId.has(String(e.uid))) player = byId.get(String(e.uid));
+    else if (e.uid) { try { const p = await getVal(P(e.uid)); if (p) player = { ...p, id: String(p.id || e.uid) }; } catch (err) { player = null; } }
+    if (!player && byUserNo.has(Number(e.userNo))) player = byUserNo.get(Number(e.userNo));
+    rows.push({
+      hash, userNo: Number(e.userNo) || 0, uid: e.uid ? String(e.uid) : null,
+      source: e.source || '', valueNano: e.valueNano ?? '', utime: Number(e.utime) || 0,
+      reason: e.reason || '', checks: Number(e.checks) || 0,
+      player: player ? { id: String(player.id), name: player.name || '', username: player.username || '', walletAddr: player.walletAddr || '', walletVerified: player.walletVerified === true } : null
+    });
+  }
+  return { ok: true, rows };
+}
+
+async function panelVerifyResolve(c) {
+  panelKey(c);
+  const hash = String(c.body.hash || '').trim();
+  if (!hash || !/^[A-Za-z0-9_-]+$/.test(hash)) fail(400, 'Bad hash');
+  const rec = await getVal(rtdb().ref('verifyUnresolved/' + hash));
+  if (!rec) fail(404, 'Not found');
+  if (rec.status !== 'open') fail(400, 'Already resolved');
+  let id = rec.uid ? String(rec.uid) : '';
+  if (!id) {
+    const rows = await panelPlayersScan();
+    const p = rows.find((r) => Number(r.userNo) === Number(rec.userNo));
+    if (p) id = String(p.id);
+  }
+  if (!id) fail(404, 'Player not found');
+  const res = await panelDoVerify(id, hash, c.cfg);
+  await panelAudit('panelVerifyResolve', id, 'hash ' + hash + ' -> ' + (res.won ? 'verified' : 'not won (' + (res.reason || '?') + ')'));
+  return { ok: true, won: !!res.won, ...(res.reason ? { reason: res.reason } : {}), tx: hash };
+}
+
+async function panelConfigGet(c) {
+  panelKey(c);
+  const stored = (await getVal(rtdb().ref('settings/global'))) || {};
+  return { ok: true, config: c.cfg, stored };
+}
+
+async function panelConfigSet(c) {
+  panelKey(c);
+  const s = c.body.settings;
+  if (!s || typeof s !== 'object' || Array.isArray(s)) fail(400, 'Bad settings');
+  const out = {};
+  // adminSettings' whitelist + validation, mirrored exactly...
+  for (const k of NUM_KEYS) if (s[k] !== undefined) { const v = Number(s[k]); if (!Number.isFinite(v) || v < 0 || v > 1e12) fail(400, 'Bad ' + k); if ((k === 'withdrawFeePercent' || k === 'holdPercentReq') && v > 100) fail(400, 'Bad ' + k); out[k] = v; }
+  for (const k of STR_KEYS) if (s[k] !== undefined) out[k] = clean(s[k], 300);
+  // ...plus the panel-only keys.
+  if (s.holdTaskDefs !== undefined) {
+    const defs = s.holdTaskDefs;
+    if (!Array.isArray(defs) || defs.length < 1 || defs.length > 10) fail(400, 'Bad holdTaskDefs');
+    let prev = 0;
+    out.holdTaskDefs = defs.map((t) => {
+      const hold = Number(t && t.hold), reward = Number(t && t.reward);
+      if (!Number.isFinite(hold) || !Number.isFinite(reward) || hold <= 0 || reward <= 0) fail(400, 'Bad holdTaskDefs');
+      if (hold <= prev) fail(400, 'Bad holdTaskDefs'); // holds must strictly increase tier over tier
+      prev = hold;
+      return { hold, reward };
+    });
+  }
+  if (s.adminUsers !== undefined) {
+    if (!Array.isArray(s.adminUsers) || s.adminUsers.length > 20) fail(400, 'Bad adminUsers');
+    out.adminUsers = s.adminUsers.map((x) => {
+      const v = String(x);
+      if (!/^\d{5,15}$/.test(v)) fail(400, 'Bad adminUsers');
+      return v;
+    });
+  }
+  if (s.ownerOnly !== undefined) {
+    if (typeof s.ownerOnly !== 'boolean') fail(400, 'Bad ownerOnly');
+    out.ownerOnly = s.ownerOnly;
+  }
+  // ONLY the provided (and validated) keys are written — an unknown
+  // key in the request is ignored, never stored.
+  if (Object.keys(out).length) {
+    await rtdb().ref('settings/global').update(out);
+    cfgCache = null;
+  }
+  await panelAudit('panelConfigSet', 'settings/global', JSON.stringify(out));
+  return { ok: true, applied: Object.keys(out) };
+}
+
+async function panelRequestAdd(c) {
+  panelKey(c);
+  const text = clean(c.body.text, 1000).trim();
+  if (!text) fail(400, 'Empty text');
+  const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  await txUpdate(rtdb().ref('meta/panelRequests'), (cur) => {
+    const doc = (cur && typeof cur === 'object') ? cur : {};
+    const items = (doc.items && typeof doc.items === 'object') ? doc.items : {};
+    return { value: { ...doc, items: { ...items, [id]: { text, at: Date.now(), status: 'new', reply: null, repliedAt: 0 } } }, out: id };
+  });
+  return { ok: true, id };
+}
+
+async function panelRequestList(c) {
+  panelKey(c);
+  const doc = (await getVal(rtdb().ref('meta/panelRequests'))) || {};
+  const items = (doc.items && typeof doc.items === 'object') ? doc.items : {};
+  const rows = Object.entries(items)
+    .map(([id, e]) => ({ id, text: (e && e.text) || '', at: Number(e && e.at) || 0, status: (e && e.status) || 'new', reply: (e && e.reply) ?? null, repliedAt: Number(e && e.repliedAt) || 0 }))
+    .sort((a, b) => b.at - a.at)
+    .slice(0, 100);
+  return { ok: true, rows };
+}
+
+async function panelRequestReply(c) {
+  panelKey(c);
+  const reply = clean(c.body.reply, 2000).trim();
+  if (!reply) fail(400, 'Empty reply');
+  const id = String(c.body.id || '');
+  await txUpdate(rtdb().ref('meta/panelRequests'), (cur) => {
+    const doc = (cur && typeof cur === 'object') ? cur : null;
+    if (!doc || !doc.items || !doc.items[id]) return { error: new Fail(404, 'Not found') };
+    return { value: { ...doc, items: { ...doc.items, [id]: { ...doc.items[id], status: 'done', reply, repliedAt: Date.now() } } }, out: true };
+  });
+  return { ok: true };
+}
+
+async function panelAuditList(c) {
+  panelKey(c);
+  const doc = (await getVal(rtdb().ref('meta/panelAudit'))) || {};
+  const entries = Array.isArray(doc.entries) ? doc.entries : [];
+  return { ok: true, rows: [...entries].reverse().slice(0, 200) };
+}
+
+const PANEL_ACTIONS = { panelStats, panelPlayers, panelPlayer, panelBan, panelAdjust, panelSetAvatar, panelVerifyPlayer, panelWithdrawals, panelWdApprove, panelWdReject, panelWdBan, panelVerifyQueue, panelVerifyResolve, panelConfigGet, panelConfigSet, panelRequestAdd, panelRequestList, panelRequestReply, panelAuditList };
+
 const ACTIONS = { state, collect, daily, task, holdTask, bioTask, refAch, wallet, unlink, verifyInfo, verifyCheck, refCollect, withdraw, setAvatar, adminState, adminBan, adminAdjust, adminWd, adminSettings };
 
 ensureWebhook(); // self-register the Telegram webhook once per process (never blocks boot)
@@ -4411,6 +4898,21 @@ functions.http('collectMining', async (req, res) => {
     const ip = clientIp(req);
     if (!hit('ip:' + ip, 600, 60000)) return res.status(429).json({ error: 'Too many requests, slow down' });
     const body = req.body || {};
+    // Admin PANEL API (owner order 2026-11-17): key-guarded web
+    // panel actions authenticate by ADMIN_PANEL_KEY in the body,
+    // NOT by Telegram initData, so they are dispatched here —
+    // after body parsing and the global per-IP rate limiter above,
+    // before the initData gate (and before the ownerOnly gate:
+    // the panel must stay usable during maintenance). The context
+    // is minimal ({ body, cfg }); every panel action re-checks the
+    // key itself via panelKey. All other actions keep the exact
+    // existing flow below.
+    if (typeof body.action === 'string' && body.action.startsWith('panel')) {
+      if (!Object.prototype.hasOwnProperty.call(PANEL_ACTIONS, body.action)) return res.status(400).json({ error: 'Unknown action' });
+      const cfg = await getConfig();
+      const result = await PANEL_ACTIONS[body.action]({ body, cfg });
+      return res.status(200).json(result);
+    }
     const auth = verifyInitData(body.initData);
     if (auth.error === 'config') { console.error('BOT_TOKEN env var is not set'); return res.status(500).json({ error: 'Server not configured' }); }
     if (auth.error === 'expired') return res.status(401).json({ error: 'Session expired, reopen the app' });
