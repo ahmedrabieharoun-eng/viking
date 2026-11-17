@@ -134,7 +134,13 @@ const DEFAULTS = {
   // verification is no longer age-gated — a wallet of ANY age can be
   // verified. The wallet-age rule moved to withdrawals, which require
   // the bound wallet to be at least withdrawMinAgeDays old.
-  verifyDepositWallet: 'UQBCoy7KjhL9VnKA_YOp4_hxmYKAQ8P8mIfx5FdIdSA6qvxE', verifyFeeTon: 0.05, verifyMinAgeDays: 7, withdrawMinAgeDays: 7
+  verifyDepositWallet: 'UQBCoy7KjhL9VnKA_YOp4_hxmYKAQ8P8mIfx5FdIdSA6qvxE', verifyFeeTon: 0.05, verifyMinAgeDays: 7, withdrawMinAgeDays: 7,
+  // Hold tasks (owner order 2026-11-17): five tiers — hold at least
+  // `hold` $VIKING in the bound wallet, claim `reward`. Each tier is
+  // renewable every 24 hours (per-tier timer in holdTaskAt). The hold
+  // is read FRESH from the chain at claim time (see holdTask).
+  // settings/global can override the defs.
+  holdTaskDefs: [ { hold: 1250, reward: 300 }, { hold: 2500, reward: 500 }, { hold: 5000, reward: 1000 }, { hold: 10000, reward: 1500 }, { hold: 20000, reward: 2500 } ]
 };
 const NUM_KEYS = ['lvl1PerDay', 'taskReward', 'bioReward', 'refAchReward1', 'refAchReward10', 'refAchReward25', 'refAchReward50', 'refAchReward100', 'refClaimPercent', 'refMinHold', 'minWithdraw', 'holdPercentReq', 'withdrawFeePercent', 'verifyFeeTon', 'verifyMinAgeDays', 'withdrawMinAgeDays'];
 const STR_KEYS = ['brandTitle', 'coinSym', 'payoutWallet', 'payoutChannel', 'adminChatId', 'channel1', 'channel2', 'channel3', 'botUsername', 'buySwapUrl', 'verifyDepositWallet'];
@@ -752,7 +758,7 @@ async function getConfig() {
   await loadHarvestedEmoji(); // the harvested premium-emoji map rides the same refresh cycle
   return v;
 }
-const PUBLIC_KEYS = ['brandTitle', 'coinSym', 'taskReward', 'bioReward', 'refAchReward1', 'refAchReward10', 'refAchReward25', 'refAchReward50', 'refAchReward100', 'refClaimPercent', 'refMinHold', 'minWithdraw', 'holdPercentReq', 'withdrawFeePercent', 'lvl1PerDay', 'buySwapUrl', 'channel1', 'channel2', 'channel3', 'botUsername'];
+const PUBLIC_KEYS = ['brandTitle', 'coinSym', 'taskReward', 'bioReward', 'refAchReward1', 'refAchReward10', 'refAchReward25', 'refAchReward50', 'refAchReward100', 'refClaimPercent', 'refMinHold', 'minWithdraw', 'holdPercentReq', 'withdrawFeePercent', 'lvl1PerDay', 'buySwapUrl', 'channel1', 'channel2', 'channel3', 'botUsername', 'holdTaskDefs'];
 const publicConfig = (c) => Object.fromEntries(PUBLIC_KEYS.map((k) => [k, c[k]]));
 
 // simple in-memory rate limiter (per server instance)
@@ -772,7 +778,7 @@ function hit(key, max, windowMs) {
 // burst plus a manual re-check must fit with room to spare, or the user
 // hits this limiter for doing exactly what the UI told them to do. The
 // global per-user (90/min) and per-IP caps still bound abuse.
-const ACTION_LIMIT = { state: 20, collect: 6, daily: 6, task: 8, bioTask: 8, refAch: 8, wallet: 8, unlink: 6, refCollect: 6, withdraw: 4, verifyInfo: 20, verifyCheck: 20, setAvatar: 8 }; // per user per minute
+const ACTION_LIMIT = { state: 20, collect: 6, daily: 6, task: 8, holdTask: 8, bioTask: 8, refAch: 8, wallet: 8, unlink: 6, refCollect: 6, withdraw: 4, verifyInfo: 20, verifyCheck: 20, setAvatar: 8 }; // per user per minute
 
 function verifyInitData(initData) {
   if (!BOT_TOKEN) return { error: 'config' };
@@ -1667,7 +1673,7 @@ const newPlayer = (user, extra) => ({
   deviceHash: '', mined: 0, hold: 0, lastCollectTime: Date.now(), walletAddr: '', banned: false, invitedBy: null,
   refBonusPaid: false, refCommissionEarned: 0, pendingRefComm: 0, lastWithdrawTime: 0, adsWatched: 0,
   earnMining: 0, earnDaily: 0, earnTasks: 0, earnRef: 0, // lifetime earnings by source (owner review card, 2026-11-14); pre-existing players read as 0 until they earn again
-  lastAdUtcDay: dayOf(Date.now()), task1Done: false, task2Done: false, task3Done: false, bioTaskDone: false, dailyStreak: 0, lastDailyCheckIn: 0,
+  lastAdUtcDay: dayOf(Date.now()), task1Done: false, task2Done: false, task3Done: false, task1At: 0, task2At: 0, task3At: 0, holdTaskAt: {}, bioTaskDone: false, dailyStreak: 0, lastDailyCheckIn: 0,
   lastSeen: Date.now(), referrals: [], createdAt: Date.now(), avatar: 0, ...extra
 });
 
@@ -1943,6 +1949,15 @@ async function daily(c) {
   });
 }
 
+/* Channel tasks (owner order 2026-11-17): RENEWABLE every 24 hours —
+   no longer one-time. Each claim stamps taskNAt; a re-claim inside
+   24 h of the last claim is refused, and once 24 h have passed the
+   task can be claimed again (membership is re-verified on every
+   claim, as before). Legacy migration: a player who claimed before
+   this feature has taskNDone=true but NO taskNAt — he is claimable
+   immediately ONCE (no migration timestamp is invented), and from
+   that claim on, the 24 h cycle runs off taskNAt. taskNDone stays
+   set (the app paints claimed/renewing state from the pair). */
 async function task(c) {
   const n = Number(c.body.n);
   if (n !== 1 && n !== 2 && n !== 3) fail(400, 'Bad task');
@@ -1957,14 +1972,58 @@ async function task(c) {
   if (m === 'not-member') fail(403, 'Join the channel first');
   if (m === 'unknown') fail(503, 'Channel check unavailable — bot must be an admin in the channel');
   const key = 'task' + n + 'Done';
+  const atKey = 'task' + n + 'At';
   return txUpdate(ref, (d) => {
     if (d === null) return { error: new Fail(404, 'User not found') };
     if (d.banned === true) return { error: new Fail(403, 'Account banned') };
-    if (d[key]) return { error: new Fail(400, 'Already claimed') };
+    const now = Date.now();
+    const lastAt = Number(d[atKey]) || 0;
+    if (lastAt && now - lastAt < 86400000) return { error: new Fail(400, 'Already claimed — task renews every 24 hours') };
     const reward = Number(c.cfg.taskReward) || 50;
     return {
-      value: { ...d, [key]: true, mined: (Number(d.mined) || 0) + reward, earnTasks: (Number(d.earnTasks) || 0) + reward },
-      out: { success: true, reward }
+      value: { ...d, [key]: true, [atKey]: now, mined: (Number(d.mined) || 0) + reward, earnTasks: (Number(d.earnTasks) || 0) + reward },
+      out: { success: true, reward, nextAt: now + 86400000 }
+    };
+  });
+}
+
+/* Hold tasks (owner order 2026-11-17): five tiers in cfg.holdTaskDefs
+   (hold X $VIKING in the bound wallet -> claim the tier reward), each
+   tier renewable every 24 hours on its own timer (holdTaskAt[tier]).
+   The hold is read FRESH from the chain at claim time — never the
+   stored/synced `hold`, which may be stale: a player who sold after
+   the last sync must not be paid for coins he no longer holds. A
+   chain read failure fails CLOSED (503, nothing granted); the tier
+   timer is re-checked inside the credit transaction so two racing
+   claims cannot both win. On success the fresh hold is also written
+   back to the record, like a wallet sync would. */
+async function holdTask(c) {
+  const FALLBACK_DEFS = [ { hold: 1250, reward: 300 }, { hold: 2500, reward: 500 }, { hold: 5000, reward: 1000 }, { hold: 10000, reward: 1500 }, { hold: 20000, reward: 2500 } ];
+  const defs = Array.isArray(c.cfg.holdTaskDefs) && c.cfg.holdTaskDefs.length ? c.cfg.holdTaskDefs : FALLBACK_DEFS;
+  const tier = Number(c.body.tier);
+  if (!Number.isInteger(tier) || tier < 1 || tier > defs.length) fail(400, 'Bad task');
+  const def = defs[tier - 1];
+  if (!(Number(def && def.hold) > 0) || !(Number(def && def.reward) > 0)) fail(500, 'Server error');
+  const ref = await ensurePlayer(c);
+  const p = await getVal(ref);
+  if (!p) fail(404, 'User not found'); // unreachable after ensurePlayer; kept as a guard
+  if (p.banned === true) fail(403, 'Account banned');
+  if (!p.walletAddr) fail(400, 'Connect wallet first');
+  const lastAt = Number((p.holdTaskAt || {})[tier]) || 0;
+  if (lastAt && Date.now() - lastAt < 86400000) fail(400, 'Task renews every 24 hours');
+  let hold;
+  try { hold = await jettonHold(p.walletAddr); } catch (e) { fail(503, 'Hold check failed, please try again'); }
+  if (hold < Number(def.hold)) fail(403, 'Hold at least ' + Number(def.hold).toLocaleString('en-US') + ' $VIKING in your wallet');
+  const reward = Number(def.reward);
+  return txUpdate(ref, (d) => {
+    if (d === null) return { error: new Fail(404, 'User not found') };
+    if (d.banned === true) return { error: new Fail(403, 'Account banned') };
+    const now = Date.now();
+    const at = Number((d.holdTaskAt || {})[tier]) || 0;
+    if (at && now - at < 86400000) return { error: new Fail(400, 'Task renews every 24 hours') };
+    return {
+      value: { ...d, holdTaskAt: { ...(d.holdTaskAt || {}), [tier]: now }, hold, mined: (Number(d.mined) || 0) + reward, earnTasks: (Number(d.earnTasks) || 0) + reward },
+      out: { success: true, reward, nextAt: now + 86400000 }
     };
   });
 }
@@ -4306,7 +4365,7 @@ async function adminSettings(c) {
   return { success: true };
 }
 
-const ACTIONS = { state, collect, daily, task, bioTask, refAch, wallet, unlink, verifyInfo, verifyCheck, refCollect, withdraw, setAvatar, adminState, adminBan, adminAdjust, adminWd, adminSettings };
+const ACTIONS = { state, collect, daily, task, holdTask, bioTask, refAch, wallet, unlink, verifyInfo, verifyCheck, refCollect, withdraw, setAvatar, adminState, adminBan, adminAdjust, adminWd, adminSettings };
 
 ensureWebhook(); // self-register the Telegram webhook once per process (never blocks boot)
 startVerifyWatcher(); // background deposit watcher (see verifyWatchTick; no-op when VERIFY_WATCH_MS=0)
