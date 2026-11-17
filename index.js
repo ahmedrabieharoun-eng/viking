@@ -129,11 +129,14 @@ const DEFAULTS = {
   buySwapUrl: 'https://app.ston.fi/swap?chartVisible=false&tt=EQC6uN73kvaKh8LrTHQ8TQ5_vgqheI93iny5XUWkpQL9vjxI&ft=GRAM',
   channel1: 'https://t.me/YGRAM1', channel2: 'https://t.me/telegram', channel3: 'https://t.me/VikingMiner_Community', botUsername: 'VIKING_MINER_BOT',
   // Wallet verification (owner order 2026-11-14): the fee is paid to
-  // verifyDepositWallet with the comment VIKING-<userNo>; a wallet must
-  // be at least verifyMinAgeDays old to be verified.
-  verifyDepositWallet: 'UQBCoy7KjhL9VnKA_YOp4_hxmYKAQ8P8mIfx5FdIdSA6qvxE', verifyFeeTon: 0.05, verifyMinAgeDays: 7
+  // verifyDepositWallet with the comment VIKING-<userNo>.
+  // verifyMinAgeDays is LEGACY since 2026-11-17 (owner order):
+  // verification is no longer age-gated — a wallet of ANY age can be
+  // verified. The wallet-age rule moved to withdrawals, which require
+  // the bound wallet to be at least withdrawMinAgeDays old.
+  verifyDepositWallet: 'UQBCoy7KjhL9VnKA_YOp4_hxmYKAQ8P8mIfx5FdIdSA6qvxE', verifyFeeTon: 0.05, verifyMinAgeDays: 7, withdrawMinAgeDays: 7
 };
-const NUM_KEYS = ['lvl1PerDay', 'taskReward', 'bioReward', 'refAchReward1', 'refAchReward10', 'refAchReward25', 'refAchReward50', 'refAchReward100', 'refClaimPercent', 'refMinHold', 'minWithdraw', 'holdPercentReq', 'withdrawFeePercent', 'verifyFeeTon', 'verifyMinAgeDays'];
+const NUM_KEYS = ['lvl1PerDay', 'taskReward', 'bioReward', 'refAchReward1', 'refAchReward10', 'refAchReward25', 'refAchReward50', 'refAchReward100', 'refClaimPercent', 'refMinHold', 'minWithdraw', 'holdPercentReq', 'withdrawFeePercent', 'verifyFeeTon', 'verifyMinAgeDays', 'withdrawMinAgeDays'];
 const STR_KEYS = ['brandTitle', 'coinSym', 'payoutWallet', 'payoutChannel', 'adminChatId', 'channel1', 'channel2', 'channel3', 'botUsername', 'buySwapUrl', 'verifyDepositWallet'];
 
 /* ---------- helpers ---------- */
@@ -2564,7 +2567,7 @@ async function verifyInfo(c) {
     wallet,
     ageDays,
     minAgeDays: minAge,
-    ageOk: ageDays !== null && ageDays >= minAge,
+    ageOk: true, // owner order 2026-11-17: verification is not age-gated (wallet age gates withdrawals instead)
     verified,
     verifiedWallet: p.verifiedWallet || '',
     verifyPending: !!wallet && !verified && pending > 0
@@ -2714,9 +2717,8 @@ async function verifyCheck(c) {
   if (p.walletVerified === true && p.verifiedWallet === wallet) return { verified: true, tx: p.verifyTx || '', already: true };
   const userNo = await ensureUserNo(uid);
   if (!userNo) fail(500, 'Server error');
-  const minAge = Number(c.cfg.verifyMinAgeDays) || 7;
-  const age = await walletAgeDays(ref, p, wallet); // cache-aware; recomputes when stale or the wallet changed
-  if (age < minAge) fail(400, 'Wallet too new: ' + age + ' days, needs ' + minAge);
+  // Owner order 2026-11-17: no wallet-age gate here — verification is
+  // open at any wallet age; the age rule now gates withdrawals only.
   const feeTon = Number(c.cfg.verifyFeeTon) || 0;
   const minNano = BigInt(Math.floor(feeTon * 1e9 * 0.99)); // 1% tolerance for wallet-side rounding
   const comment = verifyComment(userNo);
@@ -2888,14 +2890,13 @@ async function markUnresolvedCompleted(hash) {
    either completed through completeVerification or recorded in
    verifyUnresolved with the reason. Validation order (owner order
    2026-11-16): value >= fee (1% tolerance) -> claim state -> player
-   exists -> not banned -> bound wallet == deposit source -> wallet
-   age >= minimum -> complete. ctx.ageBudget ({left}) caps FRESH
-   wallet-age determinations for the background paths that can defer
-   (sweep/recheck); the cursor path passes none — a player who paid
-   is never queued behind an age budget again. Returns one of:
-   'WON' | 'already' | 'unresolved' | 'age-deferred' | 'skip'. */
+   exists -> not banned -> bound wallet == deposit source -> complete.
+   Owner order 2026-11-17: wallet age no longer gates verification —
+   it gates withdrawals instead (see withdraw()). The ctx parameter
+   (and its ageBudget) is kept for caller compatibility but is no
+   longer used here. Returns one of:
+   'WON' | 'already' | 'unresolved' | 'skip'. */
 async function processVerifyCandidate(cand, cfg, ctx) {
-  const minAge = Number(cfg.verifyMinAgeDays) || 7;
   const feeTon = Number(cfg.verifyFeeTon) || 0;
   const minNano = BigInt(Math.floor(feeTon * 1e9 * 0.99));
   let val;
@@ -2921,13 +2922,9 @@ async function processVerifyCandidate(cand, cfg, ctx) {
   if (p.walletVerified === true && wallet && p.verifiedWallet === wallet) { await markUnresolvedCompleted(cand.hash); return 'already'; }
   if (!wallet) { await recordUnresolved(cand, 'no-wallet', uid); return 'unresolved'; }
   if (cand.source !== wallet) { await recordUnresolved(cand, 'source-mismatch', uid); return 'unresolved'; }
-  const ageCached = p.walletAgeV === WALLET_AGE_CACHE_V && p.walletAgeFor === wallet && p.walletAgeAt && (Date.now() - p.walletAgeAt) < WALLET_AGE_CACHE_MS && Number(p.walletAgeDays) >= 0;
-  if (!ageCached && ctx && ctx.ageBudget && ctx.ageBudget.left <= 0) return 'age-deferred';
-  let age = null;
-  try { age = await walletAgeDays(P(uid), p, wallet); } catch (e) { /* treated as unknown below — never guessed */ }
-  if (!ageCached && ctx && ctx.ageBudget) ctx.ageBudget.left--;
-  if (age === null) { await recordUnresolved(cand, 'age-unknown', uid); return 'unresolved'; }
-  if (age < minAge) { await recordUnresolved(cand, 'age-too-low', uid); return 'unresolved'; }
+  // Owner order 2026-11-17: no wallet-age validation here any more —
+  // a payer whose wallet is younger than 7 days completes like anyone
+  // else (the age rule now gates withdrawals in withdraw()).
   let done;
   try { done = await completeVerification(uid, cand.hash, cfg); } catch (e) {
     await recordUnresolved(cand, 'error:' + String((e && e.message) || e).slice(0, 80), uid);
@@ -3352,6 +3349,15 @@ async function withdraw(c) {
   // (binding a different wallet voids it — see wallet()), so a true
   // flag here always refers to the currently bound wallet.
   if (pre.walletVerified !== true) fail(403, 'Verify your wallet first');
+  // Owner order 2026-11-17: the wallet-age rule moved here from
+  // verification — withdrawing requires the bound wallet to be at
+  // least withdrawMinAgeDays old (verification itself is open at any
+  // age). Age is read through the same cache-aware helper the
+  // verification paths use.
+  const wdMinAge = Number(cfg.withdrawMinAgeDays) || 7;
+  const wdAge = await walletAgeDays(ref, pre, addr);
+  if (wdAge === null || wdAge === undefined) fail(503, 'Wallet age check failed, please try again');
+  if (Number(wdAge) < wdMinAge) fail(403, 'Wallet too new for withdrawal: ' + Number(wdAge) + ' days, needs ' + wdMinAge);
   if (!Number.isFinite(amt) || amt < Number(cfg.minWithdraw)) fail(400, 'Minimum is ' + cfg.minWithdraw);
   const hold = await jettonHold(addr); // re-checked on-chain at withdrawal time
   const needHold = Math.ceil(amt * Number(cfg.holdPercentReq) / 100);
