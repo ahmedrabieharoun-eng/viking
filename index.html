@@ -46,6 +46,10 @@
     .btn-3d-gold.btn-wd-locked{background:linear-gradient(180deg,#9ca3af,#6b7280,#4b5563);color:#e5e7eb;box-shadow:0 4px 0 #1f2937;border-top:1px solid #d1d5db;cursor:not-allowed;opacity:.78}
     .btn-3d-gold.btn-wd-locked:active{transform:none;box-shadow:0 4px 0 #1f2937}
     .btn-done-green{background:linear-gradient(180deg,#4ade80,#22c55e,#16a34a)!important;color:#fff!important;box-shadow:0 4px 0 #14532d!important;border-top:1px solid #bbf7d0!important}
+    /* Renewable-task cooldown (owner order 2026-11-17): after a claim the
+       task button goes inactive YELLOW and carries the live 24h countdown. */
+    .btn-cooldown-yellow{background:linear-gradient(180deg,#fef08a,#facc15,#eab308)!important;color:#422006!important;box-shadow:0 4px 0 #713f12!important;border-top:1px solid #fef9c3!important;cursor:default!important}
+    .q-renew{font-size:10px;color:#8a6d1f;font-weight:700;margin-top:2px}
     .btn-done-green:active{box-shadow:0 1px 0 #14532d!important}
     .btn-busy{opacity:.78;pointer-events:none}
     .btn-spinner{display:inline-block;width:13px;height:13px;border-radius:50%;border:2px solid rgba(128,128,128,.35);border-top-color:currentColor;animation:btnspin .7s linear infinite;flex:none}
@@ -657,6 +661,7 @@
             <div class="q-mid">
               <div class="q-title" id="ch-1-title" data-i18n="ch1_title">📢 Official Telegram Channel</div>
               <div class="q-rew"><img src="assets/coin_icon.webp" alt="">+<span class="ui-task-rew">50</span> <span class="coin-sym">$VIKING</span></div>
+              <div class="q-renew">🔄 <span data-i18n="renews_24h">Renews every 24 hours</span></div>
             </div>
             <button class="btn-3d-gold q-btn" id="ch-task-1-btn">Join Channel</button>
           </div>
@@ -672,6 +677,7 @@
             <div class="q-mid">
               <div class="q-title" id="ch-2-title" data-i18n="ch2_title">💬 Payouts & Community Channel</div>
               <div class="q-rew"><img src="assets/coin_icon.webp" alt="">+<span class="ui-task-rew">50</span> <span class="coin-sym">$VIKING</span></div>
+              <div class="q-renew">🔄 <span data-i18n="renews_24h">Renews every 24 hours</span></div>
             </div>
             <button class="btn-3d-gold q-btn" id="ch-task-2-btn">Join Channel</button>
           </div>
@@ -687,6 +693,7 @@
             <div class="q-mid">
               <div class="q-title" id="ch-3-title" data-i18n="ch3_title" style="font-size:13px;">👥 Community Channel</div>
               <div class="q-rew"><img src="assets/coin_icon.webp" alt="">+<span class="ui-task-rew">50</span> <span class="coin-sym">$VIKING</span></div>
+              <div class="q-renew">🔄 <span data-i18n="renews_24h">Renews every 24 hours</span></div>
             </div>
             <button class="btn-3d-gold q-btn" id="ch-task-3-btn">Join Channel</button>
           </div>
@@ -707,6 +714,11 @@
           </div>
         </div>
         <span id="bio-bot-username" style="display:none"></span>
+      </div>
+
+      <div class="q-wrap" style="background-image:url('assets/ref_stone_plain.webp');">
+        <div class="q-sec-title" data-i18n="hold_tasks_title">💰 HOLD TASKS</div>
+        <div id="hold-task-list"></div>
       </div>
 
       <div class="q-wrap" style="background-image:url('assets/ref_stone_plain.webp');">
@@ -1428,7 +1440,7 @@
         my_referrals_title:"👥 My Invited Friends", pending_ref_title:"Pending Referral Profits", collect_ref_btn:"COLLECT",
         ton_wallet_title:"TON Blockchain Wallet", connect_wallet_btn:"Connect TON Wallet",
         sync_hold_btn:"Verify Wallet Hold", disconnect_wallet_btn:"Disconnect", unlink_title:"Disconnect Wallet?", unlink_warn:"⚠️ Disconnecting will cancel your wallet verification. To verify again, you will have to pay the verification fee again.", unlink_confirm:"Disconnect", unlink_cancel:"Cancel",
-        prof_page_title:"PROFILE", prof_username_lbl:"USERNAME", prof_wallet_lbl:"WALLET", prof_amount_lbl:"AMOUNT", buy_stonfi_btn:"Buy on STON.fi", set_sound_lbl:"SOUND", set_lang_lbl:"LANGUAGE", lock_verify:"Verify Your Wallet First", lock_age:"Wallet Must Be {n}+ Days Old", ref_banner_title:"REFERRAL SYSTEM", boost_banner_title:"LEVELS BOOST", quests_title:"QUESTS", tap_open_hint:"Tap the card to open", ref_head_earn:"Earn 5% of your friends mining", ref_head_sub:"A friend activates at Level 2", ref_link_lbl:"REFERRAL LINK", ref_how_title:"HOW IT WORKS", ref_rule_100:"+100 coins for every ACTIVE referral", ref_rule_cond:"Activation: your friend reaches Level 2 — holding 200+ $VIKING in their wallet", ref_rule_5:"You earn 5% of everything your active referrals earn — automatically", ref_friends_title:"MY INVITED FRIENDS", ref_verified_pill:"VERIFIED", ref_pending_pill:"PENDING", ref_dup_pill:"DUPLICATE",
+        prof_page_title:"PROFILE", prof_username_lbl:"USERNAME", prof_wallet_lbl:"WALLET", prof_amount_lbl:"AMOUNT", buy_stonfi_btn:"Buy on STON.fi", set_sound_lbl:"SOUND", set_lang_lbl:"LANGUAGE", lock_verify:"Verify Your Wallet First", lock_age:"Wallet Must Be {n}+ Days Old", renews_24h:"Renews every 24 hours", hold_tasks_title:"💰 HOLD TASKS", hold_task_title:"Hold {n}", claim_btn:"Claim", task_available_in:"Available in {t}", ref_banner_title:"REFERRAL SYSTEM", boost_banner_title:"LEVELS BOOST", quests_title:"QUESTS", tap_open_hint:"Tap the card to open", ref_head_earn:"Earn 5% of your friends mining", ref_head_sub:"A friend activates at Level 2", ref_link_lbl:"REFERRAL LINK", ref_how_title:"HOW IT WORKS", ref_rule_100:"+100 coins for every ACTIVE referral", ref_rule_cond:"Activation: your friend reaches Level 2 — holding 200+ $VIKING in their wallet", ref_rule_5:"You earn 5% of everything your active referrals earn — automatically", ref_friends_title:"MY INVITED FRIENDS", ref_verified_pill:"VERIFIED", ref_pending_pill:"PENDING", ref_dup_pill:"DUPLICATE",
         hold_wallet_lbl:"Wallet Hold", mine_wallet_lbl:"In-App Balance",
         withdraw_title:"Withdraw", min_wd_lbl:"Minimum:", wd_fee_lbl:"Fee (5%):", net_lbl:"Net:",
         hold_cond_lbl:"25% Hold Required:", your_hold_lbl:"Your Hold:", req_wd_btn:"Request Withdrawal",
@@ -1478,7 +1490,7 @@
         my_referrals_title:"👥 أصدقائي المدعوون", pending_ref_title:"أرباح الإحالات المعلقة", collect_ref_btn:"جمع أرباح الإحالات",
         ton_wallet_title:"محفظة شبكة TON", connect_wallet_btn:"ربط محفظة TON الآن",
         sync_hold_btn:"تحديث رصيد المحفظة", disconnect_wallet_btn:"إلغاء الربط", unlink_title:"فك ربط المحفظة؟", unlink_warn:"⚠️ فك ربط المحفظة سيلغي توثيق محفظتك، وستضطر لدفع رسوم التوثيق مرة أخرى لإعادة التوثيق.", unlink_confirm:"فك الربط", unlink_cancel:"إلغاء",
-        prof_page_title:"الملف الشخصي", prof_username_lbl:"اسم المستخدم", prof_wallet_lbl:"المحفظة", prof_amount_lbl:"المبلغ", buy_stonfi_btn:"اشترِ من STON.fi", set_sound_lbl:"الصوت", set_lang_lbl:"اللغة", lock_verify:"قم بتوثيق محفظتك أولاً", lock_age:"عمر المحفظة لازم يكون {n} يوم أو أكتر", ref_banner_title:"نظام الإحالة", boost_banner_title:"تعزيز المستوى", quests_title:"المهام", tap_open_hint:"اضغط على الكارت للفتح", ref_head_earn:"اكسب 5% من تعدين أصدقائك", ref_head_sub:"الصديق بيتنشط عند المستوى 2", ref_link_lbl:"رابط الإحالة", ref_how_title:"إزاي بيشتغل", ref_rule_100:"+100 عملة عن كل إحالة نشطة", ref_rule_cond:"التنشيط: صديقك يوصل للمستوى 2 — يعني معاه 200+ $VIKING في محفظته", ref_rule_5:"بتكسب 5% من كل أرباح إحالاتك النشطة — تلقائيًا", ref_friends_title:"أصدقائي المدعوون", ref_verified_pill:"موثّق", ref_pending_pill:"قيد الانتظار", ref_dup_pill:"مكرر",
+        prof_page_title:"الملف الشخصي", prof_username_lbl:"اسم المستخدم", prof_wallet_lbl:"المحفظة", prof_amount_lbl:"المبلغ", buy_stonfi_btn:"اشترِ من STON.fi", set_sound_lbl:"الصوت", set_lang_lbl:"اللغة", lock_verify:"قم بتوثيق محفظتك أولاً", lock_age:"عمر المحفظة لازم يكون {n} يوم أو أكتر", renews_24h:"تتجدد كل 24 ساعة", hold_tasks_title:"💰 مهام الاحتفاظ", hold_task_title:"احتفظ بـ {n}", claim_btn:"استلام", task_available_in:"متاحة بعد {t}", ref_banner_title:"نظام الإحالة", boost_banner_title:"تعزيز المستوى", quests_title:"المهام", tap_open_hint:"اضغط على الكارت للفتح", ref_head_earn:"اكسب 5% من تعدين أصدقائك", ref_head_sub:"الصديق بيتنشط عند المستوى 2", ref_link_lbl:"رابط الإحالة", ref_how_title:"إزاي بيشتغل", ref_rule_100:"+100 عملة عن كل إحالة نشطة", ref_rule_cond:"التنشيط: صديقك يوصل للمستوى 2 — يعني معاه 200+ $VIKING في محفظته", ref_rule_5:"بتكسب 5% من كل أرباح إحالاتك النشطة — تلقائيًا", ref_friends_title:"أصدقائي المدعوون", ref_verified_pill:"موثّق", ref_pending_pill:"قيد الانتظار", ref_dup_pill:"مكرر",
         hold_wallet_lbl:"عملات المحفظة (Hold)", mine_wallet_lbl:"رصيد داخل التطبيق",
         withdraw_title:"سحب", min_wd_lbl:"الحد الأدنى:", wd_fee_lbl:"رسوم (5%):", net_lbl:"الصافي:",
         hold_cond_lbl:"شرط 25% بالمحفظة:", your_hold_lbl:"رصيد محفظتك:", req_wd_btn:"طلب سحب الرصيد",
@@ -1528,7 +1540,7 @@
         my_referrals_title:"👥 Мои рефералы", pending_ref_title:"Ожидаемый доход", collect_ref_btn:"Собрать доход",
         ton_wallet_title:"Кошелек TON", connect_wallet_btn:"Подключить TON Кошелек",
         sync_hold_btn:"Обновить Холд", disconnect_wallet_btn:"Отключить", unlink_title:"Отключить кошелёк?", unlink_warn:"⚠️ Отключение отменит верификацию кошелька. Для повторной верификации придётся снова оплатить комиссию.", unlink_confirm:"Отключить", unlink_cancel:"Отмена",
-        prof_page_title:"ПРОФИЛЬ", prof_username_lbl:"ИМЯ ПОЛЬЗОВАТЕЛЯ", prof_wallet_lbl:"КОШЕЛЁК", prof_amount_lbl:"СУММА", buy_stonfi_btn:"Купить на STON.fi", set_sound_lbl:"ЗВУК", set_lang_lbl:"ЯЗЫК", lock_verify:"Сначала подтвердите кошелёк", lock_age:"Возраст кошелька должен быть от {n} дн.", ref_banner_title:"РЕФЕРАЛЬНАЯ СИСТЕМА", boost_banner_title:"УСИЛЕНИЕ УРОВНЕЙ", quests_title:"ЗАДАНИЯ", tap_open_hint:"Нажмите на карточку, чтобы открыть", ref_head_earn:"Зарабатывайте 5% от майнинга друзей", ref_head_sub:"Друг активируется на уровне 2", ref_link_lbl:"РЕФЕРАЛЬНАЯ ССЫЛКА", ref_how_title:"КАК ЭТО РАБОТАЕТ", ref_rule_100:"+100 монет за каждого АКТИВНОГО реферала", ref_rule_cond:"Активация: друг достигает уровня 2 — держит 200+ $VIKING в кошельке", ref_rule_5:"Вы получаете 5% от всего заработка активных рефералов — автоматически", ref_friends_title:"МОИ ПРИГЛАШЁННЫЕ ДРУЗЬЯ", ref_verified_pill:"ПОДТВЕРЖДЁН", ref_pending_pill:"ОЖИДАЕТ", ref_dup_pill:"ДУБЛИКАТ",
+        prof_page_title:"ПРОФИЛЬ", prof_username_lbl:"ИМЯ ПОЛЬЗОВАТЕЛЯ", prof_wallet_lbl:"КОШЕЛЁК", prof_amount_lbl:"СУММА", buy_stonfi_btn:"Купить на STON.fi", set_sound_lbl:"ЗВУК", set_lang_lbl:"ЯЗЫК", lock_verify:"Сначала подтвердите кошелёк", lock_age:"Возраст кошелька должен быть от {n} дн.", renews_24h:"Обновляется каждые 24 часа", hold_tasks_title:"💰 ЗАДАНИЯ НА УДЕРЖАНИЕ", hold_task_title:"Удерживайте {n}", claim_btn:"Забрать", task_available_in:"Доступно через {t}", ref_banner_title:"РЕФЕРАЛЬНАЯ СИСТЕМА", boost_banner_title:"УСИЛЕНИЕ УРОВНЕЙ", quests_title:"ЗАДАНИЯ", tap_open_hint:"Нажмите на карточку, чтобы открыть", ref_head_earn:"Зарабатывайте 5% от майнинга друзей", ref_head_sub:"Друг активируется на уровне 2", ref_link_lbl:"РЕФЕРАЛЬНАЯ ССЫЛКА", ref_how_title:"КАК ЭТО РАБОТАЕТ", ref_rule_100:"+100 монет за каждого АКТИВНОГО реферала", ref_rule_cond:"Активация: друг достигает уровня 2 — держит 200+ $VIKING в кошельке", ref_rule_5:"Вы получаете 5% от всего заработка активных рефералов — автоматически", ref_friends_title:"МОИ ПРИГЛАШЁННЫЕ ДРУЗЬЯ", ref_verified_pill:"ПОДТВЕРЖДЁН", ref_pending_pill:"ОЖИДАЕТ", ref_dup_pill:"ДУБЛИКАТ",
         hold_wallet_lbl:"В кошельке", mine_wallet_lbl:"Баланс в приложении",
         withdraw_title:"Вывод", min_wd_lbl:"Минимум:", wd_fee_lbl:"Комиссия (5%):", net_lbl:"Чистыми:",
         hold_cond_lbl:"Нужно 25% Холда:", your_hold_lbl:"Ваш Холд:", req_wd_btn:"Запросить вывод",
@@ -1616,6 +1628,8 @@
     let wdCooldownActive = false;
     let pendingRefComm = 0;
     let task1Done = false, task2Done = false, task3Done = false;
+    let task1At = 0, task2At = 0, task3At = 0;
+    let holdTaskAt = {};
     let chV = {1:false, 2:false, 3:false};
     let bioTaskDone = false, refAchClaimed = {}, activeRefs = 0;
     const REF_MILESTONES = [1, 10, 25, 50, 100];
@@ -2039,6 +2053,10 @@
       task1Done = !!d.task1Done;
       task2Done = !!d.task2Done;
       task3Done = !!d.task3Done;
+      task1At = Number(d.task1At) || 0;
+      task2At = Number(d.task2At) || 0;
+      task3At = Number(d.task3At) || 0;
+      holdTaskAt = d.holdTaskAt || {};
       bioTaskDone = !!d.bioTaskDone;
       refAchClaimed = d.refAchClaimed || {};
       activeRefs = Number(d.activeRefs) || 0;
@@ -2680,6 +2698,52 @@
       return m ? '@' + m[1] : '';
     }
 
+    /* Hold tasks (owner order 2026-11-17): five tiers rendered from the
+       server config (holdTaskDefs; the literal fallback mirrors the
+       server defaults). Each tier pays its reward for holding at least
+       the tier amount in the connected wallet, and renews every 24h —
+       after a claim its button shows the same yellow countdown as the
+       channel tasks. */
+    const HOLD_TASK_FALLBACK = [ { hold: 1250, reward: 300 }, { hold: 2500, reward: 500 }, { hold: 5000, reward: 1000 }, { hold: 10000, reward: 1500 }, { hold: 20000, reward: 2500 } ];
+    function renderHoldTasks() {
+      const box = document.getElementById('hold-task-list'); if (!box) return;
+      const dict = I18N[currentLang] || I18N.en;
+      const defs = (Array.isArray(config.holdTaskDefs) && config.holdTaskDefs.length) ? config.holdTaskDefs : HOLD_TASK_FALLBACK;
+      box.innerHTML = defs.map((def, i) => {
+        const tier = i + 1;
+        const req = Number(def.hold) || 0, rew = Number(def.reward) || 0;
+        const rem = holdRemaining(tier);
+        const pct = Math.min(100, Math.floor(walletHold / Math.max(1, req) * 100));
+        const btn = rem > 0
+          ? `<button class="btn-3d-gold q-btn btn-cooldown-yellow" data-hold-cd="${tier}" disabled>⏳ ${fmtCd(rem)}</button>`
+          : `<button class="btn-3d-gold q-btn hold-claim" data-tier="${tier}" ${walletHold >= req ? '' : 'style="opacity:0.45;" disabled'}>${dict.claim_btn || 'Claim'}</button>`;
+        return `
+          <div style="margin-top:10px;">
+            <div class="q-row">
+              <img class="q-scroll" src="assets/quest_scroll.webp" alt="">
+              <div class="q-row-in">
+                <img class="q-ic" src="assets/icon_q_coins.webp" alt="">
+                <div class="q-mid">
+                  <div class="q-title">${(dict.hold_task_title || 'Hold {n}').replace('{n}', req.toLocaleString())} ${esc(config.coinSym)}</div>
+                  <div class="q-rew"><img src="assets/coin_icon.webp" alt="">+${rew.toLocaleString()} ${esc(config.coinSym)}</div>
+                  <div class="q-renew">🔄 ${dict.renews_24h || 'Renews every 24 hours'}</div>
+                </div>
+                ${btn}
+              </div>
+            </div>
+            <div class="q-prog"><div class="q-prog-bg"><div class="q-prog-fill" style="width:${pct}%;"></div></div><div class="q-prog-txt">${Math.floor(walletHold).toLocaleString()}/${req.toLocaleString()}</div></div>
+          </div>`;
+      }).join('');
+      box.querySelectorAll('.hold-claim').forEach(b => b.addEventListener('click', async e => {
+        if (!isHumanClick(e)) return;
+        const tier = Number(b.getAttribute('data-tier'));
+        await withBtnBusy(b, async () => {
+          try { const r = await api("holdTask", { tier }); SoundFX.buySuccess(); showToast(`🎉 +${r.reward} ${config.coinSym}!`); await refreshState(); }
+          catch (err) { showToast("❌ " + err.message, "#ef4444"); }
+        });
+      }));
+    }
+
     function renderTasksExtras() {
       // channel card titles: prefer the configured channel's own @handle
       const dict = I18N[currentLang] || I18N.en;
@@ -2706,6 +2770,8 @@
           bioBtn.classList.toggle('btn-done-green', bioTaskDone);
         }
       }
+
+      renderHoldTasks();
 
       // referral milestones: only ACTIVE (verified) referrals count —
       // activeRefs comes from the server; pending friends never count.
@@ -2745,17 +2811,55 @@
       }));
     }
 
-    /* Channel task button flow (owner order 2026-11-14): the button starts
-       as «Join Channel» and opens the channel; once opened it becomes
-       «Verify»; a failed membership check flips it back to «Join Channel»;
-       success paints «✓ Done». */
+    /* Renewable tasks (owner order 2026-11-17): channel tasks and hold
+       tasks renew every 24 hours. After a claim, the button goes
+       inactive YELLOW and carries the live countdown until renewal;
+       tickTaskTimers() keeps every visible countdown ticking. */
+    const TASK_RENEW_MS = 86400000;
+    function fmtCd(ms) { let s = Math.max(0, Math.ceil(ms / 1000)); const h = String(Math.floor(s / 3600)).padStart(2, '0'), m = String(Math.floor((s % 3600) / 60)).padStart(2, '0'), ss = String(s % 60).padStart(2, '0'); return `${h}:${m}:${ss}`; }
+    function chDone(n) { return n === 1 ? task1Done : n === 2 ? task2Done : task3Done; }
+    function chLastAt(n) { return n === 1 ? task1At : n === 2 ? task2At : task3At; }
+    function chRemaining(n) { const at = chLastAt(n); if (!at) return 0; return Math.max(0, at + TASK_RENEW_MS - Date.now()); }
+    function holdRemaining(tier) { const at = Number((holdTaskAt || {})[tier]) || 0; if (!at) return 0; return Math.max(0, at + TASK_RENEW_MS - Date.now()); }
+
+    /* Channel task button flow (owner order 2026-11-14, renewal added
+       2026-11-17): the button starts as «Join Channel» and opens the
+       channel; once opened it becomes «Verify»; a failed membership
+       check flips it back to «Join Channel». After a successful claim
+       it shows the yellow 24h countdown; once the countdown ends it
+       offers «Verify» again (membership is re-checked server-side on
+       every claim). */
     function paintChBtn(n) {
       const btn = document.getElementById('ch-task-' + n + '-btn'); if (!btn) return;
       const d = I18N[currentLang] || I18N.en;
-      const done = (n === 1 ? task1Done : n === 2 ? task2Done : task3Done) || !!localStorage.getItem('vksec_task' + n);
-      if (done) { btn.innerText = "✓ Done"; btn.classList.add('btn-done-green'); return; }
+      const rem = chRemaining(n);
       btn.classList.remove('btn-done-green');
-      btn.innerText = chV[n] ? (d.verify_join_btn || "Verify") : (d.join_channel_btn || "Join Channel");
+      if (rem > 0) {
+        btn.disabled = true;
+        btn.classList.add('btn-cooldown-yellow');
+        btn.dataset.cdCh = n;
+        btn.innerText = '⏳ ' + fmtCd(rem);
+        return;
+      }
+      btn.disabled = false;
+      btn.classList.remove('btn-cooldown-yellow');
+      delete btn.dataset.cdCh;
+      btn.innerText = (chDone(n) || chV[n]) ? (d.verify_join_btn || "Verify") : (d.join_channel_btn || "Join Channel");
+    }
+
+    function tickTaskTimers() {
+      let dirty = false;
+      document.querySelectorAll('[data-cd-ch]').forEach(btn => {
+        const rem = chRemaining(Number(btn.getAttribute('data-cd-ch')));
+        if (rem <= 0) { dirty = true; return; }
+        btn.innerText = '⏳ ' + fmtCd(rem);
+      });
+      document.querySelectorAll('[data-hold-cd]').forEach(btn => {
+        const rem = holdRemaining(Number(btn.getAttribute('data-hold-cd')));
+        if (rem <= 0) { dirty = true; return; }
+        btn.innerText = '⏳ ' + fmtCd(rem);
+      });
+      if (dirty) { paintChBtn(1); paintChBtn(2); paintChBtn(3); renderHoldTasks(); }
     }
 
     function applyUI() {
@@ -3100,8 +3204,9 @@
     const ch3Row = document.getElementById('ch3-row'); if (ch3Row) ch3Row.addEventListener('click', e => { if (e.target.closest('button')) return; document.getElementById('btn-open-ch3').click(); });
     [1, 2, 3].forEach(n => document.getElementById(`ch-task-${n}-btn`).addEventListener('click', async e => {
       if (!isHumanClick(e)) return;
-      if ((n === 1 && task1Done) || (n === 2 && task2Done) || (n === 3 && task3Done)) return showToast("Already claimed!", "#f59e0b");
-      if (!chV[n]) { document.getElementById('btn-open-ch' + n).click(); return; }
+      const rem = chRemaining(n);
+      if (rem > 0) { const d = I18N[currentLang] || I18N.en; return showToast("⏳ " + (d.task_available_in || "Available in {t}").replace('{t}', fmtCd(rem)), "#f59e0b"); }
+      if (!chV[n] && !chDone(n)) { document.getElementById('btn-open-ch' + n).click(); return; }
       await withBtnBusy(e.currentTarget, async () => {
         try { const r = await api("task", { n }); SoundFX.buySuccess(); showToast(`🎉 +${r.reward} ${config.coinSym}!`); await refreshState(); }
         catch (err) { chV[n] = false; paintChBtn(n); showToast("❌ " + err.message, "#ef4444"); }
@@ -3152,7 +3257,7 @@
     document.getElementById('btn-share-ref').addEventListener('click', () => window.open(`https://t.me/share/url?url=${encodeURIComponent(document.getElementById('ref-link-box').value)}`, '_blank'));
     document.querySelectorAll('.nav-item').forEach(i => i.addEventListener('click', () => switchTab(i.getAttribute('data-tab'))));
 
-    initCloudSync(); setInterval(() => { updateLiveMining(); if (wdCooldownActive) updateWdCalculation(); }, 1000); updateLiveMining();
+    initCloudSync(); setInterval(() => { updateLiveMining(); if (wdCooldownActive) updateWdCalculation(); tickTaskTimers(); }, 1000); updateLiveMining();
     // No unconditional boot finish anymore (owner order 2026-11-15):
     // finishBoot only fires once state is applied AND all critical
     // images have loaded — see the readiness gates above.
