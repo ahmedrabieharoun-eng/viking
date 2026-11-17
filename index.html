@@ -301,6 +301,14 @@
     .pf-modal-title{font-family:Georgia,serif;font-weight:900;font-size:17px;letter-spacing:1px;color:#f0d9a0;margin-bottom:10px}
     .pf-modal-body{font-size:13.5px;line-height:1.55;color:#e8e2d4;margin-bottom:18px}
     .pf-modal-row{display:flex;gap:10px}
+    .pf-modal-card-wide{max-width:400px;text-align:left;max-height:86vh;overflow-y:auto;padding:18px 14px}
+    .pf-modal-x{background:rgba(212,175,55,.12);border:1px solid rgba(212,175,55,.55);color:#f0d9a0;width:30px;height:30px;border-radius:8px;font-size:14px;font-weight:900;cursor:pointer;flex:0 0 auto}
+    .pf-modal-x:active{transform:scale(.94)}
+    #ref-tasks-card{cursor:pointer}
+    .fr-tasks-row{display:flex;align-items:center;gap:10px}
+    .fr-tasks-mid{flex:1;min-width:0}
+    .fr-tasks-sum{font-size:12.5px;font-weight:800;color:#e8e2d4;line-height:1.35}
+    .fr-tasks-hint{font-size:10px;color:#9aa7ba;margin-top:2px}
     .pf-modal-cancel{flex:1;background:linear-gradient(180deg,#2a3a52,#16233a);border:1px solid rgba(255,255,255,.25);color:#dbe4f0;font-weight:800;font-size:13px;padding:11px 0;border-radius:8px;cursor:pointer}
     .pf-modal-confirm{flex:1;background:linear-gradient(180deg,#8a2f23,#5d1a12);border:1px solid #c0563f;color:#ffe1d6;font-weight:800;font-size:13px;padding:11px 0;border-radius:8px;cursor:pointer}
     .pf-modal-cancel:active,.pf-modal-confirm:active{transform:scale(.96)}
@@ -564,6 +572,16 @@
     </div>
   </div>
 
+  <div id="ref-tasks-modal" class="pf-modal" style="display:none">
+    <div class="pf-modal-card pf-modal-card-wide">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+        <div class="pf-modal-title" style="margin-bottom:0;">🏆 <span data-i18n="ref_tasks_title">Referral Tasks</span></div>
+        <button class="pf-modal-x" id="btn-close-ref-tasks">✕</button>
+      </div>
+      <div id="ref-ach-list"></div>
+    </div>
+  </div>
+
   <div class="app-shell" id="main-app-shell">
     <!-- Top bar REMOVED (owner order 2026-11-14): its three controls —
          sound, language, wallet — now live in the Profile page's
@@ -721,10 +739,6 @@
         <div id="hold-task-list"></div>
       </div>
 
-      <div class="q-wrap" style="background-image:url('assets/ref_stone_plain.webp');">
-        <div class="q-sec-title">🏆 Referral Milestones</div>
-        <div id="ref-ach-list"></div>
-      </div>
     </div>
 
     <!-- 3. BOOST PAGE -->
@@ -780,6 +794,17 @@
         <div class="fr-tablet"><div class="fr-tab-notch"></div><small data-i18n="ref_verified">Active</small><div class="fr-tab-num" id="ref-verified-count">0</div></div>
         <div class="fr-tablet"><div class="fr-tab-notch"></div><small data-i18n="ref_earned">5% Earned</small><div class="fr-tab-num" id="ref-earned-total">0</div></div>
       </div>
+      <section class="fr-sec" id="ref-tasks-card">
+        <div class="fr-sec-lbl">🏆 <span data-i18n="ref_tasks_title">REFERRAL TASKS</span></div>
+        <div class="fr-tasks-row">
+          <img class="q-ic" src="assets/icon_q_crown.webp" alt="">
+          <div class="fr-tasks-mid">
+            <div class="fr-tasks-sum" id="ref-tasks-summary"></div>
+            <div class="fr-tasks-hint" data-i18n="tap_open_hint">Tap the card to open</div>
+          </div>
+          <span class="fr-gold-btn" style="flex:0 0 auto;">🏆 <span data-i18n="ref_tasks_open">Open</span></span>
+        </div>
+      </section>
       <section class="fr-sec">
         <div class="fr-sec-lbl">🔗 <span data-i18n="ref_link_lbl">REFERRAL LINK</span></div>
         <div class="fr-link-row">
@@ -1440,7 +1465,7 @@
         my_referrals_title:"👥 My Invited Friends", pending_ref_title:"Pending Referral Profits", collect_ref_btn:"COLLECT",
         ton_wallet_title:"TON Blockchain Wallet", connect_wallet_btn:"Connect TON Wallet",
         sync_hold_btn:"Verify Wallet Hold", disconnect_wallet_btn:"Disconnect", unlink_title:"Disconnect Wallet?", unlink_warn:"⚠️ Disconnecting will cancel your wallet verification. To verify again, you will have to pay the verification fee again.", unlink_confirm:"Disconnect", unlink_cancel:"Cancel",
-        prof_page_title:"PROFILE", prof_username_lbl:"USERNAME", prof_wallet_lbl:"WALLET", prof_amount_lbl:"AMOUNT", buy_stonfi_btn:"Buy on STON.fi", set_sound_lbl:"SOUND", set_lang_lbl:"LANGUAGE", lock_verify:"Verify Your Wallet First", lock_age:"Wallet Must Be {n}+ Days Old", renews_24h:"Renews every 24 hours", hold_tasks_title:"💰 HOLD TASKS", hold_task_title:"Hold {n}", claim_btn:"Claim", task_available_in:"Available in {t}", ref_banner_title:"REFERRAL SYSTEM", boost_banner_title:"LEVELS BOOST", quests_title:"QUESTS", tap_open_hint:"Tap the card to open", ref_head_earn:"Earn 5% of your friends mining", ref_head_sub:"A friend activates at Level 2", ref_link_lbl:"REFERRAL LINK", ref_how_title:"HOW IT WORKS", ref_rule_100:"+100 coins for every ACTIVE referral", ref_rule_cond:"Activation: your friend reaches Level 2 — holding 200+ $VIKING in their wallet", ref_rule_5:"You earn 5% of everything your active referrals earn — automatically", ref_friends_title:"MY INVITED FRIENDS", ref_verified_pill:"VERIFIED", ref_pending_pill:"PENDING", ref_dup_pill:"DUPLICATE",
+        prof_page_title:"PROFILE", prof_username_lbl:"USERNAME", prof_wallet_lbl:"WALLET", prof_amount_lbl:"AMOUNT", buy_stonfi_btn:"Buy on STON.fi", set_sound_lbl:"SOUND", set_lang_lbl:"LANGUAGE", lock_verify:"Verify Your Wallet First", lock_age:"Wallet Must Be {n}+ Days Old", renews_24h:"Renews every 24 hours", hold_tasks_title:"💰 HOLD TASKS", hold_task_title:"Hold {n}", claim_btn:"Claim", task_available_in:"Available in {t}", ref_tasks_title:"Referral Tasks", ref_tasks_open:"Open", ref_tasks_sum:"{a} active · Next reward at {n}: +{r}", ref_tasks_done:"All milestones claimed 🎉", ref_banner_title:"REFERRAL SYSTEM", boost_banner_title:"LEVELS BOOST", quests_title:"QUESTS", tap_open_hint:"Tap the card to open", ref_head_earn:"Earn 5% of your friends mining", ref_head_sub:"A friend activates at Level 2", ref_link_lbl:"REFERRAL LINK", ref_how_title:"HOW IT WORKS", ref_rule_100:"+100 coins for every ACTIVE referral", ref_rule_cond:"Activation: your friend reaches Level 2 — holding 200+ $VIKING in their wallet", ref_rule_5:"You earn 5% of everything your active referrals earn — automatically", ref_friends_title:"MY INVITED FRIENDS", ref_verified_pill:"VERIFIED", ref_pending_pill:"PENDING", ref_dup_pill:"DUPLICATE",
         hold_wallet_lbl:"Wallet Hold", mine_wallet_lbl:"In-App Balance",
         withdraw_title:"Withdraw", min_wd_lbl:"Minimum:", wd_fee_lbl:"Fee (5%):", net_lbl:"Net:",
         hold_cond_lbl:"25% Hold Required:", your_hold_lbl:"Your Hold:", req_wd_btn:"Request Withdrawal",
@@ -1490,7 +1515,7 @@
         my_referrals_title:"👥 أصدقائي المدعوون", pending_ref_title:"أرباح الإحالات المعلقة", collect_ref_btn:"جمع أرباح الإحالات",
         ton_wallet_title:"محفظة شبكة TON", connect_wallet_btn:"ربط محفظة TON الآن",
         sync_hold_btn:"تحديث رصيد المحفظة", disconnect_wallet_btn:"إلغاء الربط", unlink_title:"فك ربط المحفظة؟", unlink_warn:"⚠️ فك ربط المحفظة سيلغي توثيق محفظتك، وستضطر لدفع رسوم التوثيق مرة أخرى لإعادة التوثيق.", unlink_confirm:"فك الربط", unlink_cancel:"إلغاء",
-        prof_page_title:"الملف الشخصي", prof_username_lbl:"اسم المستخدم", prof_wallet_lbl:"المحفظة", prof_amount_lbl:"المبلغ", buy_stonfi_btn:"اشترِ من STON.fi", set_sound_lbl:"الصوت", set_lang_lbl:"اللغة", lock_verify:"قم بتوثيق محفظتك أولاً", lock_age:"عمر المحفظة لازم يكون {n} يوم أو أكتر", renews_24h:"تتجدد كل 24 ساعة", hold_tasks_title:"💰 مهام الاحتفاظ", hold_task_title:"احتفظ بـ {n}", claim_btn:"استلام", task_available_in:"متاحة بعد {t}", ref_banner_title:"نظام الإحالة", boost_banner_title:"تعزيز المستوى", quests_title:"المهام", tap_open_hint:"اضغط على الكارت للفتح", ref_head_earn:"اكسب 5% من تعدين أصدقائك", ref_head_sub:"الصديق بيتنشط عند المستوى 2", ref_link_lbl:"رابط الإحالة", ref_how_title:"إزاي بيشتغل", ref_rule_100:"+100 عملة عن كل إحالة نشطة", ref_rule_cond:"التنشيط: صديقك يوصل للمستوى 2 — يعني معاه 200+ $VIKING في محفظته", ref_rule_5:"بتكسب 5% من كل أرباح إحالاتك النشطة — تلقائيًا", ref_friends_title:"أصدقائي المدعوون", ref_verified_pill:"موثّق", ref_pending_pill:"قيد الانتظار", ref_dup_pill:"مكرر",
+        prof_page_title:"الملف الشخصي", prof_username_lbl:"اسم المستخدم", prof_wallet_lbl:"المحفظة", prof_amount_lbl:"المبلغ", buy_stonfi_btn:"اشترِ من STON.fi", set_sound_lbl:"الصوت", set_lang_lbl:"اللغة", lock_verify:"قم بتوثيق محفظتك أولاً", lock_age:"عمر المحفظة لازم يكون {n} يوم أو أكتر", renews_24h:"تتجدد كل 24 ساعة", hold_tasks_title:"💰 مهام الاحتفاظ", hold_task_title:"احتفظ بـ {n}", claim_btn:"استلام", task_available_in:"متاحة بعد {t}", ref_tasks_title:"مهام الإحالات", ref_tasks_open:"افتح", ref_tasks_sum:"{a} نشط · المكافأة الجاية عند {n}: +{r}", ref_tasks_done:"كل المراحل اتستلمت 🎉", ref_banner_title:"نظام الإحالة", boost_banner_title:"تعزيز المستوى", quests_title:"المهام", tap_open_hint:"اضغط على الكارت للفتح", ref_head_earn:"اكسب 5% من تعدين أصدقائك", ref_head_sub:"الصديق بيتنشط عند المستوى 2", ref_link_lbl:"رابط الإحالة", ref_how_title:"إزاي بيشتغل", ref_rule_100:"+100 عملة عن كل إحالة نشطة", ref_rule_cond:"التنشيط: صديقك يوصل للمستوى 2 — يعني معاه 200+ $VIKING في محفظته", ref_rule_5:"بتكسب 5% من كل أرباح إحالاتك النشطة — تلقائيًا", ref_friends_title:"أصدقائي المدعوون", ref_verified_pill:"موثّق", ref_pending_pill:"قيد الانتظار", ref_dup_pill:"مكرر",
         hold_wallet_lbl:"عملات المحفظة (Hold)", mine_wallet_lbl:"رصيد داخل التطبيق",
         withdraw_title:"سحب", min_wd_lbl:"الحد الأدنى:", wd_fee_lbl:"رسوم (5%):", net_lbl:"الصافي:",
         hold_cond_lbl:"شرط 25% بالمحفظة:", your_hold_lbl:"رصيد محفظتك:", req_wd_btn:"طلب سحب الرصيد",
@@ -1540,7 +1565,7 @@
         my_referrals_title:"👥 Мои рефералы", pending_ref_title:"Ожидаемый доход", collect_ref_btn:"Собрать доход",
         ton_wallet_title:"Кошелек TON", connect_wallet_btn:"Подключить TON Кошелек",
         sync_hold_btn:"Обновить Холд", disconnect_wallet_btn:"Отключить", unlink_title:"Отключить кошелёк?", unlink_warn:"⚠️ Отключение отменит верификацию кошелька. Для повторной верификации придётся снова оплатить комиссию.", unlink_confirm:"Отключить", unlink_cancel:"Отмена",
-        prof_page_title:"ПРОФИЛЬ", prof_username_lbl:"ИМЯ ПОЛЬЗОВАТЕЛЯ", prof_wallet_lbl:"КОШЕЛЁК", prof_amount_lbl:"СУММА", buy_stonfi_btn:"Купить на STON.fi", set_sound_lbl:"ЗВУК", set_lang_lbl:"ЯЗЫК", lock_verify:"Сначала подтвердите кошелёк", lock_age:"Возраст кошелька должен быть от {n} дн.", renews_24h:"Обновляется каждые 24 часа", hold_tasks_title:"💰 ЗАДАНИЯ НА УДЕРЖАНИЕ", hold_task_title:"Удерживайте {n}", claim_btn:"Забрать", task_available_in:"Доступно через {t}", ref_banner_title:"РЕФЕРАЛЬНАЯ СИСТЕМА", boost_banner_title:"УСИЛЕНИЕ УРОВНЕЙ", quests_title:"ЗАДАНИЯ", tap_open_hint:"Нажмите на карточку, чтобы открыть", ref_head_earn:"Зарабатывайте 5% от майнинга друзей", ref_head_sub:"Друг активируется на уровне 2", ref_link_lbl:"РЕФЕРАЛЬНАЯ ССЫЛКА", ref_how_title:"КАК ЭТО РАБОТАЕТ", ref_rule_100:"+100 монет за каждого АКТИВНОГО реферала", ref_rule_cond:"Активация: друг достигает уровня 2 — держит 200+ $VIKING в кошельке", ref_rule_5:"Вы получаете 5% от всего заработка активных рефералов — автоматически", ref_friends_title:"МОИ ПРИГЛАШЁННЫЕ ДРУЗЬЯ", ref_verified_pill:"ПОДТВЕРЖДЁН", ref_pending_pill:"ОЖИДАЕТ", ref_dup_pill:"ДУБЛИКАТ",
+        prof_page_title:"ПРОФИЛЬ", prof_username_lbl:"ИМЯ ПОЛЬЗОВАТЕЛЯ", prof_wallet_lbl:"КОШЕЛЁК", prof_amount_lbl:"СУММА", buy_stonfi_btn:"Купить на STON.fi", set_sound_lbl:"ЗВУК", set_lang_lbl:"ЯЗЫК", lock_verify:"Сначала подтвердите кошелёк", lock_age:"Возраст кошелька должен быть от {n} дн.", renews_24h:"Обновляется каждые 24 часа", hold_tasks_title:"💰 ЗАДАНИЯ НА УДЕРЖАНИЕ", hold_task_title:"Удерживайте {n}", claim_btn:"Забрать", task_available_in:"Доступно через {t}", ref_tasks_title:"Задания за рефералов", ref_tasks_open:"Открыть", ref_tasks_sum:"{a} активных · Следующая награда при {n}: +{r}", ref_tasks_done:"Все этапы получены 🎉", ref_banner_title:"РЕФЕРАЛЬНАЯ СИСТЕМА", boost_banner_title:"УСИЛЕНИЕ УРОВНЕЙ", quests_title:"ЗАДАНИЯ", tap_open_hint:"Нажмите на карточку, чтобы открыть", ref_head_earn:"Зарабатывайте 5% от майнинга друзей", ref_head_sub:"Друг активируется на уровне 2", ref_link_lbl:"РЕФЕРАЛЬНАЯ ССЫЛКА", ref_how_title:"КАК ЭТО РАБОТАЕТ", ref_rule_100:"+100 монет за каждого АКТИВНОГО реферала", ref_rule_cond:"Активация: друг достигает уровня 2 — держит 200+ $VIKING в кошельке", ref_rule_5:"Вы получаете 5% от всего заработка активных рефералов — автоматически", ref_friends_title:"МОИ ПРИГЛАШЁННЫЕ ДРУЗЬЯ", ref_verified_pill:"ПОДТВЕРЖДЁН", ref_pending_pill:"ОЖИДАЕТ", ref_dup_pill:"ДУБЛИКАТ",
         hold_wallet_lbl:"В кошельке", mine_wallet_lbl:"Баланс в приложении",
         withdraw_title:"Вывод", min_wd_lbl:"Минимум:", wd_fee_lbl:"Комиссия (5%):", net_lbl:"Чистыми:",
         hold_cond_lbl:"Нужно 25% Холда:", your_hold_lbl:"Ваш Холд:", req_wd_btn:"Запросить вывод",
@@ -2772,9 +2797,16 @@
       }
 
       renderHoldTasks();
+      renderRefAchList();
+      renderRefTasksSummary();
+    }
 
-      // referral milestones: only ACTIVE (verified) referrals count —
-      // activeRefs comes from the server; pending friends never count.
+    /* Referral milestones (owner order 2026-11-17: moved OFF the Tasks
+       page onto the Friends page) — the list now lives inside
+       #ref-tasks-modal, opened from the Referral Tasks card in Friends.
+       Only ACTIVE (verified) referrals count — activeRefs comes from
+       the server; pending friends never count. */
+    function renderRefAchList() {
       const box = document.getElementById('ref-ach-list');
       if (!box) return;
       const QICONS = { 1: 'warriors', 10: 'skull', 25: 'banner', 50: 'crown', 100: 'coins' };
@@ -2809,6 +2841,28 @@
           catch (err) { showToast("❌ " + err.message, "#ef4444"); }
         });
       }));
+    }
+
+    /* Friends-page Referral Tasks card summary: how many ACTIVE
+       referrals the player has and where the next unclaimed
+       milestone reward sits. */
+    function renderRefTasksSummary() {
+      const el = document.getElementById('ref-tasks-summary');
+      if (!el) return;
+      const dict = I18N[currentLang] || I18N.en;
+      const next = REF_MILESTONES.find(n => !refAchClaimed[n]);
+      if (!next) { el.innerText = dict.ref_tasks_done || 'All milestones claimed 🎉'; return; }
+      const rew = Number(config['refAchReward' + next] || 0);
+      el.innerText = (dict.ref_tasks_sum || '{a} active · Next reward at {n}: +{r}')
+        .replace('{a}', activeRefs).replace('{n}', next).replace('{r}', rew.toLocaleString()) + ' ' + config.coinSym;
+    }
+
+    function openRefTasksModal() {
+      renderRefAchList();
+      document.getElementById('ref-tasks-modal').style.display = 'flex';
+    }
+    function closeRefTasksModal() {
+      document.getElementById('ref-tasks-modal').style.display = 'none';
     }
 
     /* Renewable tasks (owner order 2026-11-17): channel tasks and hold
@@ -3183,6 +3237,19 @@
     });
     document.getElementById('unlink-modal').addEventListener('click', (e) => {
       if (e.target && e.target.id === 'unlink-modal') e.currentTarget.style.display = 'none';
+    });
+    document.getElementById('ref-tasks-card').addEventListener('click', (e) => {
+      if (!isHumanClick(e)) return;
+      SoundFX.click();
+      openRefTasksModal();
+    });
+    document.getElementById('btn-close-ref-tasks').addEventListener('click', (e) => {
+      if (!isHumanClick(e)) return;
+      SoundFX.click();
+      closeRefTasksModal();
+    });
+    document.getElementById('ref-tasks-modal').addEventListener('click', (e) => {
+      if (e.target && e.target.id === 'ref-tasks-modal') e.currentTarget.style.display = 'none';
     });
     document.getElementById('btn-copy-id').addEventListener('click', () => {
       SoundFX.click();
