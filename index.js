@@ -137,7 +137,8 @@ const DEFAULTS = {
   verifyDepositWallet: 'UQBCoy7KjhL9VnKA_YOp4_hxmYKAQ8P8mIfx5FdIdSA6qvxE', verifyFeeTon: 0.05, verifyMinAgeDays: 7, withdrawMinAgeDays: 7,
   // Hold tasks (owner order 2026-11-17): five tiers — hold at least
   // `hold` $VIKING in the bound wallet, claim `reward`. Each tier is
-  // renewable every 24 hours (per-tier timer in holdTaskAt). The hold
+  // renewable every 48 hours (per-tier timer in holdTaskAt; the owner
+  // changed it from 24h to 48h on 2026-11-17). The hold
   // is read FRESH from the chain at claim time (see holdTask).
   // settings/global can override the defs.
   holdTaskDefs: [ { hold: 1250, reward: 300 }, { hold: 2500, reward: 500 }, { hold: 5000, reward: 1000 }, { hold: 10000, reward: 1500 }, { hold: 20000, reward: 2500 } ]
@@ -1989,8 +1990,9 @@ async function task(c) {
 
 /* Hold tasks (owner order 2026-11-17): five tiers in cfg.holdTaskDefs
    (hold X $VIKING in the bound wallet -> claim the tier reward), each
-   tier renewable every 24 hours on its own timer (holdTaskAt[tier]).
-   The hold is read FRESH from the chain at claim time — never the
+   tier renewable every 48 hours on its own timer (holdTaskAt[tier];
+   24h originally, raised to 48h by the owner the same day). The hold
+   is read FRESH from the chain at claim time — never the
    stored/synced `hold`, which may be stale: a player who sold after
    the last sync must not be paid for coins he no longer holds. A
    chain read failure fails CLOSED (503, nothing granted); the tier
@@ -1998,6 +2000,7 @@ async function task(c) {
    claims cannot both win. On success the fresh hold is also written
    back to the record, like a wallet sync would. */
 async function holdTask(c) {
+  const RENEW_MS = 172800000; // 48h renewal (owner order 2026-11-17)
   const FALLBACK_DEFS = [ { hold: 1250, reward: 300 }, { hold: 2500, reward: 500 }, { hold: 5000, reward: 1000 }, { hold: 10000, reward: 1500 }, { hold: 20000, reward: 2500 } ];
   const defs = Array.isArray(c.cfg.holdTaskDefs) && c.cfg.holdTaskDefs.length ? c.cfg.holdTaskDefs : FALLBACK_DEFS;
   const tier = Number(c.body.tier);
@@ -2010,7 +2013,7 @@ async function holdTask(c) {
   if (p.banned === true) fail(403, 'Account banned');
   if (!p.walletAddr) fail(400, 'Connect wallet first');
   const lastAt = Number((p.holdTaskAt || {})[tier]) || 0;
-  if (lastAt && Date.now() - lastAt < 86400000) fail(400, 'Task renews every 24 hours');
+  if (lastAt && Date.now() - lastAt < RENEW_MS) fail(400, 'Task renews every 48 hours');
   let hold;
   try { hold = await jettonHold(p.walletAddr); } catch (e) { fail(503, 'Hold check failed, please try again'); }
   if (hold < Number(def.hold)) fail(403, 'Hold at least ' + Number(def.hold).toLocaleString('en-US') + ' $VIKING in your wallet');
@@ -2020,10 +2023,10 @@ async function holdTask(c) {
     if (d.banned === true) return { error: new Fail(403, 'Account banned') };
     const now = Date.now();
     const at = Number((d.holdTaskAt || {})[tier]) || 0;
-    if (at && now - at < 86400000) return { error: new Fail(400, 'Task renews every 24 hours') };
+    if (at && now - at < RENEW_MS) return { error: new Fail(400, 'Task renews every 48 hours') };
     return {
       value: { ...d, holdTaskAt: { ...(d.holdTaskAt || {}), [tier]: now }, hold, mined: (Number(d.mined) || 0) + reward, earnTasks: (Number(d.earnTasks) || 0) + reward },
-      out: { success: true, reward, nextAt: now + 86400000 }
+      out: { success: true, reward, nextAt: now + RENEW_MS }
     };
   });
 }
