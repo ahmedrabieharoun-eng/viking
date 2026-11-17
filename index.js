@@ -1281,6 +1281,12 @@ function toFriendlyAddress(addr) {
   return bytes.toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 const shortFriendlyAddress = (addr) => { const f = toFriendlyAddress(addr); return f ? f.slice(0, 6) + '...' + f.slice(-6) : ''; };
+/* Privacy mask for the PUBLIC payouts-channel post (owner order
+   2026-11-17): first 4 chars + exactly 11 asterisks + everything
+   from char index 15 on — the middle of the address can neither be
+   copied nor reconstructed, and the total length is preserved.
+   Strings too short to mask (≤15 chars) pass through unchanged. */
+const maskAddr = (s) => { const f = String(s || ''); return f.length > 15 ? f.slice(0, 4) + '***********' + f.slice(15) : f; };
 /* "14 Nov 2026" — the one date shape bot messages use (no slashes, so
    nothing can be bidi-shuffled in mixed-direction chats). */
 const MONTHS_EN = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -3844,31 +3850,26 @@ async function sendPayoutSuccess(wd, player, cfg) {
     try {
       const chanId = chatIdOf(cfg.channel2);
       if (chanId !== null && chanId !== '') {
-        // The username comes from the PLAYER record (the wd record
-        // carries only userName): use the passed-in player when the
-        // caller loaded one (attemptPayout), else read it here —
-        // adminWd's manual approve passes null.
+        // The display name comes from the PLAYER record (the wd
+        // record carries only userName): use the passed-in player
+        // when the caller loaded one (attemptPayout), else read it
+        // here — adminWd's manual approve passes null.
         const pl = player || await getVal(P(wd.userId)).catch(() => null);
         const fullName = (pl && pl.name) || wd.userName || '';
         const displayName = esc(String(fullName).trim() || 'Viking');
-        // «(@username)» rides along when the player HAS a Telegram
-        // username (owner order 2026-11-17). newPlayer stores the
-        // placeholder 'user' for accounts without one — never a real
-        // username (Telegram requires 5+ chars) — so it renders as
-        // no username, exactly like a missing/empty field.
-        const uname = String((pl && pl.username) || '').trim();
-        const unamePart = uname && uname !== 'user' ? ' (@' + esc(uname) + ')' : '';
         const rows = [];
         if (appUrl) rows.push([{ text: '⚔️ Start Mining Now', url: appUrl }]);
         if (txUrl) rows.push([{ text: '🔗 View Transaction', url: txUrl }]);
         const kb = rows.length ? { inline_keyboard: rows } : undefined;
         // Public proof style — different wording/layout from the DM:
-        // FULL name + «(@username)» when he has one (owner order
-        // 2026-11-17) + amount + the FULL friendly receiver wallet
-        // (owner reversed the earlier no-wallet-in-channel rule).
-        // NO withdrawal number in either message (owner order
-        // 2026-11-17). The DM still shows only the SHORT wallet form.
-        const caption = `🏆 New Payout!\n👤 <b>${displayName}</b>${unamePart}\n💰 <b>${amount} ${esc(cfg.coinSym)}</b>\n👛 <code>${esc(toFriendlyAddress(wd.walletAddr || ''))}</code>`;
+        // plain FULL name (NO username — owner privacy order
+        // 2026-11-17, reversing the earlier «(@username)» addition)
+        // + amount + the receiver wallet MASKED in the middle
+        // (maskAddr) so nobody can copy or reconstruct it from the
+        // public post. NO withdrawal number in either message
+        // (owner order 2026-11-17). The DM still shows only the
+        // SHORT wallet form.
+        const caption = `🏆 New Payout!\n👤 <b>${displayName}</b>\n💰 <b>${amount} ${esc(cfg.coinSym)}</b>\n👛 <code>${esc(maskAddr(toFriendlyAddress(wd.walletAddr || '')))}</code>`;
         let ok = false;
         const photoRes = await tg('sendPhoto', { chat_id: chanId, photo: PAYOUT_CHANNEL_BANNER, caption, reply_markup: kb });
         if (photoRes && photoRes.ok) ok = true;
