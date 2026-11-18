@@ -763,7 +763,7 @@ async function getConfig() {
   await loadHarvestedEmoji(); // the harvested premium-emoji map rides the same refresh cycle
   return v;
 }
-const PUBLIC_KEYS = ['brandTitle', 'coinSym', 'taskReward', 'bioReward', 'refAchReward1', 'refAchReward10', 'refAchReward25', 'refAchReward50', 'refAchReward100', 'refClaimPercent', 'refMinHold', 'minWithdraw', 'holdPercentReq', 'withdrawFeePercent', 'lvl1PerDay', 'buySwapUrl', 'channel1', 'channel2', 'channel3', 'botUsername', 'holdTaskDefs'];
+const PUBLIC_KEYS = ['brandTitle', 'coinSym', 'taskReward', 'bioReward', 'refAchReward1', 'refAchReward10', 'refAchReward25', 'refAchReward50', 'refAchReward100', 'refClaimPercent', 'refMinHold', 'minWithdraw', 'holdPercentReq', 'withdrawFeePercent', 'withdrawMinAgeDays', 'lvl1PerDay', 'buySwapUrl', 'channel1', 'channel2', 'channel3', 'botUsername', 'holdTaskDefs'];
 const publicConfig = (c) => Object.fromEntries(PUBLIC_KEYS.map((k) => [k, c[k]]));
 
 // simple in-memory rate limiter (per server instance)
