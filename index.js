@@ -152,6 +152,10 @@ const fail = (status, msg) => { throw new Fail(status, msg); };
 const dayOf = (ts) => Math.floor(ts / 86400000);
 const esc = (s) => String(s ?? '').replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
 const clean = (s, n) => String(s ?? '').replace(/[\u0000-\u001f<>]/g, '').slice(0, n);
+// Like clean() but preserves newlines — for free-text panel request/reply
+// bodies, whose line breaks are part of the formatting (owner order
+// 2026-11-18: replies must not collapse into one line).
+const cleanText = (s, n) => String(s ?? '').replace(/[\u0000-\u0009\u000b-\u001f<>]/g, '').slice(0, n);
 const P = (id) => rtdb().ref('players/' + String(id));
 const isId = (v) => /^\d{5,15}$/.test(String(v));
 const walletDoc = (raw) => rtdb().ref('wallets/' + String(raw).replace(':', '_'));
@@ -4946,7 +4950,7 @@ async function panelConfigSet(c) {
 
 async function panelRequestAdd(c) {
   panelKey(c);
-  const text = clean(c.body.text, 1000).trim();
+  const text = cleanText(c.body.text, 1000).trim();
   if (!text) fail(400, 'Empty text');
   const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
   await txUpdate(rtdb().ref('meta/panelRequests'), (cur) => {
@@ -4970,7 +4974,7 @@ async function panelRequestList(c) {
 
 async function panelRequestReply(c) {
   panelKey(c);
-  const reply = clean(c.body.reply, 2000).trim();
+  const reply = cleanText(c.body.reply, 2000).trim();
   if (!reply) fail(400, 'Empty reply');
   const id = String(c.body.id || '');
   await txUpdate(rtdb().ref('meta/panelRequests'), (cur) => {
