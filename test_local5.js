@@ -16,8 +16,12 @@
  *   V3  wallet binding through the real `wallet` action; verifyInfo
  *       reports the on-chain age (800d) + ageOk; the age is cached
  *       (second call does not re-hit the TON stub).
- *   V4  another account binding the same wallet -> 400 'This wallet
- *       is linked to another account' (unchanged existing rule).
+ *   V4  another account binding the same wallet while the first
+ *       account's claim is UNVERIFIED -> provisional takeover (owner
+ *       order 2026-11-18: an unverified binding proves nothing and
+ *       blocks nobody); once the wallet is VERIFIED to the first
+ *       account (V5), the same bind -> 400 'This wallet is linked to
+ *       another account'.
  *   V5  verifyCheck happy path (API-decoded text_comment): player
  *       verified, verifyClaims/{hash} written, wallets-registry node
  *       flagged verified, state exposes the verified fields. The
@@ -29,9 +33,11 @@
  *       'Payment not found yet', player stays unverified.
  *   V8  comment carried as raw body hex (opcode + UTF-8, no decoded
  *       body) still verifies.
- *   V9  wallet younger than 7 days: verifyInfo ageOk false and
- *       verifyCheck -> 400 'Wallet too new' even with a perfect
- *       payment waiting.
+ *   V9  wallet younger than 7 days (owner order 2026-11-17: the
+ *       age rule moved from verification to withdrawals): verifyInfo
+ *       still reports the true age (1d) but ageOk is true, and
+ *       verifyCheck verifies him from the perfect payment — age no
+ *       longer gates verification anywhere.
  *   V10 adminState players carry walletVerified.
  *   V11 referral entry flag: the inviter's referral entry for the
  *       invitee flips verified=true on verification and back to
@@ -91,6 +97,12 @@
  *       notifiedAt and no completed flip (an earlier completion
  *       died mid-flight) still sends its messages on the eventual
  *       win — that win is the payment's first notification.
+ *   V26 registry permanence belongs to VERIFIED claims (owner
+ *       orders 2026-11-15 + 2026-11-18): a VERIFIED claim is
+ *       permanent — unlink/switch never free it and no other account
+ *       can take it. An UNVERIFIED claim is provisional: the node is
+ *       kept on unlink/switch, but another account binding the
+ *       address takes the claim over (binding alone proves nothing).
  *
  * Run:  node test_local5.js    (ports: app 18090, watcher app 18095, TG stub 18091, TON stub 18093, emu 9000)
  */
@@ -178,6 +190,32 @@ const tonStub = http.createServer((req, res) => {
   if (m) return res.end(JSON.stringify({ raw_form: toRawAddress(decodeURIComponent(m[1])) }));
   // tonapi: jetton hold — nobody holds anything in these tests
   if (/^\/tonapi\/accounts\/.+\/jettons\//.test(u.pathname)) { res.statusCode = 404; return res.end(JSON.stringify({ error: 'not found' })); }
+  // tonapi v2: deposit-wallet transactions with REAL before_lt paging,
+  // in the shape the live tonapi serves (hex hash, utime, source as an
+  // object, comment at decoded_body.text). Serves the same depositTxs
+  // fixtures as the v3 route below, converted — the deposit-cursor
+  // processor walks THIS endpoint (added 2026-11-16 with the cursor
+  // root fix; the v3 route remains for verifyCheck's fallback scan).
+  let tm = /^\/tonapi\/blockchain\/accounts\/(.+)\/transactions$/.exec(u.pathname);
+  if (tm) {
+    const account = toRawAddress(decodeURIComponent(tm[1]));
+    if (account !== DEPOSIT_RAW) { res.statusCode = 404; return res.end(JSON.stringify({ error: 'not found' })); }
+    const limit = Number(u.searchParams.get('limit') || 100);
+    const beforeLt = u.searchParams.get('before_lt');
+    let list = depositTxs.slice();
+    if (beforeLt !== null) list = list.filter((t) => Number(t.lt) < Number(beforeLt));
+    const page = list.slice(0, limit).map((t) => {
+      const mc = (t.in_msg && t.in_msg.message_content) || {};
+      let comment = (mc.decoded && mc.decoded.comment) || '';
+      if (!comment && typeof mc.body === 'string' && /^(?:[0-9a-fA-F]{2})+$/.test(mc.body)) {
+        const buf = Buffer.from(mc.body, 'hex');
+        if (buf.length > 4 && buf.readUInt32BE(0) === 0) comment = buf.subarray(4).toString('utf8');
+      }
+      const hashHex = /^[0-9a-fA-F]{64}$/.test(t.hash) ? t.hash : Buffer.from(t.hash, 'base64').toString('hex');
+      return { hash: hashHex, lt: t.lt, utime: t.now, in_msg: { source: { address: t.in_msg.source }, destination: { address: DEPOSIT_RAW }, value: t.in_msg.value, decoded_body: comment ? { text: comment } : undefined } };
+    });
+    return res.end(JSON.stringify({ transactions: page }));
+  }
   // toncenter v3: account transactions. Mirrors the REAL toncenter
   // contract: ordering is `sort=asc|desc` (default desc); the tonapi
   // parameter name `sort_order` is IGNORED, so a caller passing it
@@ -229,7 +267,7 @@ async function dbPatch(p, v) {
   await fetch(`http://${EMU}/${p}.json?ns=${NS}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(v) });
 }
 async function dbWipe() {
-  for (const p of ['players', 'withdrawals', 'settings', 'meta', 'sigs', 'wallets', 'deviceIds', 'devices', 'premiumEmoji', 'verifyClaims']) {
+  for (const p of ['players', 'withdrawals', 'settings', 'meta', 'sigs', 'wallets', 'deviceIds', 'devices', 'premiumEmoji', 'verifyClaims', 'verifyUnresolved']) {
     await fetch(`http://${EMU}/${p}.json?ns=${NS}`, { method: 'DELETE' });
   }
 }
@@ -262,6 +300,8 @@ const J = U(700003013, 'Unlink Uma', 'unlinkuma');
 const K = U(700003014, 'Change Chad', 'changechad');
 const L = U(700003015, 'Once Olga', 'onceolga');
 const M = U(700003016, 'Strand Stan', 'strandstan');
+const P1 = U(700003017, 'Perm Pete', 'permpete');
+const P2 = U(700003018, 'Second Sara', 'secondsara');
 const OWNER = U(700000001, 'Boss Man', 'bossman');
 const WA = '0:' + 'aa'.repeat(32);
 const WA2 = '0:' + 'ab'.repeat(32);
@@ -279,6 +319,8 @@ const WK2 = '0:' + '9a'.repeat(32);
 const WL = '0:' + '23'.repeat(32);
 const WL2 = '0:' + '45'.repeat(32);
 const WM = '0:' + '67'.repeat(32);
+const WP1 = '0:' + '89'.repeat(32);
+const WP2 = '0:' + 'bc'.repeat(32);
 const nowSec = () => Math.floor(Date.now() / 1000);
 /* toncenter v3 serves tx.hash as base64 of the 32 hash bytes — script
  * deposit payments in that form; the canonical hex is what the server
@@ -323,6 +365,7 @@ const FEE_NANO = '50000000';
           TG_API_BASE: `http://127.0.0.1:${TG_PORT}`,
           TON_API_BASE: `http://127.0.0.1:${TON_PORT}/v3`,
           TONAPI_BASE: `http://127.0.0.1:${TON_PORT}/tonapi`,
+          TONAPI_PAGE_GAP_MS: '0',
           VERIFY_WATCH_MS: '0' // watcher OFF on the main instance: V1–V17 must not race it (the watcher gets its own instance in V19+)
           // TON_API_KEY intentionally unset — keyless operation must work
         }),
@@ -367,8 +410,8 @@ const FEE_NANO = '50000000';
       check('userNo 1 + comment VIKING-1', r.body.userNo === 1 && r.body.comment === 'VIKING-1', r.body);
       check('deposit wallet is the configured UQ address', r.body.depositWallet === DEPOSIT_UQ, r.body.depositWallet);
       check('fee is 0.05 TON, min age 7', r.body.feeTon === 0.05 && r.body.minAgeDays === 7, r.body);
-      check('no wallet -> wallet empty, ageDays null, ageOk false, not verified',
-        r.body.wallet === '' && r.body.ageDays === null && r.body.ageOk === false && r.body.verified === false, r.body);
+      check('no wallet -> wallet empty, ageDays null, ageOk true (never age-gated since 2026-11-17), not verified',
+        r.body.wallet === '' && r.body.ageDays === null && r.body.ageOk === true && r.body.verified === false, r.body);
     }
 
     /* ---------------- V3: bind + age + cache ---------------- */
@@ -387,11 +430,17 @@ const FEE_NANO = '50000000';
       check('state shows the player not verified yet', r.body.player.walletVerified === false && r.body.player.userNo === 1, r.body.player);
     }
 
-    /* ---------------- V4: other account's wallet rejected ---------------- */
-    console.log('\n[V4: another account binding the same wallet -> rejected]');
+    /* ---------------- V4: unverified claim blocks nobody ---------------- */
+    console.log('\n[V4: another account binding the same wallet while the claim is UNVERIFIED -> provisional takeover]');
     {
-      const r = await api(idD, 'wallet', { address: WA });
-      check('400 This wallet is linked to another account', r.status === 400 && /linked to another account/.test(r.body.error || ''), r);
+      let r = await api(idD, 'wallet', { address: WA });
+      check('D binds WA while A\'s claim is unverified (provisional takeover)', r.status === 200 && r.body.success === true, r);
+      let wdoc = await dbGet('wallets/' + WA.replace(':', '_'));
+      check('registry node flipped to D, still unverified', !!wdoc && String(wdoc.userId) === '700003005' && wdoc.verified !== true, wdoc);
+      r = await api(idA, 'wallet', { address: WA });
+      check('A re-binds WA (same address on A\'s record — claim returns)', r.status === 200 && r.body.success === true, r);
+      wdoc = await dbGet('wallets/' + WA.replace(':', '_'));
+      check('registry node back to A', !!wdoc && String(wdoc.userId) === '700003001', wdoc);
     }
 
     /* ---------------- V5: verifyCheck happy path (decoded comment) ---------------- */
@@ -412,6 +461,8 @@ const FEE_NANO = '50000000';
       check('verifyClaims/{hash} records the claim', !!claim && String(claim.userId) === '700003001', claim);
       const wdoc = await dbGet('wallets/' + WA.replace(':', '_'));
       check('wallets-registry node flagged verified (owner kept)', !!wdoc && wdoc.verified === true && String(wdoc.userId) === '700003001', wdoc);
+      const rD = await api(idD, 'wallet', { address: WA });
+      check('now that WA is VERIFIED to A, D binding it -> 400 linked to another account', rD.status === 400 && /linked to another account/.test(rD.body.error || ''), rD);
       const s = await api(idA, 'state');
       check('state exposes walletVerified + verifiedWallet', s.body.player.walletVerified === true && s.body.player.verifiedWallet === WA, s.body.player);
     }
@@ -465,8 +516,13 @@ const FEE_NANO = '50000000';
       check('verifyClaims/<hex> written for the hex-served tx', !!claim && String(claim.userId) === '700003002', claim);
     }
 
-    /* ---------------- V9: wallet too young ---------------- */
-    console.log('\n[V9: wallet age < 7 days blocks verification]');
+    /* ---------------- V9: wallet younger than 7 days ----------------
+       Owner order 2026-11-17: the wallet-age rule MOVED from
+       verification to withdrawals. A 1-day-old wallet now verifies
+       like any other — verifyInfo still reports the true age but
+       ageOk is unconditionally true, and verifyCheck completes from
+       the perfect payment (claim written, player verified). */
+    console.log('\n[V9: wallet age < 7 days no longer blocks verification (age gates withdrawals now)]');
     {
       let r = await api(idC, 'state');
       const cNo = r.body.player.userNo;
@@ -474,16 +530,16 @@ const FEE_NANO = '50000000';
       r = await api(idC, 'wallet', { address: WC });
       check('C binds the young wallet', r.status === 200 && r.body.success === true, r);
       r = await api(idC, 'verifyInfo');
-      check('age is 1 day, ageOk false', r.body.ageDays === 1 && r.body.ageOk === false, r.body);
+      check('age is 1 day but ageOk is true (verification is not age-gated)', r.body.ageDays === 1 && r.body.ageOk === true, r.body);
       depositTxs = [depTx(b64hex('c1'.repeat(32)), WC, FEE_NANO, decodedComment('VIKING-' + cNo))];
       r = await api(idC, 'verifyCheck');
-      check('verifyCheck -> 400 Wallet too new (even with a perfect payment)',
-        r.status === 400 && /Wallet too new: 1 days, needs 7/.test(r.body.error || ''), r);
+      check('verifyCheck VERIFIES the young wallet from its perfect payment',
+        r.status === 200 && r.body.verified === true && r.body.tx === 'c1'.repeat(32), r);
       const p = await dbGet('players/700003004');
-      check('C stays unverified and the payment was NOT claimed',
-        !!p && p.walletVerified !== true, p && p.walletVerified);
+      check('C is verified for the young wallet',
+        !!p && p.walletVerified === true && p.verifiedWallet === WC, p && p.walletVerified);
       const claim = await dbGet('verifyClaims/' + 'c1'.repeat(32));
-      check('no verifyClaims entry was written for the blocked payment', claim === null, claim);
+      check('the payment WAS claimed for C', !!claim && String(claim.userId) === '700003004', claim);
     }
 
     /* ---------------- V10: adminState carries walletVerified ---------------- */
@@ -496,7 +552,7 @@ const FEE_NANO = '50000000';
         !!byIdMap.get('700003001') && byIdMap.get('700003001').walletVerified === true &&
         !!byIdMap.get('700003002') && byIdMap.get('700003002').walletVerified === true,
         [...byIdMap.keys()]);
-      check('C is not verified in the admin list', !!byIdMap.get('700003004') && byIdMap.get('700003004').walletVerified !== true, byIdMap.get('700003004') && byIdMap.get('700003004').walletVerified);
+      check('C IS verified in the admin list (young wallet — verified since the 2026-11-17 rule move)', !!byIdMap.get('700003004') && byIdMap.get('700003004').walletVerified === true, byIdMap.get('700003004') && byIdMap.get('700003004').walletVerified);
     }
 
     /* ---------------- V11: referral entry verified flag ---------------- */
@@ -673,7 +729,7 @@ const FEE_NANO = '50000000';
        never touch the chain (the TON stub counts deposit scans). */
     console.log('\n[V19: watcher with nobody pending makes ZERO chain calls]');
     {
-      await dbPatch('players/700003004', { verifyPendingAt: 0 }); // C (age-blocked, was pending from V9)
+      await dbPatch('players/700003004', { verifyPendingAt: 0 }); // C (verified in V9; the flip already cleared his marker — kept as a guard)
       await dbPatch('players/700003008', { verifyPendingAt: 0 }); // E (never paid, was pending from V14)
       await dbPatch('players/700003011', { verifyPendingAt: 0 }); // H (V20 re-marks via verifyInfo)
       const watchSrv = spawn(path.join(__dirname, 'node_modules', '.bin', 'functions-framework'),
@@ -687,6 +743,7 @@ const FEE_NANO = '50000000';
             TG_API_BASE: `http://127.0.0.1:${TG_PORT}`,
             TON_API_BASE: `http://127.0.0.1:${TON_PORT}/v3`,
             TONAPI_BASE: `http://127.0.0.1:${TON_PORT}/tonapi`,
+          TONAPI_PAGE_GAP_MS: '0',
             VERIFY_WATCH_MS: '250'
           }),
           stdio: 'ignore'
@@ -885,6 +942,50 @@ const FEE_NANO = '50000000';
         { photos: photosTo(M.id).length, admin: msgsTo(OWNER_ID).length });
       const claim = await dbGet('verifyClaims/' + HASHM);
       check('the claim now carries notifiedAt', !!claim && Number(claim.notifiedAt) > 0, claim);
+    }
+
+    /* ---------------- V26: permanence belongs to VERIFIED claims (owner orders 2026-11-15 + 2026-11-18) ----------------
+       A VERIFIED claim is permanent: unlinking does NOT free it and
+       switching wallets does NOT free it; another account can never
+       take it and the owner can always re-link it. An UNVERIFIED
+       claim is only a provisional binding: the node is kept on
+       unlink/switch, but another account binding the address takes
+       the claim over — binding alone proves no ownership. */
+    console.log('\n[V26: unverified claims are provisional; verified claims are permanent]');
+    {
+      const idP1 = makeInitData(P1);
+      const idP2 = makeInitData(P2);
+      let r = await api(idP1, 'wallet', { address: WP1 });
+      check('P1 binds WP1', r.status === 200 && r.body.success === true, r);
+      r = await api(idP1, 'unlink');
+      check('P1 unlinks WP1', r.status === 200 && r.body.success === true, r);
+      const wdoc = await dbGet('wallets/' + WP1.replace(':', '_'));
+      check('the registry node SURVIVES the unlink, still owned by P1', !!wdoc && String(wdoc.userId) === '700003017', wdoc);
+      r = await api(idP2, 'wallet', { address: WP1 });
+      check('P2 binding the unlinked UNVERIFIED WP1 -> provisional takeover succeeds', r.status === 200 && r.body.success === true, r);
+      const wdocT = await dbGet('wallets/' + WP1.replace(':', '_'));
+      check('the node flipped to P2 (still unverified)', !!wdocT && String(wdocT.userId) === '700003018' && wdocT.verified !== true, wdocT);
+      await dbPatch('players/700003017', { lastSyncAt: 0 }); // wallet() sync cooldown
+      r = await api(idP1, 'wallet', { address: WP1 });
+      check('P1 re-links its own WP1 after unlink (claim returns)', r.status === 200 && r.body.success === true, r);
+      await dbPatch('players/700003017', { lastSyncAt: 0 });
+      r = await api(idP1, 'wallet', { address: WP2 });
+      check('P1 switches to WP2', r.status === 200 && r.body.success === true, r);
+      const wdoc1 = await dbGet('wallets/' + WP1.replace(':', '_'));
+      check('WP1 stays registered to P1 after the switch', !!wdoc1 && String(wdoc1.userId) === '700003017', wdoc1);
+      await dbPatch('players/700003018', { lastSyncAt: 0 }); // P2 bound WP1 above; cooldown before a different bind
+      r = await api(idP2, 'wallet', { address: WP2 });
+      check('P2 binding WP2 (bound to P1, unverified) -> provisional takeover succeeds', r.status === 200 && r.body.success === true, r);
+      // The verified stamp is what makes a claim permanent:
+      await dbPut('wallets/' + WP1.replace(':', '_'), { userId: '700003017', verified: true });
+      await dbPatch('players/700003018', { lastSyncAt: 0 });
+      r = await api(idP2, 'wallet', { address: WP1 });
+      check('P2 binding WP1 once it is VERIFIED to P1 -> 400 linked to another account', r.status === 400 && /linked to another account/.test(r.body.error || ''), r);
+      await dbPatch('players/700003017', { lastSyncAt: 0 });
+      r = await api(idP1, 'wallet', { address: WP1 });
+      check('P1 re-links its VERIFIED WP1 freely', r.status === 200 && r.body.success === true, r);
+      const s = await api(idP1, 'state');
+      check('P1 state shows WP1 bound', s.body.player.walletAddr === WP1, s.body.player);
     }
   } finally {
     tgStub.close();

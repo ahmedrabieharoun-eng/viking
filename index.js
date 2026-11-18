@@ -2018,15 +2018,27 @@ async function holdTask(c) {
   if (!p) fail(404, 'User not found'); // unreachable after ensurePlayer; kept as a guard
   if (p.banned === true) fail(403, 'Account banned');
   if (!p.walletAddr) fail(400, 'Connect wallet first');
+  /* Wallet-ownership proof (owner order 2026-11-18, closing the
+     bind-any-address exploit): hold tasks pay ONLY against the
+     player's VERIFIED wallet. Binding an address is just a string in
+     a request — anyone could bind a rich wallet they do not control
+     and claim every tier against its balance (the Lyass_21 / Adam
+     cases). The 0.05 TON verification payment FROM the wallet is the
+     only proof of control, so an unverified binding earns nothing
+     here. The same check is repeated inside the credit transaction
+     below against the exact address the chain read used. */
+  const raw = p.walletAddr;
+  if (p.walletVerified !== true || (p.verifiedWallet || '') !== raw) fail(403, 'Verify your wallet first');
   const lastAt = Number((p.holdTaskAt || {})[tier]) || 0;
   if (lastAt && Date.now() - lastAt < RENEW_MS) fail(400, 'Task renews every 48 hours');
   let hold;
-  try { hold = await jettonHold(p.walletAddr); } catch (e) { fail(503, 'Hold check failed, please try again'); }
+  try { hold = await jettonHold(raw); } catch (e) { fail(503, 'Hold check failed, please try again'); }
   if (hold < Number(def.hold)) fail(403, 'Hold at least ' + Number(def.hold).toLocaleString('en-US') + ' $VIKING in your wallet');
   const reward = Number(def.reward);
   return txUpdate(ref, (d) => {
     if (d === null) return { error: new Fail(404, 'User not found') };
     if (d.banned === true) return { error: new Fail(403, 'Account banned') };
+    if ((d.walletAddr || '') !== raw || d.walletVerified !== true || (d.verifiedWallet || '') !== raw) return { error: new Fail(403, 'Verify your wallet first') };
     const now = Date.now();
     const at = Number((d.holdTaskAt || {})[tier]) || 0;
     if (at && now - at < RENEW_MS) return { error: new Fail(400, 'Task renews every 48 hours') };
@@ -2520,12 +2532,22 @@ async function wallet(c) {
   const uid = String(c.user.id);
   // claim the wallet node first (the Firestore original checked ownership
   // inside its transaction before writing anything — same net effect here).
-  // The claim is PERMANENT (owner order 2026-11-15): neither unlink nor
-  // binding a different wallet ever deletes a registry node, so a wallet
-  // belongs to the first account that linked it, forever.
+  // PERMANENCE APPLIES TO VERIFIED CLAIMS ONLY (revised by owner order
+  // 2026-11-18, closing the registry-squatting side of the
+  // bind-any-address exploit): a registry node stamped verified:true by
+  // completeVerification is permanent — it belongs to that account
+  // forever and blocks every other account. A node WITHOUT the verified
+  // stamp is only a provisional binding: binding an address is just a
+  // string, it proves nothing, so it blocks nobody — the next account
+  // to bind the address takes the provisional claim over. (Under the
+  // old rule anyone could permanently squat any wallet, including the
+  // project's own payout wallet, by merely naming its address.)
   await txUpdate(walletDoc(raw), (w) => {
     if (w === null) return { value: { userId: uid } };
-    if (String(w.userId) !== uid) return { error: new Fail(400, 'This wallet is linked to another account') };
+    if (String(w.userId) !== uid) {
+      if (w.verified === true) return { error: new Fail(400, 'This wallet is linked to another account') };
+      return { value: { userId: uid } };
+    }
     return { skip: true };
   });
   const out = await txUpdate(ref, (d) => {
@@ -2545,12 +2567,12 @@ async function wallet(c) {
     };
   });
   if (out.voided) await syncRefVerifiedFlag(uid, false);
-  // Wallet ownership is PERMANENT (owner order 2026-11-15): the
-  // registry node of the previously bound wallet is deliberately NOT
-  // removed here — a wallet that was ever linked to this account can
-  // never be linked to a different account, only re-linked to this
-  // one. (The claim above already rejects any wallet whose registry
-  // node names another userId.)
+  // The registry node of the previously bound wallet is deliberately
+  // NOT removed here. If that wallet was VERIFIED for this account the
+  // node is permanent — it can only ever be re-linked here. If it was
+  // never verified the node is a provisional claim that any later
+  // binder takes over (see the claim above), so leaving it costs
+  // nothing and keeps a re-link by this account seamless.
   // Referral activation is a live state (verified + hold >= minimum):
   // re-evaluate it against the hold/verification this sync just wrote —
   // reaching the minimum activates, dropping below it deactivates.
@@ -2575,11 +2597,12 @@ async function unlink(c) {
   // Unlinking zeroes the hold and voids verification: the referral
   // deactivates (live activation state — see syncReferralActive).
   await syncReferralActive(String(c.user.id), c.cfg);
-  // The wallets-registry node is deliberately KEPT (owner order
-  // 2026-11-15): unlinking disconnects the wallet from this account
-  // but does NOT free it — it stays registered to this account
-  // forever and can only be re-linked here, never to another
-  // account (the claim in wallet() rejects any other userId).
+  // The wallets-registry node is deliberately KEPT: unlinking
+  // disconnects the wallet from this account. A VERIFIED node stays
+  // registered to this account forever and can only be re-linked
+  // here; an unverified node remains a provisional claim in this
+  // account's name until another binder takes it over (the claim in
+  // wallet() rejects another userId only for verified nodes).
   return { success: true };
 }
 
@@ -2735,13 +2758,12 @@ async function completeVerification(uid, hash, cfg) {
     };
   });
   if (!flip || !flip.won) return { won: false, reason: (flip && flip.reason) || 'already' };
-  // Flag the wallets-registry node for this address as verified
-  // (preserving its ownership record — the node normally exists
-  // from the wallet binding; recreate it WITH the owner if not).
-  const wRef = walletDoc(wallet);
-  const wDoc = await getVal(wRef);
-  if (wDoc) await wRef.update({ verified: true });
-  else await wRef.set({ userId: uid, verified: true });
+  // Stamp the wallets-registry node as THIS player's verified claim:
+  // ownership and the verified flag are written together, atomically.
+  // (A provisional claim another account placed on this address must
+  // never inherit the verified stamp — the payment just proved whose
+  // wallet this is. From here the claim is permanent: see wallet().)
+  await txUpdate(walletDoc(wallet), () => ({ value: { userId: uid, verified: true } }));
   await syncRefVerifiedFlag(uid, true);
   // Verification is one of the two activation conditions: if the hold
   // already meets the minimum, the referral turns Active right here.
