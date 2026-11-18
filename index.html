@@ -916,7 +916,7 @@
         <div class="pf-lines">
           <div><span data-i18n="wd_fee_lbl">Fee (5%):</span> <strong class="pf-neg">-<span id="wd-fee-calc">250</span></strong></div>
           <div><span data-i18n="net_lbl">Net:</span> <strong class="pf-net" id="wd-net-calc">4,750</strong></div>
-          <div class="pf-line-sub"><span data-i18n="min_wd_lbl">Minimum:</span> <strong id="wd-min-ui">5,000</strong> · <span data-i18n="hold_cond_lbl">25% Hold Required:</span> <strong id="wd-req-hold-num">1,250</strong> (<span data-i18n="your_hold_lbl">Your Hold:</span> <strong id="wd-cur-hold-num">0</strong>)</div>
+          <div class="pf-line-sub"><span data-i18n="min_wd_lbl">Minimum:</span> <strong id="wd-min-ui">5,000</strong> · <span data-i18n="hold_cond_lbl">30% Hold Required:</span> <strong id="wd-req-hold-num">1,500</strong> (<span data-i18n="your_hold_lbl">Your Hold:</span> <strong id="wd-cur-hold-num">0</strong>)</div>
         </div>
         <button class="pf-wd-btn" id="btn-request-wd"><img src="assets/icon_chest.webp" alt=""><span id="wd-btn-arrow">↗</span> <span id="wd-btn-label" data-i18n="req_wd_btn">Request Withdrawal</span></button>
         <button class="btn-3d-bronze btn-stonfi-buy" id="btn-wd-buy" style="display:none;justify-content:center;">🪙 <span data-i18n="buy_stonfi_btn">Buy on STON.fi</span></button>
@@ -1460,17 +1460,17 @@
         wallet_hold:"Wallet Hold (Speed Source)", mined_app:"Mined in App",
         buy_upgrade_btn:"Buy Official Token on STON.fi to Upgrade Speed",
         ref_rule_title:"⚠️ Referral System (5% Mining)",
-        ref_rule_desc:"1️⃣ Activation: Referral activates when your friend reaches Level 2 (holds 200+ coins).<br>2️⃣ 5% Mining Bonus: Every time your active friend collects, you get 5%!",
+        ref_rule_desc:"1️⃣ Activation: Referral activates when your friend reaches Level 2 (holds {h}+ coins).<br>2️⃣ {c}% Mining Bonus: Every time your active friend collects, you get {c}%!",
         ref_pending:"Pending", ref_verified:"Active", ref_earned:"5% Earned", copy_btn:"Copy Link", share_btn:"Share",
         my_referrals_title:"👥 My Invited Friends", pending_ref_title:"Pending Referral Profits", collect_ref_btn:"COLLECT",
         ton_wallet_title:"TON Blockchain Wallet", connect_wallet_btn:"Connect TON Wallet",
         sync_hold_btn:"Verify Wallet Hold", disconnect_wallet_btn:"Disconnect", unlink_title:"Disconnect Wallet?", unlink_warn:"⚠️ Disconnecting will cancel your wallet verification. To verify again, you will have to pay the verification fee again.", unlink_confirm:"Disconnect", unlink_cancel:"Cancel",
-        prof_page_title:"PROFILE", prof_username_lbl:"USERNAME", prof_wallet_lbl:"WALLET", prof_amount_lbl:"AMOUNT", buy_stonfi_btn:"Buy on STON.fi", set_sound_lbl:"SOUND", set_lang_lbl:"LANGUAGE", lock_verify:"Verify Your Wallet First", lock_age:"Wallet Must Be {n}+ Days Old", renews_24h:"Renews every 24 hours", renews_48h:"Renews every 48 hours", hold_tasks_title:"💰 HOLD TASKS", hold_task_title:"Hold {n}", claim_btn:"Claim", task_available_in:"Available in {t}", ref_tasks_title:"Referral Tasks", ref_tasks_open:"Open", ref_tasks_sum:"{a} active · Next reward at {n}: +{r}", ref_tasks_done:"All milestones claimed 🎉", ref_banner_title:"REFERRAL SYSTEM", boost_banner_title:"LEVELS BOOST", quests_title:"QUESTS", tap_open_hint:"Tap the card to open", ref_head_earn:"Earn 5% of your friends mining", ref_head_sub:"A friend activates at Level 2", ref_link_lbl:"REFERRAL LINK", ref_how_title:"HOW IT WORKS", ref_rule_100:"+100 coins for every ACTIVE referral", ref_rule_cond:"Activation: your friend reaches Level 2 — holding 200+ $VIKING in their wallet", ref_rule_5:"You earn 5% of everything your active referrals earn — automatically", ref_friends_title:"MY INVITED FRIENDS", ref_verified_pill:"VERIFIED", ref_pending_pill:"PENDING", ref_dup_pill:"DUPLICATE",
+        prof_page_title:"PROFILE", prof_username_lbl:"USERNAME", prof_wallet_lbl:"WALLET", prof_amount_lbl:"AMOUNT", buy_stonfi_btn:"Buy on STON.fi", set_sound_lbl:"SOUND", set_lang_lbl:"LANGUAGE", lock_verify:"Verify Your Wallet First", lock_age:"Wallet Must Be {n}+ Days Old", renews_24h:"Renews every 24 hours", renews_48h:"Renews every 48 hours", hold_tasks_title:"💰 HOLD TASKS", hold_task_title:"Hold {n}", claim_btn:"Claim", task_available_in:"Available in {t}", ref_tasks_title:"Referral Tasks", ref_tasks_open:"Open", ref_tasks_sum:"{a} active · Next reward at {n}: +{r}", ref_tasks_done:"All milestones claimed 🎉", ref_banner_title:"REFERRAL SYSTEM", boost_banner_title:"LEVELS BOOST", quests_title:"QUESTS", tap_open_hint:"Tap the card to open", ref_head_earn:"Earn {c}% of your friends mining", ref_head_sub:"A friend activates at Level 2", ref_link_lbl:"REFERRAL LINK", ref_how_title:"HOW IT WORKS", ref_rule_100:"+100 coins for every ACTIVE referral", ref_rule_cond:"Activation: your friend reaches Level 2 — holding {h}+ $VIKING in their wallet", ref_rule_5:"You earn {c}% of everything your active referrals earn — automatically", ref_friends_title:"MY INVITED FRIENDS", ref_verified_pill:"VERIFIED", ref_pending_pill:"PENDING", ref_dup_pill:"DUPLICATE",
         hold_wallet_lbl:"Wallet Hold", mine_wallet_lbl:"In-App Balance",
         withdraw_title:"Withdraw", min_wd_lbl:"Minimum:", wd_fee_lbl:"Fee (5%):", net_lbl:"Net:",
-        hold_cond_lbl:"25% Hold Required:", your_hold_lbl:"Your Hold:", req_wd_btn:"Request Withdrawal",
-        lock_connect:"Connect Wallet First", lock_min:"Minimum {n} Required", lock_balance:"Insufficient Balance", lock_hold:"You must hold 25% of the withdrawal in your wallet (need {n})", lock_cooldown:"Wait {t}",
-        buy_hold_btn:"Buy on STON.fi to Unlock 25% Hold", buy_tonkeeper_btn:"Buy on Tonkeeper", wd_hist_title:"Withdrawal History",
+        hold_cond_lbl:"{p}% Hold Required:", your_hold_lbl:"Your Hold:", req_wd_btn:"Request Withdrawal",
+        lock_connect:"Connect Wallet First", lock_min:"Minimum {n} Required", lock_balance:"Insufficient Balance", lock_hold:"You must hold {p}% of the withdrawal in your wallet (need {n})", lock_cooldown:"Wait {t}",
+        buy_hold_btn:"Buy on STON.fi to Unlock {p}% Hold", buy_tonkeeper_btn:"Buy on Tonkeeper", wd_hist_title:"Withdrawal History",
         verify_title:"Wallet Verification", verify_connected_row:"Wallet connected",
         verify_not_connected:"Connect your wallet above first, then verify it here.",
         verify_age_row:"Wallet age", verify_days_word:"days",
@@ -1510,17 +1510,17 @@
         wallet_hold:"رصيد المحفظة (مصدر السرعة)", mined_app:"رصيد البوت (للسحب)",
         buy_upgrade_btn:"اشترِ العملة الرسمية من STON.fi لرفع سرعتك",
         ref_rule_title:"⚠️ نظام الإحالات (5% تعدين)",
-        ref_rule_desc:"1️⃣ التفعيل: تتفعل الإحالة عندما يصل صديقك للمستوى 2 (يمتلك 200+ عملة بالمحفظة).<br>2️⃣ ربح 5% مستمر: كلما جمع صديقك، تحصل أنت على 5%!",
+        ref_rule_desc:"1️⃣ التفعيل: تتفعل الإحالة عندما يصل صديقك للمستوى 2 (يمتلك {h}+ عملة بالمحفظة).<br>2️⃣ ربح {c}% مستمر: كلما جمع صديقك، تحصل أنت على {c}%!",
         ref_pending:"معلق", ref_verified:"مفعل", ref_earned:"ربح 5%", copy_btn:"نسخ الرابط", share_btn:"مشاركة",
         my_referrals_title:"👥 أصدقائي المدعوون", pending_ref_title:"أرباح الإحالات المعلقة", collect_ref_btn:"جمع أرباح الإحالات",
         ton_wallet_title:"محفظة شبكة TON", connect_wallet_btn:"ربط محفظة TON الآن",
         sync_hold_btn:"تحديث رصيد المحفظة", disconnect_wallet_btn:"إلغاء الربط", unlink_title:"فك ربط المحفظة؟", unlink_warn:"⚠️ فك ربط المحفظة سيلغي توثيق محفظتك، وستضطر لدفع رسوم التوثيق مرة أخرى لإعادة التوثيق.", unlink_confirm:"فك الربط", unlink_cancel:"إلغاء",
-        prof_page_title:"الملف الشخصي", prof_username_lbl:"اسم المستخدم", prof_wallet_lbl:"المحفظة", prof_amount_lbl:"المبلغ", buy_stonfi_btn:"اشترِ من STON.fi", set_sound_lbl:"الصوت", set_lang_lbl:"اللغة", lock_verify:"قم بتوثيق محفظتك أولاً", lock_age:"عمر المحفظة لازم يكون {n} يوم أو أكتر", renews_24h:"تتجدد كل 24 ساعة", renews_48h:"تتجدد كل 48 ساعة", hold_tasks_title:"💰 مهام الاحتفاظ", hold_task_title:"احتفظ بـ {n}", claim_btn:"استلام", task_available_in:"متاحة بعد {t}", ref_tasks_title:"مهام الإحالات", ref_tasks_open:"افتح", ref_tasks_sum:"{a} نشط · المكافأة الجاية عند {n}: +{r}", ref_tasks_done:"كل المراحل اتستلمت 🎉", ref_banner_title:"نظام الإحالة", boost_banner_title:"تعزيز المستوى", quests_title:"المهام", tap_open_hint:"اضغط على الكارت للفتح", ref_head_earn:"اكسب 5% من تعدين أصدقائك", ref_head_sub:"الصديق بيتنشط عند المستوى 2", ref_link_lbl:"رابط الإحالة", ref_how_title:"إزاي بيشتغل", ref_rule_100:"+100 عملة عن كل إحالة نشطة", ref_rule_cond:"التنشيط: صديقك يوصل للمستوى 2 — يعني معاه 200+ $VIKING في محفظته", ref_rule_5:"بتكسب 5% من كل أرباح إحالاتك النشطة — تلقائيًا", ref_friends_title:"أصدقائي المدعوون", ref_verified_pill:"موثّق", ref_pending_pill:"قيد الانتظار", ref_dup_pill:"مكرر",
+        prof_page_title:"الملف الشخصي", prof_username_lbl:"اسم المستخدم", prof_wallet_lbl:"المحفظة", prof_amount_lbl:"المبلغ", buy_stonfi_btn:"اشترِ من STON.fi", set_sound_lbl:"الصوت", set_lang_lbl:"اللغة", lock_verify:"قم بتوثيق محفظتك أولاً", lock_age:"عمر المحفظة لازم يكون {n} يوم أو أكتر", renews_24h:"تتجدد كل 24 ساعة", renews_48h:"تتجدد كل 48 ساعة", hold_tasks_title:"💰 مهام الاحتفاظ", hold_task_title:"احتفظ بـ {n}", claim_btn:"استلام", task_available_in:"متاحة بعد {t}", ref_tasks_title:"مهام الإحالات", ref_tasks_open:"افتح", ref_tasks_sum:"{a} نشط · المكافأة الجاية عند {n}: +{r}", ref_tasks_done:"كل المراحل اتستلمت 🎉", ref_banner_title:"نظام الإحالة", boost_banner_title:"تعزيز المستوى", quests_title:"المهام", tap_open_hint:"اضغط على الكارت للفتح", ref_head_earn:"اكسب {c}% من تعدين أصدقائك", ref_head_sub:"الصديق بيتنشط عند المستوى 2", ref_link_lbl:"رابط الإحالة", ref_how_title:"إزاي بيشتغل", ref_rule_100:"+100 عملة عن كل إحالة نشطة", ref_rule_cond:"التنشيط: صديقك يوصل للمستوى 2 — يعني معاه {h}+ $VIKING في محفظته", ref_rule_5:"بتكسب {c}% من كل أرباح إحالاتك النشطة — تلقائيًا", ref_friends_title:"أصدقائي المدعوون", ref_verified_pill:"موثّق", ref_pending_pill:"قيد الانتظار", ref_dup_pill:"مكرر",
         hold_wallet_lbl:"عملات المحفظة (Hold)", mine_wallet_lbl:"رصيد داخل التطبيق",
         withdraw_title:"سحب", min_wd_lbl:"الحد الأدنى:", wd_fee_lbl:"رسوم (5%):", net_lbl:"الصافي:",
-        hold_cond_lbl:"شرط 25% بالمحفظة:", your_hold_lbl:"رصيد محفظتك:", req_wd_btn:"طلب سحب الرصيد",
-        lock_connect:"اربط المحفظة الأول", lock_min:"الحد الأدنى {n}", lock_balance:"الرصيد مش كافي", lock_hold:"يجب الاحتفاظ بـ 25% من قيمة السحب في المحفظة (تحتاج {n})", lock_cooldown:"استنى {t}",
-        buy_hold_btn:"اشترِ من STON.fi لتحقيق شرط الـ 25%", buy_tonkeeper_btn:"اشترِ من Tonkeeper", wd_hist_title:"سجل السحوبات",
+        hold_cond_lbl:"شرط {p}% بالمحفظة:", your_hold_lbl:"رصيد محفظتك:", req_wd_btn:"طلب سحب الرصيد",
+        lock_connect:"اربط المحفظة الأول", lock_min:"الحد الأدنى {n}", lock_balance:"الرصيد مش كافي", lock_hold:"يجب الاحتفاظ بـ {p}% من قيمة السحب في المحفظة (تحتاج {n})", lock_cooldown:"استنى {t}",
+        buy_hold_btn:"اشترِ من STON.fi لتحقيق شرط الـ {p}%", buy_tonkeeper_btn:"اشترِ من Tonkeeper", wd_hist_title:"سجل السحوبات",
         verify_title:"توثيق المحفظة", verify_connected_row:"المحفظة مربوطة",
         verify_not_connected:"اربط محفظتك فوق الأول، وبعدين وثّقها من هنا.",
         verify_age_row:"عمر المحفظة", verify_days_word:"يوم",
@@ -1560,17 +1560,17 @@
         wallet_hold:"В кошельке (Скорость)", mined_app:"В боте",
         buy_upgrade_btn:"Купить на STON.fi для увеличения скорости",
         ref_rule_title:"⚠️ Реферальная система (5% Майнинг)",
-        ref_rule_desc:"1️⃣ Активация: друг достигает Уровня 2 (200+ монет).<br>2️⃣ Бонус 5%: каждый раз, когда друг собирает добычу, вы получаете 5%!",
+        ref_rule_desc:"1️⃣ Активация: друг достигает Уровня 2 ({h}+ монет).<br>2️⃣ Бонус {c}%: каждый раз, когда друг собирает добычу, вы получаете {c}%!",
         ref_pending:"Ожидание", ref_verified:"Активно", ref_earned:"Доход 5%", copy_btn:"Копировать", share_btn:"Поделиться",
         my_referrals_title:"👥 Мои рефералы", pending_ref_title:"Ожидаемый доход", collect_ref_btn:"Собрать доход",
         ton_wallet_title:"Кошелек TON", connect_wallet_btn:"Подключить TON Кошелек",
         sync_hold_btn:"Обновить Холд", disconnect_wallet_btn:"Отключить", unlink_title:"Отключить кошелёк?", unlink_warn:"⚠️ Отключение отменит верификацию кошелька. Для повторной верификации придётся снова оплатить комиссию.", unlink_confirm:"Отключить", unlink_cancel:"Отмена",
-        prof_page_title:"ПРОФИЛЬ", prof_username_lbl:"ИМЯ ПОЛЬЗОВАТЕЛЯ", prof_wallet_lbl:"КОШЕЛЁК", prof_amount_lbl:"СУММА", buy_stonfi_btn:"Купить на STON.fi", set_sound_lbl:"ЗВУК", set_lang_lbl:"ЯЗЫК", lock_verify:"Сначала подтвердите кошелёк", lock_age:"Возраст кошелька должен быть от {n} дн.", renews_24h:"Обновляется каждые 24 часа", renews_48h:"Обновляется каждые 48 часов", hold_tasks_title:"💰 ЗАДАНИЯ НА УДЕРЖАНИЕ", hold_task_title:"Удерживайте {n}", claim_btn:"Забрать", task_available_in:"Доступно через {t}", ref_tasks_title:"Задания за рефералов", ref_tasks_open:"Открыть", ref_tasks_sum:"{a} активных · Следующая награда при {n}: +{r}", ref_tasks_done:"Все этапы получены 🎉", ref_banner_title:"РЕФЕРАЛЬНАЯ СИСТЕМА", boost_banner_title:"УСИЛЕНИЕ УРОВНЕЙ", quests_title:"ЗАДАНИЯ", tap_open_hint:"Нажмите на карточку, чтобы открыть", ref_head_earn:"Зарабатывайте 5% от майнинга друзей", ref_head_sub:"Друг активируется на уровне 2", ref_link_lbl:"РЕФЕРАЛЬНАЯ ССЫЛКА", ref_how_title:"КАК ЭТО РАБОТАЕТ", ref_rule_100:"+100 монет за каждого АКТИВНОГО реферала", ref_rule_cond:"Активация: друг достигает уровня 2 — держит 200+ $VIKING в кошельке", ref_rule_5:"Вы получаете 5% от всего заработка активных рефералов — автоматически", ref_friends_title:"МОИ ПРИГЛАШЁННЫЕ ДРУЗЬЯ", ref_verified_pill:"ПОДТВЕРЖДЁН", ref_pending_pill:"ОЖИДАЕТ", ref_dup_pill:"ДУБЛИКАТ",
+        prof_page_title:"ПРОФИЛЬ", prof_username_lbl:"ИМЯ ПОЛЬЗОВАТЕЛЯ", prof_wallet_lbl:"КОШЕЛЁК", prof_amount_lbl:"СУММА", buy_stonfi_btn:"Купить на STON.fi", set_sound_lbl:"ЗВУК", set_lang_lbl:"ЯЗЫК", lock_verify:"Сначала подтвердите кошелёк", lock_age:"Возраст кошелька должен быть от {n} дн.", renews_24h:"Обновляется каждые 24 часа", renews_48h:"Обновляется каждые 48 часов", hold_tasks_title:"💰 ЗАДАНИЯ НА УДЕРЖАНИЕ", hold_task_title:"Удерживайте {n}", claim_btn:"Забрать", task_available_in:"Доступно через {t}", ref_tasks_title:"Задания за рефералов", ref_tasks_open:"Открыть", ref_tasks_sum:"{a} активных · Следующая награда при {n}: +{r}", ref_tasks_done:"Все этапы получены 🎉", ref_banner_title:"РЕФЕРАЛЬНАЯ СИСТЕМА", boost_banner_title:"УСИЛЕНИЕ УРОВНЕЙ", quests_title:"ЗАДАНИЯ", tap_open_hint:"Нажмите на карточку, чтобы открыть", ref_head_earn:"Зарабатывайте {c}% от майнинга друзей", ref_head_sub:"Друг активируется на уровне 2", ref_link_lbl:"РЕФЕРАЛЬНАЯ ССЫЛКА", ref_how_title:"КАК ЭТО РАБОТАЕТ", ref_rule_100:"+100 монет за каждого АКТИВНОГО реферала", ref_rule_cond:"Активация: друг достигает уровня 2 — держит {h}+ $VIKING в кошельке", ref_rule_5:"Вы получаете {c}% от всего заработка активных рефералов — автоматически", ref_friends_title:"МОИ ПРИГЛАШЁННЫЕ ДРУЗЬЯ", ref_verified_pill:"ПОДТВЕРЖДЁН", ref_pending_pill:"ОЖИДАЕТ", ref_dup_pill:"ДУБЛИКАТ",
         hold_wallet_lbl:"В кошельке", mine_wallet_lbl:"Баланс в приложении",
         withdraw_title:"Вывод", min_wd_lbl:"Минимум:", wd_fee_lbl:"Комиссия (5%):", net_lbl:"Чистыми:",
-        hold_cond_lbl:"Нужно 25% Холда:", your_hold_lbl:"Ваш Холд:", req_wd_btn:"Запросить вывод",
-        lock_connect:"Сначала подключите кошелёк", lock_min:"Минимум: {n}", lock_balance:"Недостаточный баланс", lock_hold:"Нужно держать 25% суммы вывода в кошельке (нужно {n})", lock_cooldown:"Подождите {t}",
-        buy_hold_btn:"Купить на STON.fi (25% Холд)", buy_tonkeeper_btn:"Купить в Tonkeeper", wd_hist_title:"История выводов",
+        hold_cond_lbl:"Нужно {p}% Холда:", your_hold_lbl:"Ваш Холд:", req_wd_btn:"Запросить вывод",
+        lock_connect:"Сначала подключите кошелёк", lock_min:"Минимум: {n}", lock_balance:"Недостаточный баланс", lock_hold:"Нужно держать {p}% суммы вывода в кошельке (нужно {n})", lock_cooldown:"Подождите {t}",
+        buy_hold_btn:"Купить на STON.fi ({p}% Холд)", buy_tonkeeper_btn:"Купить в Tonkeeper", wd_hist_title:"История выводов",
         verify_title:"Верификация кошелька", verify_connected_row:"Кошелёк подключён",
         verify_not_connected:"Сначала подключите кошелёк выше, затем подтвердите его здесь.",
         verify_age_row:"Возраст кошелька", verify_days_word:"дн.",
@@ -1635,7 +1635,7 @@
       taskReward: 50,
       bioReward: 50, refAchReward1: 125, refAchReward10: 250, refAchReward25: 625, refAchReward50: 1250, refAchReward100: 2500,
       refClaimPercent: 5, refMinHold: 200,
-      minWithdraw: 5000, holdPercentReq: 25, withdrawFeePercent: 5, withdrawMinAgeDays: 7,
+      minWithdraw: 5000, holdPercentReq: 30, withdrawFeePercent: 5, withdrawMinAgeDays: 7,
       payoutWallet: "", botToken: "", payoutChannel: "@YGRAM1",
       adminChatId: "",
       buySwapUrl: "https://app.ston.fi/swap?chartVisible=false&tt=EQC6uN73kvaKh8LrTHQ8TQ5_vgqheI93iny5XUWkpQL9vjxI&ft=GRAM",
@@ -2846,9 +2846,25 @@
     /* Friends-page Referral Tasks card summary: how many ACTIVE
        referrals the player has and where the next unclaimed
        milestone reward sits. */
+    /* Referral copy follows the panel config (owner order 2026-11-18):
+       commission % and activation hold in the Friends texts are painted
+       from config.refClaimPercent / config.refMinHold on every render —
+       the same repaint-last pattern as the withdraw hold label — so a
+       panel edit never leaves stale numbers in the app copy. */
+    function paintRefCopy() {
+      const dict = I18N[currentLang] || I18N.en;
+      const cPct = (config.refClaimPercent == null ? 5 : config.refClaimPercent);
+      const hMin = (config.refMinHold == null ? 200 : Number(config.refMinHold).toLocaleString());
+      ['ref_head_earn', 'ref_rule_5', 'ref_rule_cond', 'ref_rule_desc'].forEach(k => {
+        const el = document.querySelector('[data-i18n="' + k + '"]');
+        if (el && dict[k]) el.innerHTML = dict[k].replaceAll('{c}', cPct).replaceAll('{h}', hMin);
+      });
+    }
+
     function renderRefTasksSummary() {
       const el = document.getElementById('ref-tasks-summary');
       if (!el) return;
+      paintRefCopy();
       const dict = I18N[currentLang] || I18N.en;
       const next = REF_MILESTONES.find(n => !refAchClaimed[n]);
       if (!next) { el.innerText = dict.ref_tasks_done || 'All milestones claimed 🎉'; return; }
@@ -3023,6 +3039,9 @@
       const wdLbl = document.getElementById('wd-btn-label');
       const wdArrow = document.getElementById('wd-btn-arrow');
       const dict = I18N[currentLang] || I18N.en;
+      const holdPct = (config.holdPercentReq == null ? 30 : config.holdPercentReq);
+      const hcl = document.querySelector('[data-i18n="hold_cond_lbl"]');
+      if (hcl && dict.hold_cond_lbl) hcl.textContent = dict.hold_cond_lbl.replace('{p}', holdPct);
       let lockReason = '';
       let lockKind = '';
       const cdRemain = (lastWithdrawTime + 86400000) - Date.now();
@@ -3038,7 +3057,7 @@
       }
       else if (rawAmt < config.minWithdraw) { lockReason = dict.lock_min.replace('{n}', config.minWithdraw.toLocaleString()); lockKind = 'min'; }
       else if (rawAmt > minedInApp) { lockReason = dict.lock_balance; lockKind = 'balance'; }
-      else if (walletHold < reqHold) { lockReason = dict.lock_hold.replace('{n}', reqHold.toLocaleString()); lockKind = 'hold'; }
+      else if (walletHold < reqHold) { lockReason = dict.lock_hold.replace('{n}', reqHold.toLocaleString()).replace('{p}', holdPct); lockKind = 'hold'; }
       if (lockReason) {
         wdBtn.disabled = true;
         wdBtn.classList.add('btn-wd-locked');
