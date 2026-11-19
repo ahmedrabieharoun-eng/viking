@@ -800,7 +800,7 @@ function hit(key, max, windowMs) {
 // burst plus a manual re-check must fit with room to spare, or the user
 // hits this limiter for doing exactly what the UI told them to do. The
 // global per-user (90/min) and per-IP caps still bound abuse.
-const ACTION_LIMIT = { state: 20, collect: 6, daily: 6, task: 8, holdTask: 8, bioTask: 8, refAch: 8, wallet: 8, unlink: 6, refCollect: 6, withdraw: 4, verifyInfo: 20, verifyCheck: 20, setAvatar: 8, adTicket: 6, adClaim: 6 }; // per user per minute
+const ACTION_LIMIT = { state: 20, collect: 6, daily: 6, task: 8, holdTask: 8, bioTask: 8, refAch: 8, wallet: 8, unlink: 6, refCollect: 6, withdraw: 4, verifyInfo: 20, verifyCheck: 20, setAvatar: 8, adTicket: 6, adClaim: 6, adNoFill: 6 }; // per user per minute
 
 function verifyInitData(initData) {
   if (!BOT_TOKEN) return { error: 'config' };
@@ -2188,8 +2188,47 @@ function takeAdTicket(c, purpose, minAgeMs) {
   if (age < minAgeMs) fail(400, 'Watch the full ad first');
   if (age > AD_TICKET_TTL_MS) fail(400, 'Ad session expired, try again');
 }
+/* No-fill waiver (owner order 2026-11-19): when Adsgram itself
+   has no ad to serve (its show() promise REJECTS — an ad closed
+   early RESOLVES with done:false and never qualifies), the gated
+   action may proceed once without an ad. The waiver is issued
+   by the server against a real gate ticket the client already
+   holds (the ticket is consumed by the exchange), is bound to
+   the user, single-use, short-lived, and rate-limited per user
+   — it rescues genuine no-fill periods without becoming a
+   general bypass. The reward flow never accepts a waiver:
+   no ad shown, no ad reward. */
+const AD_WAIVER_TTL_MS = 10 * 60 * 1000;
+const AD_WAIVER_MAX_PER_HOUR = 20;
+const adWaivers = new Map(); // token -> { uid, at }
+const adWaiverUse = new Map(); // uid -> [timestamps]
+function takeAdWaiver(c) {
+  const t = String((c.body && c.body.adWaiver) || '');
+  const rec = t ? adWaivers.get(t) : null;
+  if (!rec) return false;
+  adWaivers.delete(t); // single-use: consumed by ANY presentation
+  if (rec.uid !== String(c.user.id)) return false;
+  if (Date.now() - rec.at > AD_WAIVER_TTL_MS) return false;
+  return true;
+}
+async function adNoFill(c) {
+  if (!adsOn(c.cfg)) fail(503, 'Ads are disabled');
+  const t = String((c.body && c.body.ticket) || '');
+  const rec = t ? adTickets.get(t) : null;
+  if (!rec) fail(403, 'Watch the ad first');
+  adTickets.delete(t); // the gate ticket is spent on the exchange
+  if (rec.uid !== String(c.user.id) || rec.purpose !== 'gate') fail(403, 'Watch the ad first');
+  const uid = String(c.user.id), now = Date.now();
+  const uses = (adWaiverUse.get(uid) || []).filter(x => now - x < 3600000);
+  if (uses.length >= AD_WAIVER_MAX_PER_HOUR) fail(429, 'Too many ad issues, try later');
+  uses.push(now); adWaiverUse.set(uid, uses);
+  const waiver = crypto.randomBytes(18).toString('hex');
+  adWaivers.set(waiver, { uid, at: now });
+  return { success: true, waiver };
+}
 function requireAdGate(c) {
   if (AD_GATE_DISABLED || !adsOn(c.cfg)) return;
+  if (c.body && c.body.adWaiver) { if (takeAdWaiver(c)) return; fail(403, 'Watch the ad first'); }
   takeAdTicket(c, 'gate', (Number(c.cfg.adGateMinSec) > 0 ? Number(c.cfg.adGateMinSec) : 5) * 1000);
 }
 async function adTicket(c) {
@@ -5316,7 +5355,7 @@ async function panelAuditList(c) {
 
 const PANEL_ACTIONS = { panelStats, panelPlayers, panelPlayer, panelBan, panelAdjust, panelSetAvatar, panelVerifyPlayer, panelWithdrawals, panelWdApprove, panelWdReject, panelWdBan, panelVerifyQueue, panelVerifyResolve, panelConfigGet, panelConfigSet, panelRequestAdd, panelRequestList, panelRequestReply, panelAuditList };
 
-const ACTIONS = { state, collect, daily, task, holdTask, bioTask, refAch, adTicket, adClaim, wallet, unlink, verifyInfo, verifyCheck, refCollect, withdraw, setAvatar, adminState, adminBan, adminAdjust, adminWd, adminSettings };
+const ACTIONS = { state, collect, daily, task, holdTask, bioTask, refAch, adTicket, adClaim, adNoFill, wallet, unlink, verifyInfo, verifyCheck, refCollect, withdraw, setAvatar, adminState, adminBan, adminAdjust, adminWd, adminSettings };
 
 ensureWebhook(); // self-register the Telegram webhook once per process (never blocks boot)
 startVerifyWatcher(); // background deposit watcher (see verifyWatchTick; no-op when VERIFY_WATCH_MS=0)
