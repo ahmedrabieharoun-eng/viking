@@ -1969,7 +1969,6 @@ async function collect(c) {
 }
 
 async function daily(c) {
-  requireAdGate(c);
   const ref = await ensurePlayer(c);
   return txUpdate(ref, (d) => {
     if (d === null) return { error: new Fail(404, 'User not found') };
@@ -1997,7 +1996,6 @@ async function daily(c) {
 async function task(c) {
   const n = Number(c.body.n);
   if (n !== 1 && n !== 2 && n !== 3) fail(400, 'Bad task');
-  requireAdGate(c);
   const ref = await ensurePlayer(c);
   // REAL membership verification through the bot (getChatMember) before any
   // reward: not a member -> 403; the check itself unavailable (bot not in
@@ -2158,10 +2156,12 @@ async function seedHoldLogIfNeeded(p, cfg, now, maxPages) {
       it has aged adMinWatchSec — so a script replaying the claim
       request gets nothing: no ticket, no pay; a forged ticket, no
       pay; the same ticket twice, no pay; too fast, no pay.
-   2) GATE ads: the money buttons (collect / daily / task /
-      holdTask / refAch / withdraw) run only with a fresh 'gate'
-      ticket (requireAdGate), earned the same way and aged at
-      least adGateMinSec.
+   2) GATE ads: the big money buttons (collect / refAch /
+      withdraw) run only with a fresh 'gate' ticket
+      (requireAdGate), earned the same way and aged at least
+      adGateMinSec. The Tasks-page claims (daily / task /
+      holdTask) were UNGATED by owner order 2026-11-19 — no
+      forced ad on tasks.
    AD_GATE_DISABLED=1 in the server ENVIRONMENT (never settable
    by a request) exists only so the local API test suites, which
    drive the API without a browser, can run; production never
@@ -2268,7 +2268,6 @@ async function adClaim(c) {
 }
 
 async function holdTask(c) {
-  requireAdGate(c);
   const defs = holdDefsOf(c.cfg);
   const tier = Number(c.body.tier);
   if (!Number.isInteger(tier) || tier < 1 || tier > defs.length) fail(400, 'Bad task');
