@@ -10,6 +10,7 @@
   <meta property="og:type" content="website">
 
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script src="https://sad.adsgram.ai/js/sad.min.js" async></script>
   <script src="https://unpkg.com/@tonconnect/ui@2.0.9/dist/tonconnect-ui.min.js"></script>
 
   
@@ -50,6 +51,9 @@
        task button goes inactive YELLOW and carries the live 24h countdown. */
     .btn-cooldown-yellow{background:linear-gradient(180deg,#fef08a,#facc15,#eab308)!important;color:#422006!important;box-shadow:0 4px 0 #713f12!important;border-top:1px solid #fef9c3!important;cursor:default!important}
     .q-renew{font-size:10px;color:#8a6d1f;font-weight:700;margin-top:2px}
+    #ads-wrap .q-title{color:#ffe9c4;text-shadow:0 1px 3px rgba(60,0,0,.55)}
+    #ads-wrap .q-rew{color:#ffd76a}
+    #ads-wrap .q-renew{color:#f0c184}
     .btn-done-green:active{box-shadow:0 1px 0 #14532d!important}
     .btn-busy{opacity:.78;pointer-events:none}
     .btn-spinner{display:inline-block;width:13px;height:13px;border-radius:50%;border:2px solid rgba(128,128,128,.35);border-top-color:currentColor;animation:btnspin .7s linear infinite;flex:none}
@@ -453,7 +457,7 @@
     .btn-3d-gold{box-shadow:inset 0 0 0 2px rgba(120,72,10,.5), inset 0 2px 0 rgba(255,244,200,.45), 0 6px 14px rgba(0,0,0,.45)}
     #ref-pending-count,#ref-verified-count,#ref-earned-total{font-family:Georgia,'Times New Roman',serif;font-size:27px!important;line-height:1.15}
     #pending-ref-comm-display{font-family:Georgia,'Times New Roman',serif;font-size:33px!important}
-    #prof-hold-bal,#prof-mine-bal{font-family:Georgia,'Times New Roman',serif;font-size:21px}
+    #prof-hold-bal,#prof-mine-bal,#prof-aged-bal{font-family:Georgia,'Times New Roman',serif;font-size:21px}
     #mine-claimed-total{font-family:Georgia,'Times New Roman',serif;font-size:23px}
     .live-counter-3d{font-family:Georgia,'Times New Roman',serif}
   </style>
@@ -671,6 +675,21 @@
         <div class="daily-grid" id="daily-streak-container"></div>
       </div>
 
+      <div class="q-wrap" id="ads-wrap" style="display:none;">
+        <div class="q-row">
+          <img class="q-scroll" src="assets/quest_scroll_ads.webp" alt="">
+          <div class="q-row-in">
+            <img class="q-ic" src="assets/icon_q_chest.webp" alt="">
+            <div class="q-mid">
+              <div class="q-title" data-i18n="ads_title">📺 Watch Ads</div>
+              <div class="q-rew"><img src="assets/coin_icon.webp" alt="">+<span id="ads-rew-amt">5</span> <span class="coin-sym">$VIKING</span></div>
+              <div class="q-renew"><span id="ads-left-txt"></span></div>
+            </div>
+            <button class="btn-3d-gold q-btn" id="btn-watch-ad" data-i18n="ads_watch_btn">Watch Ad</button>
+          </div>
+        </div>
+      </div>
+
       <div class="q-wrap">
         <div class="q-row" id="ch1-row">
           <img class="q-scroll" src="assets/quest_scroll.webp" alt="">
@@ -736,6 +755,7 @@
 
       <div class="q-wrap" style="background-image:url('assets/ref_stone_plain.webp');">
         <div class="q-sec-title" data-i18n="hold_tasks_title">💰 HOLD TASKS</div>
+        <div id="hold-rule-banner" style="margin:8px 2px 2px;padding:9px 12px;border:1px dashed rgba(212,175,55,.75);border-radius:10px;background:rgba(212,175,55,.08);color:#f5d67b;font-size:12px;line-height:1.55;text-align:center;"></div>
         <div id="hold-task-list"></div>
       </div>
 
@@ -891,6 +911,11 @@
             <div class="pf-stat-lbl" data-i18n="mine_wallet_lbl">Mined Balance</div>
             <div class="pf-stat-num"><span id="prof-mine-bal">0</span> <img src="assets/coin_icon.webp" alt=""></div>
           </div>
+          <div class="pf-stat" style="grid-column:1 / -1;">
+            <div class="pf-stat-ic"><svg viewBox="0 0 24 24" fill="none" stroke="#e8c766" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3h10"/><path d="M7 21h10"/><path d="M8.5 3v3.2L12 9.7l3.5-3.5V3"/><path d="M8.5 21v-3.2L12 14.3l3.5 3.5V21"/></svg></div>
+            <div class="pf-stat-lbl" id="pf-aged-lbl">3-DAY HOLD</div>
+            <div class="pf-stat-num"><span id="prof-aged-bal">0</span> <img src="assets/coin_icon.webp" alt=""></div>
+          </div>
         </div>
       </section>
 
@@ -917,6 +942,10 @@
           <div><span data-i18n="wd_fee_lbl">Fee (5%):</span> <strong class="pf-neg">-<span id="wd-fee-calc">250</span></strong></div>
           <div><span data-i18n="net_lbl">Net:</span> <strong class="pf-net" id="wd-net-calc">4,750</strong></div>
           <div class="pf-line-sub"><span data-i18n="min_wd_lbl">Minimum:</span> <strong id="wd-min-ui">5,000</strong> · <span data-i18n="hold_cond_lbl">30% Hold Required:</span> <strong id="wd-req-hold-num">1,500</strong> (<span data-i18n="your_hold_lbl">Your Hold:</span> <strong id="wd-cur-hold-num">0</strong>)</div>
+        </div>
+        <div style="margin-top:12px;padding:10px 12px;border:1px dashed rgba(212,175,55,.75);border-radius:10px;background:rgba(212,175,55,.07);">
+          <div style="display:flex;align-items:center;gap:8px;font-size:12px;font-weight:700;letter-spacing:.06em;color:#f5d67b;">🛡️ <span data-i18n="wd_recheck_title">HOLD RE-CHECK</span> <span style="background:#d4af37;color:#1a1405;border-radius:6px;padding:1px 7px;font-size:10px;" data-i18n="wd_recheck_new">NEW</span></div>
+          <div id="wd-recheck-req" style="margin-top:8px;font-size:11.5px;color:#e8e2d0;text-align:center;"></div>
         </div>
         <button class="pf-wd-btn" id="btn-request-wd"><img src="assets/icon_chest.webp" alt=""><span id="wd-btn-arrow">↗</span> <span id="wd-btn-label" data-i18n="req_wd_btn">Request Withdrawal</span></button>
         <button class="btn-3d-bronze btn-stonfi-buy" id="btn-wd-buy" style="display:none;justify-content:center;">🪙 <span data-i18n="buy_stonfi_btn">Buy on STON.fi</span></button>
@@ -1465,7 +1494,7 @@
         my_referrals_title:"👥 My Invited Friends", pending_ref_title:"Pending Referral Profits", collect_ref_btn:"COLLECT",
         ton_wallet_title:"TON Blockchain Wallet", connect_wallet_btn:"Connect TON Wallet",
         sync_hold_btn:"Verify Wallet Hold", disconnect_wallet_btn:"Disconnect", unlink_title:"Disconnect Wallet?", unlink_warn:"⚠️ Disconnecting will cancel your wallet verification. To verify again, you will have to pay the verification fee again.", unlink_confirm:"Disconnect", unlink_cancel:"Cancel",
-        prof_page_title:"PROFILE", prof_username_lbl:"USERNAME", prof_wallet_lbl:"WALLET", prof_amount_lbl:"AMOUNT", buy_stonfi_btn:"Buy on STON.fi", set_sound_lbl:"SOUND", set_lang_lbl:"LANGUAGE", lock_verify:"Verify Your Wallet First", lock_age:"Wallet Must Be {n}+ Days Old", renews_24h:"Renews every 24 hours", renews_48h:"Renews every 48 hours", hold_tasks_title:"💰 HOLD TASKS", hold_task_title:"Hold {n}", claim_btn:"Claim", task_available_in:"Available in {t}", ref_tasks_title:"Referral Tasks", ref_tasks_open:"Open", ref_tasks_sum:"{a} active · Next reward at {n}: +{r}", ref_tasks_done:"All milestones claimed 🎉", ref_banner_title:"REFERRAL SYSTEM", boost_banner_title:"LEVELS BOOST", quests_title:"QUESTS", tap_open_hint:"Tap the card to open", ref_head_earn:"Earn {c}% of your friends mining", ref_head_sub:"A friend activates at Level 2", ref_link_lbl:"REFERRAL LINK", ref_how_title:"HOW IT WORKS", ref_rule_100:"+100 coins for every ACTIVE referral", ref_rule_cond:"Activation: your friend reaches Level 2 — holding {h}+ $VIKING in their wallet", ref_rule_5:"You earn {c}% of everything your active referrals earn — automatically", ref_friends_title:"MY INVITED FRIENDS", ref_verified_pill:"VERIFIED", ref_pending_pill:"PENDING", ref_dup_pill:"DUPLICATE",
+        prof_page_title:"PROFILE", prof_username_lbl:"USERNAME", prof_wallet_lbl:"WALLET", prof_amount_lbl:"AMOUNT", buy_stonfi_btn:"Buy on STON.fi", set_sound_lbl:"SOUND", set_lang_lbl:"LANGUAGE", lock_verify:"Verify Your Wallet First", lock_age:"Wallet Must Be {n}+ Days Old", renews_24h:"Renews every 24 hours", renews_48h:"Renews every 48 hours", hold_tasks_title:"💰 HOLD TASKS", hold_task_title:"Hold {n}", claim_btn:"Claim", hold_rule_banner:"A claim pays your HIGHEST tier only — judged on your {d}-day hold, the coins that have sat in your wallet for {d} full days. Claims renew every {r} days.", hold_included:"✓ Included", hold_aged_note:"Counts only coins held {d}+ days", wd_hold_total:"WALLET HOLD", wd_hold_aged:"{d}-DAY HOLD", hold_need_days:"Hold continuously for {d} days to claim", hold_keep_warn:"Keep holding — dropping below {n} resets the timer", hold_ready:"Held {d} days — ready to claim", wd_recheck_title:"HOLD RE-CHECK", wd_recheck_new:"NEW", wd_recheck_days:"And that hold must be at least {d} days old — the coins must have sat in your wallet continuously for {d} days. Buying right before you withdraw does not count.", wd_recheck_txt:"Your hold is re-checked when your request is approved. Keep at least {p}% of the amount ({n}) in your wallet until you are paid — if your hold drops below it, the request pauses until you top it up.", wd_holdcheck_paused:"Hold check: paused — top up your wallet hold", task_available_in:"Available in {t}", ref_tasks_title:"Referral Tasks", ref_tasks_open:"Open", ref_tasks_sum:"{a} active · Next reward at {n}: +{r}", ref_tasks_done:"All milestones claimed 🎉", ref_banner_title:"REFERRAL SYSTEM", boost_banner_title:"LEVELS BOOST", quests_title:"QUESTS", tap_open_hint:"Tap the card to open", ref_head_earn:"Earn {c}% of your friends mining", ref_head_sub:"A friend activates at Level 2", ref_link_lbl:"REFERRAL LINK", ref_how_title:"HOW IT WORKS", ref_rule_100:"+100 coins for every ACTIVE referral", ref_rule_cond:"Activation: your friend reaches Level 2 — holding {h}+ $VIKING in their wallet", ref_rule_5:"You earn {c}% of everything your active referrals earn — automatically", ref_friends_title:"MY INVITED FRIENDS", ref_verified_pill:"VERIFIED", ref_pending_pill:"PENDING", ref_dup_pill:"DUPLICATE",
         hold_wallet_lbl:"Wallet Hold", mine_wallet_lbl:"In-App Balance",
         withdraw_title:"Withdraw", min_wd_lbl:"Minimum:", wd_fee_lbl:"Fee (5%):", net_lbl:"Net:",
         hold_cond_lbl:"{p}% Hold Required:", your_hold_lbl:"Your Hold:", req_wd_btn:"Request Withdrawal",
@@ -1492,7 +1521,7 @@
         months:["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"],
         nav_mine:"Mine", nav_tasks:"Tasks", nav_boost:"Boost", nav_friends:"Friends", nav_profile:"Profile",
         tank_full:"🛑 24h Tank Full (100%) - Collect Now!", tank_fill:"⏳ 24h Mining Tank:",
-        daily_login_title:"🎁 Daily Login (7 Days)", claim_daily_btn:"Claim Daily Reward",
+        daily_login_title:"🎁 Daily Login (7 Days)", claim_daily_btn:"Claim Daily Reward", ads_title:"📺 Watch Ads", ads_watch_btn:"Watch Ad", ads_left:"{n} ads left today", ads_all_done:"✅ All ads watched today — come back tomorrow", ad_watch_full:"Watch the full ad to continue", ad_loading:"Ad loading, try again", wd_bal_lbl:"YOUR BALANCE",
         day:"Day", claimed:"Claimed", no_refs_yet:"No invited friends yet."
       },
       ar: {
@@ -1515,7 +1544,7 @@
         my_referrals_title:"👥 أصدقائي المدعوون", pending_ref_title:"أرباح الإحالات المعلقة", collect_ref_btn:"جمع أرباح الإحالات",
         ton_wallet_title:"محفظة شبكة TON", connect_wallet_btn:"ربط محفظة TON الآن",
         sync_hold_btn:"تحديث رصيد المحفظة", disconnect_wallet_btn:"إلغاء الربط", unlink_title:"فك ربط المحفظة؟", unlink_warn:"⚠️ فك ربط المحفظة سيلغي توثيق محفظتك، وستضطر لدفع رسوم التوثيق مرة أخرى لإعادة التوثيق.", unlink_confirm:"فك الربط", unlink_cancel:"إلغاء",
-        prof_page_title:"الملف الشخصي", prof_username_lbl:"اسم المستخدم", prof_wallet_lbl:"المحفظة", prof_amount_lbl:"المبلغ", buy_stonfi_btn:"اشترِ من STON.fi", set_sound_lbl:"الصوت", set_lang_lbl:"اللغة", lock_verify:"قم بتوثيق محفظتك أولاً", lock_age:"عمر المحفظة لازم يكون {n} يوم أو أكتر", renews_24h:"تتجدد كل 24 ساعة", renews_48h:"تتجدد كل 48 ساعة", hold_tasks_title:"💰 مهام الاحتفاظ", hold_task_title:"احتفظ بـ {n}", claim_btn:"استلام", task_available_in:"متاحة بعد {t}", ref_tasks_title:"مهام الإحالات", ref_tasks_open:"افتح", ref_tasks_sum:"{a} نشط · المكافأة الجاية عند {n}: +{r}", ref_tasks_done:"كل المراحل اتستلمت 🎉", ref_banner_title:"نظام الإحالة", boost_banner_title:"تعزيز المستوى", quests_title:"المهام", tap_open_hint:"اضغط على الكارت للفتح", ref_head_earn:"اكسب {c}% من تعدين أصدقائك", ref_head_sub:"الصديق بيتنشط عند المستوى 2", ref_link_lbl:"رابط الإحالة", ref_how_title:"إزاي بيشتغل", ref_rule_100:"+100 عملة عن كل إحالة نشطة", ref_rule_cond:"التنشيط: صديقك يوصل للمستوى 2 — يعني معاه {h}+ $VIKING في محفظته", ref_rule_5:"بتكسب {c}% من كل أرباح إحالاتك النشطة — تلقائيًا", ref_friends_title:"أصدقائي المدعوون", ref_verified_pill:"موثّق", ref_pending_pill:"قيد الانتظار", ref_dup_pill:"مكرر",
+        prof_page_title:"الملف الشخصي", prof_username_lbl:"اسم المستخدم", prof_wallet_lbl:"المحفظة", prof_amount_lbl:"المبلغ", buy_stonfi_btn:"اشترِ من STON.fi", set_sound_lbl:"الصوت", set_lang_lbl:"اللغة", lock_verify:"قم بتوثيق محفظتك أولاً", lock_age:"عمر المحفظة لازم يكون {n} يوم أو أكتر", renews_24h:"تتجدد كل 24 ساعة", renews_48h:"تتجدد كل 48 ساعة", hold_tasks_title:"💰 مهام الاحتفاظ", hold_task_title:"احتفظ بـ {n}", claim_btn:"استلام", hold_rule_banner:"الاستلام بيدفع أعلى مستوى انت مؤهل له بس — بيتحسب على احتفاظ الـ{d} أيام، العملات اللي قاعدة في محفظتك {d} أيام كاملة. الاستلام بيتجدد كل {r} أيام.", hold_included:"✓ مشمول في الأعلى", hold_aged_note:"بيتحسب بس العملات اللي بقالها {d}+ أيام", wd_hold_total:"الهولد في المحفظة", wd_hold_aged:"هولد الـ{d} أيام", hold_need_days:"احتفظ لمدة {d} أيام متواصلة عشان تستلم", hold_keep_warn:"كمّل احتفاظ — لو نزلت عن {n} المؤقّت هيتصفّر", hold_ready:"احتفظت {d} أيام — جاهز للاستلام", wd_recheck_title:"إعادة فحص الاحتفاظ", wd_recheck_new:"جديد", wd_recheck_days:"والاحتفاظ ده لازم يكون عمره {d} أيام على الأقل — العملات لازم تكون قاعدة في محفظتك لمدة {d} أيام متواصلة. الشراء قبل السحب على طول ما بيتحسبش.", wd_recheck_txt:"بيتعاد فحص احتفاظك وقت اعتماد طلبك. خلّي على الأقل {p}% من المبلغ ({n}) في محفظتك لحد ما يتدفع لك — لو احتفاظك نزل عن كده، الطلب هيقف لحد ما تزوّده.", wd_holdcheck_paused:"فحص الاحتفاظ: متوقف — زوّد احتفاظ محفظتك", task_available_in:"متاحة بعد {t}", ref_tasks_title:"مهام الإحالات", ref_tasks_open:"افتح", ref_tasks_sum:"{a} نشط · المكافأة الجاية عند {n}: +{r}", ref_tasks_done:"كل المراحل اتستلمت 🎉", ref_banner_title:"نظام الإحالة", boost_banner_title:"تعزيز المستوى", quests_title:"المهام", tap_open_hint:"اضغط على الكارت للفتح", ref_head_earn:"اكسب {c}% من تعدين أصدقائك", ref_head_sub:"الصديق بيتنشط عند المستوى 2", ref_link_lbl:"رابط الإحالة", ref_how_title:"إزاي بيشتغل", ref_rule_100:"+100 عملة عن كل إحالة نشطة", ref_rule_cond:"التنشيط: صديقك يوصل للمستوى 2 — يعني معاه {h}+ $VIKING في محفظته", ref_rule_5:"بتكسب {c}% من كل أرباح إحالاتك النشطة — تلقائيًا", ref_friends_title:"أصدقائي المدعوون", ref_verified_pill:"موثّق", ref_pending_pill:"قيد الانتظار", ref_dup_pill:"مكرر",
         hold_wallet_lbl:"عملات المحفظة (Hold)", mine_wallet_lbl:"رصيد داخل التطبيق",
         withdraw_title:"سحب", min_wd_lbl:"الحد الأدنى:", wd_fee_lbl:"رسوم (5%):", net_lbl:"الصافي:",
         hold_cond_lbl:"شرط {p}% بالمحفظة:", your_hold_lbl:"رصيد محفظتك:", req_wd_btn:"طلب سحب الرصيد",
@@ -1542,7 +1571,7 @@
         months:["يناير","فبراير","مارس","أبريل","مايو","يونيو","يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر"],
         nav_mine:"التعدين", nav_tasks:"المهام", nav_boost:"السرعة", nav_friends:"الأصدقاء", nav_profile:"حسابي",
         tank_full:"🛑 خزان 24 ساعة ممتلئ (100%) - اجمع الآن!", tank_fill:"⏳ خزان 24 ساعة:",
-        daily_login_title:"🎁 تسجيل الدخول اليومي (7 أيام)", claim_daily_btn:"استلام المكافأة اليومية",
+        daily_login_title:"🎁 تسجيل الدخول اليومي (7 أيام)", claim_daily_btn:"استلام المكافأة اليومية", ads_title:"📺 شاهد الإعلانات", ads_watch_btn:"شاهد إعلان", ads_left:"تبقّى {n} إعلان اليوم", ads_all_done:"✅ شاهدت كل إعلانات اليوم — ارجع بكرة", ad_watch_full:"شاهد الإعلان كاملًا للمتابعة", ad_loading:"الإعلان بيحمّل، حاول تاني", wd_bal_lbl:"رصيدك",
         day:"يوم", claimed:"تم الاستلام", no_refs_yet:"لا يوجد أصدقاء مدعوون حتى الآن."
       },
       ru: {
@@ -1565,7 +1594,7 @@
         my_referrals_title:"👥 Мои рефералы", pending_ref_title:"Ожидаемый доход", collect_ref_btn:"Собрать доход",
         ton_wallet_title:"Кошелек TON", connect_wallet_btn:"Подключить TON Кошелек",
         sync_hold_btn:"Обновить Холд", disconnect_wallet_btn:"Отключить", unlink_title:"Отключить кошелёк?", unlink_warn:"⚠️ Отключение отменит верификацию кошелька. Для повторной верификации придётся снова оплатить комиссию.", unlink_confirm:"Отключить", unlink_cancel:"Отмена",
-        prof_page_title:"ПРОФИЛЬ", prof_username_lbl:"ИМЯ ПОЛЬЗОВАТЕЛЯ", prof_wallet_lbl:"КОШЕЛЁК", prof_amount_lbl:"СУММА", buy_stonfi_btn:"Купить на STON.fi", set_sound_lbl:"ЗВУК", set_lang_lbl:"ЯЗЫК", lock_verify:"Сначала подтвердите кошелёк", lock_age:"Возраст кошелька должен быть от {n} дн.", renews_24h:"Обновляется каждые 24 часа", renews_48h:"Обновляется каждые 48 часов", hold_tasks_title:"💰 ЗАДАНИЯ НА УДЕРЖАНИЕ", hold_task_title:"Удерживайте {n}", claim_btn:"Забрать", task_available_in:"Доступно через {t}", ref_tasks_title:"Задания за рефералов", ref_tasks_open:"Открыть", ref_tasks_sum:"{a} активных · Следующая награда при {n}: +{r}", ref_tasks_done:"Все этапы получены 🎉", ref_banner_title:"РЕФЕРАЛЬНАЯ СИСТЕМА", boost_banner_title:"УСИЛЕНИЕ УРОВНЕЙ", quests_title:"ЗАДАНИЯ", tap_open_hint:"Нажмите на карточку, чтобы открыть", ref_head_earn:"Зарабатывайте {c}% от майнинга друзей", ref_head_sub:"Друг активируется на уровне 2", ref_link_lbl:"РЕФЕРАЛЬНАЯ ССЫЛКА", ref_how_title:"КАК ЭТО РАБОТАЕТ", ref_rule_100:"+100 монет за каждого АКТИВНОГО реферала", ref_rule_cond:"Активация: друг достигает уровня 2 — держит {h}+ $VIKING в кошельке", ref_rule_5:"Вы получаете {c}% от всего заработка активных рефералов — автоматически", ref_friends_title:"МОИ ПРИГЛАШЁННЫЕ ДРУЗЬЯ", ref_verified_pill:"ПОДТВЕРЖДЁН", ref_pending_pill:"ОЖИДАЕТ", ref_dup_pill:"ДУБЛИКАТ",
+        prof_page_title:"ПРОФИЛЬ", prof_username_lbl:"ИМЯ ПОЛЬЗОВАТЕЛЯ", prof_wallet_lbl:"КОШЕЛЁК", prof_amount_lbl:"СУММА", buy_stonfi_btn:"Купить на STON.fi", set_sound_lbl:"ЗВУК", set_lang_lbl:"ЯЗЫК", lock_verify:"Сначала подтвердите кошелёк", lock_age:"Возраст кошелька должен быть от {n} дн.", renews_24h:"Обновляется каждые 24 часа", renews_48h:"Обновляется каждые 48 часов", hold_tasks_title:"💰 ЗАДАНИЯ НА УДЕРЖАНИЕ", hold_task_title:"Удерживайте {n}", claim_btn:"Забрать", hold_rule_banner:"Выплата — только за ваш ВЫСШИЙ уровень, по удержанию за {d} дн. — монетам, пролежавшим в кошельке полных {d} дн. Повторная выплата — каждые {r} дн.", hold_included:"✓ Включено", hold_aged_note:"Только монеты, удерживаемые {d}+ дн.", wd_hold_total:"УДЕРЖАНИЕ В КОШЕЛЬКЕ", wd_hold_aged:"УДЕРЖАНИЕ ЗА {d} ДН.", hold_need_days:"Удерживайте непрерывно {d} дн., чтобы забрать", hold_keep_warn:"Продолжайте удерживать — падение ниже {n} сбросит таймер", hold_ready:"Удержано {d} дн. — готово к получению", wd_recheck_title:"ПОВТОРНАЯ ПРОВЕРКА УДЕРЖАНИЯ", wd_recheck_new:"НОВОЕ", wd_recheck_days:"И этому удержанию должно быть не менее {d} дн. — монеты должны непрерывно лежать в вашем кошельке {d} дн. Покупка прямо перед выводом не засчитывается.", wd_recheck_txt:"Ваше удержание проверяется повторно при одобрении запроса. Держите не менее {p}% суммы ({n}) в кошельке до выплаты — если удержание упадёт ниже, запрос встанет на паузу, пока вы не пополните.", wd_holdcheck_paused:"Проверка удержания: пауза — пополните удержание кошелька", task_available_in:"Доступно через {t}", ref_tasks_title:"Задания за рефералов", ref_tasks_open:"Открыть", ref_tasks_sum:"{a} активных · Следующая награда при {n}: +{r}", ref_tasks_done:"Все этапы получены 🎉", ref_banner_title:"РЕФЕРАЛЬНАЯ СИСТЕМА", boost_banner_title:"УСИЛЕНИЕ УРОВНЕЙ", quests_title:"ЗАДАНИЯ", tap_open_hint:"Нажмите на карточку, чтобы открыть", ref_head_earn:"Зарабатывайте {c}% от майнинга друзей", ref_head_sub:"Друг активируется на уровне 2", ref_link_lbl:"РЕФЕРАЛЬНАЯ ССЫЛКА", ref_how_title:"КАК ЭТО РАБОТАЕТ", ref_rule_100:"+100 монет за каждого АКТИВНОГО реферала", ref_rule_cond:"Активация: друг достигает уровня 2 — держит {h}+ $VIKING в кошельке", ref_rule_5:"Вы получаете {c}% от всего заработка активных рефералов — автоматически", ref_friends_title:"МОИ ПРИГЛАШЁННЫЕ ДРУЗЬЯ", ref_verified_pill:"ПОДТВЕРЖДЁН", ref_pending_pill:"ОЖИДАЕТ", ref_dup_pill:"ДУБЛИКАТ",
         hold_wallet_lbl:"В кошельке", mine_wallet_lbl:"Баланс в приложении",
         withdraw_title:"Вывод", min_wd_lbl:"Минимум:", wd_fee_lbl:"Комиссия (5%):", net_lbl:"Чистыми:",
         hold_cond_lbl:"Нужно {p}% Холда:", your_hold_lbl:"Ваш Холд:", req_wd_btn:"Запросить вывод",
@@ -1592,7 +1621,7 @@
         months:["янв.","февр.","мар.","апр.","мая","июн.","июл.","авг.","сент.","окт.","нояб.","дек."],
         nav_mine:"Майнинг", nav_tasks:"Задания", nav_boost:"Буст", nav_friends:"Друзья", nav_profile:"Профиль",
         tank_full:"🛑 Бак 24ч полон (100%) - Соберите!", tank_fill:"⏳ Бак майнинга 24ч:",
-        daily_login_title:"🎁 Ежедневный вход (7 Дней)", claim_daily_btn:"Получить награду",
+        daily_login_title:"🎁 Ежедневный вход (7 Дней)", claim_daily_btn:"Получить награду", ads_title:"📺 Смотреть рекламу", ads_watch_btn:"Смотреть", ads_left:"Осталось {n} объявлений сегодня", ads_all_done:"✅ Вся реклама на сегодня просмотрена", ad_watch_full:"Досмотрите рекламу до конца", ad_loading:"Реклама загружается, попробуйте снова", wd_bal_lbl:"ВАШ БАЛАНС",
         day:"День", claimed:"Получено", no_refs_yet:"Пока нет приглашенных друзей."
       }
     };
@@ -1655,6 +1684,8 @@
     let task1Done = false, task2Done = false, task3Done = false;
     let task1At = 0, task2At = 0, task3At = 0;
     let holdTaskAt = {};
+    let agedHold = 0;
+    let adsDay = 0, adsDayCount = 0;
     let chV = {1:false, 2:false, 3:false};
     let bioTaskDone = false, refAchClaimed = {}, activeRefs = 0;
     const REF_MILESTONES = [1, 10, 25, 50, 100];
@@ -1898,7 +1929,7 @@
       if (!isHumanClick(e)) return;
       await withBtnBusy(e.currentTarget, async () => {
         try {
-          const r = await api("daily");
+          const r = await apiGated("daily");
           SoundFX.buySuccess();
           showToast(`🎁 +${r.reward} ${config.coinSym} Daily Reward!`, "#10b981");
           await refreshState();
@@ -2082,6 +2113,8 @@
       task2At = Number(d.task2At) || 0;
       task3At = Number(d.task3At) || 0;
       holdTaskAt = d.holdTaskAt || {};
+      agedHold = Number(d.agedHold) || 0;
+      adsDay = Number(d.adsDay) || 0; adsDayCount = Number(d.adsDayCount) || 0;
       bioTaskDone = !!d.bioTaskDone;
       refAchClaimed = d.refAchClaimed || {};
       activeRefs = Number(d.activeRefs) || 0;
@@ -2734,14 +2767,24 @@
       const box = document.getElementById('hold-task-list'); if (!box) return;
       const dict = I18N[currentLang] || I18N.en;
       const defs = (Array.isArray(config.holdTaskDefs) && config.holdTaskDefs.length) ? config.holdTaskDefs : HOLD_TASK_FALLBACK;
+      const days = (Number(config.holdDaysReq) > 0) ? Number(config.holdDaysReq) : 3;
+      const banner = document.getElementById('hold-rule-banner');
+      if (banner) banner.textContent = (dict.hold_rule_banner || '').replace(/\{d\}/g, days).replace(/\{r\}/g, (Number(config.holdRenewDays) > 0) ? Number(config.holdRenewDays) : 7);
+      // Top-tier-only (owner order 2026-11-19): one claim pays the
+      // HIGHEST tier the aged hold qualifies for; lower tiers are
+      // covered by it, and the renewal countdown is shared.
+      let topTier = 0;
+      defs.forEach((def, i) => { if (agedHold >= (Number(def.hold) || 0)) topTier = i + 1; });
       box.innerHTML = defs.map((def, i) => {
         const tier = i + 1;
         const req = Number(def.hold) || 0, rew = Number(def.reward) || 0;
         const rem = holdRemaining(tier);
-        const pct = Math.min(100, Math.floor(walletHold / Math.max(1, req) * 100));
-        const btn = rem > 0
-          ? `<button class="btn-3d-gold q-btn btn-cooldown-yellow" data-hold-cd="${tier}" disabled>⏳ ${fmtCd(rem)}</button>`
-          : `<button class="btn-3d-gold q-btn hold-claim" data-tier="${tier}" ${walletHold >= req ? '' : 'style="opacity:0.45;" disabled'}>${dict.claim_btn || 'Claim'}</button>`;
+        const pct = Math.min(100, Math.floor(agedHold / Math.max(1, req) * 100));
+        let btn;
+        if (rem > 0) btn = `<button class="btn-3d-gold q-btn btn-cooldown-yellow" data-hold-cd="${tier}" disabled>⏳ ${fmtCd(rem)}</button>`;
+        else if (tier === topTier) btn = `<button class="btn-3d-gold q-btn hold-claim" data-tier="${tier}">${dict.claim_btn || 'Claim'}</button>`;
+        else if (tier < topTier) btn = `<button class="btn-3d-gold q-btn" data-tier="${tier}" style="opacity:0.55;" disabled>${dict.hold_included || '✓ Included'}</button>`;
+        else btn = `<button class="btn-3d-gold q-btn" data-tier="${tier}" style="opacity:0.45;" disabled>🔒 ${dict.claim_btn || 'Claim'}</button>`;
         return `
           <div style="margin-top:10px;">
             <div class="q-row">
@@ -2751,22 +2794,87 @@
                 <div class="q-mid">
                   <div class="q-title">${(dict.hold_task_title || 'Hold {n}').replace('{n}', req.toLocaleString())} ${esc(config.coinSym)}</div>
                   <div class="q-rew"><img src="assets/coin_icon.webp" alt="">+${rew.toLocaleString()} ${esc(config.coinSym)}</div>
-                  <div class="q-renew">🔄 ${dict.renews_48h || 'Renews every 48 hours'}</div>
+                  <div class="q-renew">⏳ ${(dict.hold_aged_note || 'Counts only coins held {d}+ days').replace('{d}', days)}</div>
                 </div>
                 ${btn}
               </div>
             </div>
-            <div class="q-prog"><div class="q-prog-bg"><div class="q-prog-fill" style="width:${pct}%;"></div></div><div class="q-prog-txt">${Math.floor(walletHold).toLocaleString()}/${req.toLocaleString()}</div></div>
+            <div class="q-prog"><div class="q-prog-bg"><div class="q-prog-fill" style="width:${pct}%;"></div></div><div class="q-prog-txt">${Math.floor(agedHold).toLocaleString()}/${req.toLocaleString()}</div></div>
           </div>`;
       }).join('');
       box.querySelectorAll('.hold-claim').forEach(b => b.addEventListener('click', async e => {
         if (!isHumanClick(e)) return;
         const tier = Number(b.getAttribute('data-tier'));
         await withBtnBusy(b, async () => {
-          try { const r = await api("holdTask", { tier }); SoundFX.buySuccess(); showToast(`🎉 +${r.reward} ${config.coinSym}!`); await refreshState(); }
+          try { const r = await apiGated("holdTask", { tier }); SoundFX.buySuccess(); showToast(`🎉 +${r.reward} ${config.coinSym}!`); await refreshState(); }
           catch (err) { showToast("❌ " + err.message, "#ef4444"); }
         });
       }));
+    }
+
+
+    /* Adsgram (owner order 2026-11-19, VOLT model): the money buttons
+       run through apiGated — the server issues a single-use gate
+       ticket, the ad must actually be shown, and only then does the
+       real action fire, carrying the ticket. The Tasks-page reward
+       ads use a 'reward' ticket + adClaim (server-aged, single-use,
+       daily-capped — a replayed claim request earns nothing). If
+       ads are disabled in the panel (adsEnabled = 0), apiGated
+       degrades to a plain call and the ads section hides. */
+    let adGateBusy = false; const adsgramCtls = {};
+    function adsgramCtl() {
+      const id = String(config.adsgramBlockId || '60547');
+      if (adsgramCtls[id]) return adsgramCtls[id];
+      if (!window.Adsgram || typeof window.Adsgram.init !== 'function') return null;
+      const ctl = window.Adsgram.init({ blockId: id });
+      adsgramCtls[id] = ctl; return ctl;
+    }
+    async function apiGated(action, body) {
+      if (Number(config.adsEnabled) === 0) return api(action, body || {});
+      const dict = I18N[currentLang] || I18N.en;
+      if (adGateBusy) throw new Error(dict.ad_loading || 'Ad loading, try again');
+      const ctl = adsgramCtl();
+      if (!ctl) throw new Error(dict.ad_loading || 'Ad loading, try again');
+      adGateBusy = true;
+      try {
+        const tk = await api('adTicket', { purpose: 'gate' });
+        const res = await ctl.show();
+        if (res && res.done === false) throw new Error(dict.ad_watch_full || 'Watch the full ad to continue');
+        return await api(action, { ...(body || {}), adGate: tk.ticket });
+      } finally { adGateBusy = false; }
+    }
+    async function watchRewardAd(e) {
+      if (!isHumanClick(e)) return;
+      const dict = I18N[currentLang] || I18N.en;
+      await withBtnBusy(e.currentTarget, async () => {
+        const ctl = adsgramCtl();
+        if (!ctl) { showToast('❌ ' + (dict.ad_loading || 'Ad loading, try again'), '#ef4444'); return; }
+        try {
+          const tk = await api('adTicket', { purpose: 'reward' });
+          const res = await ctl.show();
+          if (res && res.done === false) { showToast('❌ ' + (dict.ad_watch_full || 'Watch the full ad'), '#ef4444'); return; }
+          const r = await api('adClaim', { ticket: tk.ticket });
+          SoundFX.buySuccess();
+          showToast(`📺 +${r.reward} ${config.coinSym}!`);
+          await refreshState();
+        } catch (err) { showToast('❌ ' + err.message, '#ef4444'); }
+      });
+    }
+    function renderAdsSection() {
+      const wrap = document.getElementById('ads-wrap');
+      if (!wrap) return;
+      const dict = I18N[currentLang] || I18N.en;
+      if (Number(config.adsEnabled) === 0) { wrap.style.display = 'none'; return; }
+      wrap.style.display = '';
+      const limit = Number(config.adDailyLimit) > 0 ? Number(config.adDailyLimit) : 10;
+      const used = (adsDay === Math.floor(Date.now() / 86400000)) ? adsDayCount : 0;
+      const left = Math.max(0, limit - used);
+      const rew = document.getElementById('ads-rew-amt');
+      if (rew) rew.textContent = Number(config.adReward) > 0 ? Number(config.adReward) : 5;
+      const lt = document.getElementById('ads-left-txt');
+      if (lt) lt.textContent = left > 0 ? (dict.ads_left || '{n} ads left today').replace('{n}', left) : (dict.ads_all_done || '✅ All ads watched today');
+      const btn = document.getElementById('btn-watch-ad');
+      if (btn) { btn.disabled = left <= 0; btn.style.opacity = left <= 0 ? .55 : 1; }
     }
 
     function renderTasksExtras() {
@@ -2796,6 +2904,7 @@
         }
       }
 
+      renderAdsSection();
       renderHoldTasks();
       renderRefAchList();
       renderRefTasksSummary();
@@ -2837,7 +2946,7 @@
         if (!isHumanClick(e)) return;
         const n = Number(b.getAttribute('data-n'));
         await withBtnBusy(b, async () => {
-          try { const r = await api("refAch", { n }); SoundFX.buySuccess(); showToast(`🏆 +${r.reward} ${config.coinSym}!`); await refreshState(); }
+          try { const r = await apiGated("refAch", { n }); SoundFX.buySuccess(); showToast(`🏆 +${r.reward} ${config.coinSym}!`); await refreshState(); }
           catch (err) { showToast("❌ " + err.message, "#ef4444"); }
         });
       }));
@@ -2891,7 +3000,7 @@
     function chDone(n) { return n === 1 ? task1Done : n === 2 ? task2Done : task3Done; }
     function chLastAt(n) { return n === 1 ? task1At : n === 2 ? task2At : task3At; }
     function chRemaining(n) { const at = chLastAt(n); if (!at) return 0; return Math.max(0, at + TASK_RENEW_MS - Date.now()); }
-    function holdRemaining(tier) { const at = Number((holdTaskAt || {})[tier]) || 0; if (!at) return 0; return Math.max(0, at + HOLD_RENEW_MS - Date.now()); }
+    function holdRemaining() { const days = (Number(config.holdRenewDays) > 0) ? Number(config.holdRenewDays) : 7; let at = 0; for (const k in (holdTaskAt || {})) { const v = Number(holdTaskAt[k]) || 0; if (v > at) at = v; } if (!at) return 0; return Math.max(0, at + days * 86400000 - Date.now()); }
 
     /* Channel task button flow (owner order 2026-11-14, renewal added
        2026-11-17): the button starts as «Join Channel» and opens the
@@ -3008,6 +3117,8 @@
 
       document.getElementById('prof-hold-bal').innerText = Math.floor(walletHold).toLocaleString();
       document.getElementById('prof-mine-bal').innerText = Math.floor(minedInApp).toLocaleString();
+      const pab = document.getElementById('prof-aged-bal'); if (pab) pab.innerText = Math.floor(agedHold).toLocaleString();
+      const pal = document.getElementById('pf-aged-lbl'); if (pal) pal.innerText = ((I18N[currentLang] || I18N.en).wd_hold_aged || '{d}-DAY HOLD').replace('{d}', (Number(config.holdDaysReq) > 0) ? Number(config.holdDaysReq) : 3);
       const mhb = document.getElementById('mine-hold-bal'); if (mhb) mhb.innerText = Math.floor(walletHold).toLocaleString();
       const mab = document.getElementById('mine-app-bal'); if (mab) mab.innerText = Math.floor(minedInApp).toLocaleString();
       renderVerifyCard();
@@ -3026,7 +3137,7 @@
       document.getElementById('wd-fee-calc').innerText = fee.toLocaleString();
       document.getElementById('wd-net-calc').innerText = (amt - fee).toLocaleString();
       document.getElementById('wd-req-hold-num').innerText = reqHold.toLocaleString();
-      document.getElementById('wd-cur-hold-num').innerText = Math.floor(walletHold).toLocaleString();
+      document.getElementById('wd-cur-hold-num').innerText = Math.floor(agedHold).toLocaleString();
       // Locked-button state (owner order 2026-11-14): when the user cannot
       // withdraw, the Request button itself greys out, disables, and carries
       // the FIRST blocking reason. Priority mirrors the server's validation
@@ -3042,6 +3153,20 @@
       const holdPct = (config.holdPercentReq == null ? 30 : config.holdPercentReq);
       const hcl = document.querySelector('[data-i18n="hold_cond_lbl"]');
       if (hcl && dict.hold_cond_lbl) hcl.textContent = dict.hold_cond_lbl.replace('{p}', holdPct);
+      const rcTxt = document.getElementById('wd-recheck-txt');
+      if (rcTxt && dict.wd_recheck_txt) rcTxt.textContent = dict.wd_recheck_txt.replace('{p}', holdPct).replace('{n}', reqHold.toLocaleString());
+      const rcDays = document.getElementById('wd-recheck-days');
+      if (rcDays && dict.wd_recheck_days) rcDays.textContent = '⏳ ' + dict.wd_recheck_days.replace(/\{d\}/g, (Number(config.holdDaysReq) > 0) ? Number(config.holdDaysReq) : 3);
+      const rcCur = document.getElementById('wd-recheck-cur');
+      if (rcCur) rcCur.textContent = Math.floor(walletHold).toLocaleString();
+      const rcBal = document.getElementById('wd-recheck-bal');
+      if (rcBal) rcBal.textContent = Math.floor(minedInApp).toLocaleString();
+      const agedLbl = document.getElementById('wd-hold-aged-lbl');
+      if (agedLbl && dict.wd_hold_aged) agedLbl.textContent = dict.wd_hold_aged.replace('{d}', (Number(config.holdDaysReq) > 0) ? Number(config.holdDaysReq) : 3);
+      const rcAged = document.getElementById('wd-recheck-aged');
+      if (rcAged) { rcAged.textContent = Math.floor(agedHold).toLocaleString(); rcAged.style.color = agedHold >= reqHold ? '#ffe98a' : '#f87171'; }
+      const rcReq = document.getElementById('wd-recheck-req');
+      if (rcReq) rcReq.textContent = `${(dict.hold_cond_lbl || '{p}% Hold Required:').replace('{p}', holdPct)} ${reqHold.toLocaleString()} ${agedHold >= reqHold ? '✓' : '✗'}`;
       let lockReason = '';
       let lockKind = '';
       const cdRemain = (lastWithdrawTime + 86400000) - Date.now();
@@ -3057,7 +3182,7 @@
       }
       else if (rawAmt < config.minWithdraw) { lockReason = dict.lock_min.replace('{n}', config.minWithdraw.toLocaleString()); lockKind = 'min'; }
       else if (rawAmt > minedInApp) { lockReason = dict.lock_balance; lockKind = 'balance'; }
-      else if (walletHold < reqHold) { lockReason = dict.lock_hold.replace('{n}', reqHold.toLocaleString()).replace('{p}', holdPct); lockKind = 'hold'; }
+      else if (agedHold < reqHold) { lockReason = dict.lock_hold.replace('{n}', reqHold.toLocaleString()).replace('{p}', holdPct); lockKind = 'hold'; }
       if (lockReason) {
         wdBtn.disabled = true;
         wdBtn.classList.add('btn-wd-locked');
@@ -3130,7 +3255,7 @@
       if (isCollecting || !isHumanClick(e)) return;
       isCollecting = true;
       try {
-        const r = await api("collect");
+        const r = await apiGated("collect");
         lastCollectTime = Date.now();
         SoundFX.collect();
         showToast(`⚔️ +${Number(r.added).toFixed(4)} ${config.coinSym}!`);
@@ -3173,7 +3298,7 @@
       const amt = wdAmtVal();
       await withBtnBusy(e.currentTarget, async () => {
         try {
-          const r = await api("withdraw", { amount: amt });
+          const r = await apiGated("withdraw", { amount: amt });
           SoundFX.buySuccess();
           showToast(`✅ Withdrawal #${r.wdNum} Requested!`);
           await refreshState();
@@ -3185,12 +3310,14 @@
       const box = document.getElementById('wd-history-box');
       if (!wdHistory.length) { box.innerHTML = "No withdrawals yet."; return; }
       const clock = '<svg viewBox="0 0 24 24" fill="none" stroke="#c9a86a" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>';
+      const dict = I18N[currentLang] || I18N.en;
       box.innerHTML = wdHistory.map(w => {
         const d = w.timestamp ? new Date(w.timestamp) : null;
         const dateStr = d ? (d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) + ' • ' + d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })) : ('Withdrawal #' + (w.wdNum || 1));
         const st = String(w.status || '');
         const pill = st.includes('Paid') ? '<span class="pf-pill ok">COMPLETED</span>' : (st.includes('Reject') ? '<span class="pf-pill bad">REJECTED</span>' : '<span class="pf-pill wait">PENDING</span>');
-        return `<div class="pf-hist-row"><span class="pf-hist-clock">${clock}</span><span class="pf-hist-date">${esc(dateStr)}</span><span class="pf-hist-amt">-${Number(w.amt || 0).toLocaleString()}</span>${pill}</div>`;
+        const paused = st.includes('Pending') && w.holdCheckNeed != null && (w.holdCheckAged != null ? Number(w.holdCheckAged) < Number(w.holdCheckNeed) : Number(w.holdCheckHave) < Number(w.holdCheckNeed));
+        return `<div class="pf-hist-row"><span class="pf-hist-clock">${clock}</span><span class="pf-hist-date">${esc(dateStr)}</span><span class="pf-hist-amt">-${Number(w.amt || 0).toLocaleString()}</span>${pill}</div>` + (paused ? `<div style="font-size:11px;color:#f5c542;margin:2px 0 6px 34px;">⏸ ${esc(dict.wd_holdcheck_paused || 'Hold check: paused')}</div>` : '');
       }).join('');
     }
 
@@ -3233,6 +3360,7 @@
     document.getElementById('btn-goto-boost').addEventListener('click', () => switchTab('boost'));
     document.getElementById('btn-collect-ref').addEventListener('click', collectReferralProfits);
     document.getElementById('btn-claim-daily').addEventListener('click', claimDailyLogin);
+    document.getElementById('btn-watch-ad').addEventListener('click', watchRewardAd);
 
     document.querySelectorAll('.btn-stonfi-buy').forEach(b => b.addEventListener('click', openStonfiSwap));
     document.querySelectorAll('.btn-tonkeeper-buy').forEach(b => b.addEventListener('click', openTonkeeperSwap));
@@ -3295,7 +3423,7 @@
       if (rem > 0) { const d = I18N[currentLang] || I18N.en; return showToast("⏳ " + (d.task_available_in || "Available in {t}").replace('{t}', fmtCd(rem)), "#f59e0b"); }
       if (!chV[n] && !chDone(n)) { document.getElementById('btn-open-ch' + n).click(); return; }
       await withBtnBusy(e.currentTarget, async () => {
-        try { const r = await api("task", { n }); SoundFX.buySuccess(); showToast(`🎉 +${r.reward} ${config.coinSym}!`); await refreshState(); }
+        try { const r = await apiGated("task", { n }); SoundFX.buySuccess(); showToast(`🎉 +${r.reward} ${config.coinSym}!`); await refreshState(); }
         catch (err) { chV[n] = false; paintChBtn(n); showToast("❌ " + err.message, "#ef4444"); }
       });
     }));
