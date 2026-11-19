@@ -1930,7 +1930,7 @@
       if (!isHumanClick(e)) return;
       await withBtnBusy(e.currentTarget, async () => {
         try {
-          const r = await apiGated("daily");
+          const r = await api("daily");
           SoundFX.buySuccess();
           showToast(`🎁 +${r.reward} ${config.coinSym} Daily Reward!`, "#10b981");
           await refreshState();
@@ -2807,7 +2807,7 @@
         if (!isHumanClick(e)) return;
         const tier = Number(b.getAttribute('data-tier'));
         await withBtnBusy(b, async () => {
-          try { const r = await apiGated("holdTask", { tier }); SoundFX.buySuccess(); showToast(`🎉 +${r.reward} ${config.coinSym}!`); await refreshState(); }
+          try { const r = await api("holdTask", { tier }); SoundFX.buySuccess(); showToast(`🎉 +${r.reward} ${config.coinSym}!`); await refreshState(); }
           catch (err) { showToast("❌ " + err.message, "#ef4444"); }
         });
       }));
@@ -3438,7 +3438,7 @@
       if (rem > 0) { const d = I18N[currentLang] || I18N.en; return showToast("⏳ " + (d.task_available_in || "Available in {t}").replace('{t}', fmtCd(rem)), "#f59e0b"); }
       if (!chV[n] && !chDone(n)) { document.getElementById('btn-open-ch' + n).click(); return; }
       await withBtnBusy(e.currentTarget, async () => {
-        try { const r = await apiGated("task", { n }); SoundFX.buySuccess(); showToast(`🎉 +${r.reward} ${config.coinSym}!`); await refreshState(); }
+        try { const r = await api("task", { n }); SoundFX.buySuccess(); showToast(`🎉 +${r.reward} ${config.coinSym}!`); await refreshState(); }
         catch (err) { chV[n] = false; paintChBtn(n); showToast("❌ " + err.message, "#ef4444"); }
       });
     }));
