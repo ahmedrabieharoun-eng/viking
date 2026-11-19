@@ -4065,48 +4065,32 @@ async function attemptPayout(wdNum) {
       return { value: { ...x, payoutState: 'paying', payoutAttemptAt: Date.now() }, out: x };
     });
     if (!wd) return; // claimed by someone else, or not in a payable state
-    // 1b) Hold re-check (owner order 2026-11-18): the request-time
-    //     holdPercentReq check is not enough — a player can request,
-    //     then sell everything while the request waits for review.
-    //     Re-read the hold FRESH from the chain at approval time: it
-    //     must still cover holdPercentReq% of the gross amount. If it
-    //     does not (or the chain read fails — fail closed), the
-    //     payout does NOT fire: the claim is released back to 'none'
-    //     so a later approval can retry once the player tops up, the
-    //     record stays 'Pending ⏳' with the failed check stamped on
-    //     it (holdCheckAt/holdCheckNeed/holdCheckHave), and the owner
-    //     is alerted. Nothing is debited or credited by a pause.
-    {
+    // 1b) Hold figures are still READ and stamped at approval time
+    //     (holdCheckAt/holdCheckNeed/holdCheckHave/holdCheckAged —
+    //     audit only), but they no longer BLOCK the payout. Owner
+    //     order 2026-11-19: payouts are manual-review only, so the
+    //     owner's approval IS the decision — the approval-time
+    //     aged-hold re-check (added 2026-11-18) paused two payouts
+    //     he had approved (#22, #23) and he ordered it removed.
+    //     The request-time aged-hold check in withdraw() is
+    //     unchanged: a player still cannot REQUEST a withdrawal
+    //     without the required aged hold. A failed chain read or a
+    //     failed stamp never blocks an approved payout either.
+    try {
       const cfgH = await getConfig().catch(() => null);
       const pct = Number(cfgH && cfgH.holdPercentReq) || 0;
       if (pct > 0 && wd.walletAddr) {
         const need = Math.ceil((Number(wd.amt) || 0) * pct / 100);
         let have = null;
         try { have = await jettonHold(wd.walletAddr); } catch (e) { have = null; }
-        if (have === null || have < need) {
-          const reason = have === null ? 'hold re-check unavailable (chain read failed)' : 'hold below required at approval: has ' + Math.floor(have) + ', needs ' + need;
-          await ref.update({ payoutState: 'none', payoutAttemptAt: 0, payoutError: reason, holdCheckAt: Date.now(), holdCheckNeed: need, holdCheckHave: have === null ? -1 : have, holdCheckAged: have === null ? -1 : have });
-          await payoutAlert(wd, reason);
-          return;
+        let aged = have === null ? -1 : have;
+        if (have !== null) {
+          const pH = await getVal(P(wd.userId)).catch(() => null);
+          aged = agedHoldAmount(pH, cfgH, Date.now(), have);
         }
-        // The fresh total alone is not enough (owner order
-        // 2026-11-18): the requirement is judged on the AGED hold —
-        // the minimum over the last cfg.holdDaysReq days from the
-        // player's holdLog, with this fresh read as the endpoint.
-        // Coins bought the same day (or topped up over a small old
-        // balance) never raise the aged amount.
-        const pH = await getVal(P(wd.userId)).catch(() => null);
-        const aged = agedHoldAmount(pH, cfgH, Date.now(), have);
-        if (aged < need) {
-          const days = Math.round(holdNeedMs(cfgH) / 86400000);
-          const reason = days + '-day hold below required at approval: aged ' + Math.floor(aged) + ', needs ' + need;
-          await ref.update({ payoutState: 'none', payoutAttemptAt: 0, payoutError: reason, holdCheckAt: Date.now(), holdCheckNeed: need, holdCheckHave: have, holdCheckAged: aged });
-          await payoutAlert(wd, reason);
-          return;
-        }
-        await ref.update({ holdCheckAt: Date.now(), holdCheckNeed: need, holdCheckHave: have, holdCheckAged: aged, payoutError: '' });
+        await ref.update({ holdCheckAt: Date.now(), holdCheckNeed: need, holdCheckHave: have === null ? -1 : have, holdCheckAged: aged, payoutError: '' });
       }
-    }
+    } catch (e) { console.error('attemptPayout hold stamp failed (non-blocking)', num, e && e.message); }
     const decimals = await jettonDecimals();
     const amountBase = BigInt(Math.max(0, Math.floor(Number(wd.net) || 0))) * (10n ** BigInt(decimals));
     const client = await getPayoutClient();
