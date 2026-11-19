@@ -800,7 +800,7 @@ function hit(key, max, windowMs) {
 // burst plus a manual re-check must fit with room to spare, or the user
 // hits this limiter for doing exactly what the UI told them to do. The
 // global per-user (90/min) and per-IP caps still bound abuse.
-const ACTION_LIMIT = { state: 20, collect: 6, daily: 6, task: 8, holdTask: 8, bioTask: 8, refAch: 8, wallet: 8, unlink: 6, refCollect: 6, withdraw: 4, verifyInfo: 20, verifyCheck: 20, setAvatar: 8, adTicket: 6, adClaim: 6, adNoFill: 6 }; // per user per minute
+const ACTION_LIMIT = { state: 20, collect: 6, daily: 6, task: 8, holdTask: 8, bioTask: 8, refAch: 8, wallet: 8, unlink: 6, refCollect: 6, withdraw: 4, verifyInfo: 20, verifyCheck: 20, setAvatar: 8, adTicket: 6, adClaim: 6, adNoFill: 6, holdHistory: 20 }; // per user per minute
 
 function verifyInitData(initData) {
   if (!BOT_TOKEN) return { error: 'config' };
@@ -2128,6 +2128,99 @@ async function seedHoldLogIfNeeded(p, cfg, now, maxPages) {
   const existing = Array.isArray(p.holdLog) ? p.holdLog : [];
   const firstExisting = existing.length ? Number(existing[0].at) : Infinity;
   return { holdLog: pts.filter((pt) => pt.at < firstExisting).concat(existing), holdLogSeededAt: now };
+}
+/* ---------- hold history (owner order 2026-11-19) ----------
+   Powers the info button on the Profile aged-hold card: the
+   player sees his own wallet's VIKING transfer history (receives
+   and sends, newest first) and how his CURRENT coins split by
+   age. The lots are reconstructed FIFO from the chain history —
+   a sale consumes the OLDEST coins first, so what remains is
+   exactly the coins he still holds, each with its real age. This
+   answers the recurring «my coins are 3 days old, why is the
+   aged value 0?» — the player sees the sale that reset his
+   clock. Read-only; fail-closed like the other chain reads (a
+   failed read is a 503, never invented numbers). */
+async function collectJettonEvents(raw, maxPages) {
+  const unit = Math.pow(10, await jettonDecimals());
+  const evs = []; // newest-first { at, delta }
+  let beforeLt = null, exhausted = false;
+  const pages = Math.max(1, Math.min(5, Number(maxPages) || 5));
+  for (let page = 0; page < pages; page++) {
+    if (page > 0 && TONAPI_PAGE_GAP_MS > 0) await sleepMs(TONAPI_PAGE_GAP_MS);
+    const j = await tonPage('/accounts/' + encodeURIComponent(raw) + '/jettons/' + JETTON + '/history?limit=100' + (beforeLt ? '&before_lt=' + encodeURIComponent(beforeLt) : ''));
+    if (!j || !Array.isArray(j.events) || !j.events.length) { exhausted = true; break; }
+    for (const ev of j.events) {
+      let delta = 0;
+      for (const a of (ev.actions || [])) {
+        if (!a || a.type !== 'JettonTransfer') continue;
+        const t = a.JettonTransfer || a.jetton_transfer || {};
+        const amt = parseFloat(t.amount || '0') / unit;
+        if (!Number.isFinite(amt) || amt === 0) continue;
+        const snd = String((t.sender && t.sender.address) || t.sender || '').toLowerCase();
+        const rcp = String((t.recipient && t.recipient.address) || t.recipient || '').toLowerCase();
+        if (rcp === String(raw).toLowerCase()) delta += amt;
+        if (snd === String(raw).toLowerCase()) delta -= amt;
+      }
+      if (delta !== 0) evs.push({ at: Number(ev.timestamp || 0) * 1000, delta });
+    }
+    const lastEv = j.events[j.events.length - 1];
+    beforeLt = lastEv.lt || null;
+    if (!beforeLt || j.events.length < 100) { exhausted = true; break; }
+  }
+  return { evs, exhausted };
+}
+async function holdHistory(c) {
+  const ref = await ensurePlayer(c);
+  const p = await getVal(ref);
+  if (!p) fail(404, 'User not found');
+  if (p.banned === true) fail(403, 'Account banned');
+  const raw = p.walletAddr || '';
+  if (!raw) fail(400, 'Connect a wallet first');
+  let hold;
+  try { hold = await jettonHold(raw); } catch (e) { fail(503, 'Chain read failed, try again'); }
+  let coll;
+  try { coll = await collectJettonEvents(raw, 5); } catch (e) { fail(503, 'Chain read failed, try again'); }
+  const now = Date.now();
+  // FIFO lots over the events, oldest first: a sale consumes the
+  // oldest coins; what remains is the current balance by real age.
+  const lots = []; // { at, amt } oldest first
+  let lotSum = 0;
+  for (const e of coll.evs.slice().reverse()) {
+    if (e.delta > 0) { lots.push({ at: e.at, amt: e.delta }); lotSum += e.delta; }
+    else {
+      let out = -e.delta;
+      while (out > 1e-9 && lots.length) {
+        const take = Math.min(out, lots[0].amt);
+        lots[0].amt -= take; lotSum -= take; out -= take;
+        if (lots[0].amt <= 1e-9) lots.shift();
+      }
+    }
+  }
+  // History cut off at the page cap: the unseen remainder predates
+  // the oldest fetched event, so it sits in a lot of that age —
+  // never younger than the evidence allows.
+  const remainder = Number(hold) - lotSum;
+  if (remainder > 1e-6 && coll.evs.length) {
+    lots.unshift({ at: coll.evs[coll.evs.length - 1].at, amt: remainder });
+  }
+  const DAY = 86400000;
+  const buckets = { ge3: 0, d2: 0, d1: 0, d0: 0 };
+  for (const l of lots) {
+    const age = now - l.at;
+    if (age >= 3 * DAY) buckets.ge3 += l.amt;
+    else if (age >= 2 * DAY) buckets.d2 += l.amt;
+    else if (age >= DAY) buckets.d1 += l.amt;
+    else buckets.d0 += l.amt;
+  }
+  return {
+    ok: true,
+    hold: Number(hold) || 0,
+    agedHold: agedHoldAmount(p, c.cfg, now, Number(hold)),
+    daysReq: Math.round(holdNeedMs(c.cfg) / DAY) || 3,
+    buckets,
+    events: coll.evs.slice(0, 60),
+    truncated: !coll.exhausted
+  };
 }
 /* Hold tasks (owner order 2026-11-17; aged-hold model owner order
    2026-11-18; top-tier-only + weekly renewal owner order
@@ -5338,7 +5431,7 @@ async function panelAuditList(c) {
 
 const PANEL_ACTIONS = { panelStats, panelPlayers, panelPlayer, panelBan, panelAdjust, panelSetAvatar, panelVerifyPlayer, panelWithdrawals, panelWdApprove, panelWdReject, panelWdBan, panelVerifyQueue, panelVerifyResolve, panelConfigGet, panelConfigSet, panelRequestAdd, panelRequestList, panelRequestReply, panelAuditList };
 
-const ACTIONS = { state, collect, daily, task, holdTask, bioTask, refAch, adTicket, adClaim, adNoFill, wallet, unlink, verifyInfo, verifyCheck, refCollect, withdraw, setAvatar, adminState, adminBan, adminAdjust, adminWd, adminSettings };
+const ACTIONS = { state, collect, daily, task, holdTask, bioTask, refAch, adTicket, adClaim, adNoFill, wallet, unlink, verifyInfo, verifyCheck, refCollect, withdraw, setAvatar, holdHistory, adminState, adminBan, adminAdjust, adminWd, adminSettings };
 
 ensureWebhook(); // self-register the Telegram webhook once per process (never blocks boot)
 startVerifyWatcher(); // background deposit watcher (see verifyWatchTick; no-op when VERIFY_WATCH_MS=0)
